@@ -1072,6 +1072,8 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 			purple_account_set_alias(da->account, json_object_get_string_member(self_user, "username"));
 		}
 		
+		g_free(da->session_id); da->session_id = json_object_get_string_member(data, "session_id");
+		
 		discord_got_relationships(da, json_object_get_member(data, "relationships"), NULL);
 		discord_got_private_channels(da, json_object_get_member(data, "private_channels"), NULL);
 		discord_got_presences(da, json_object_get_member(data, "presences"), NULL);
