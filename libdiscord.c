@@ -899,7 +899,8 @@ PurpleGroup* discord_get_or_create_default_group();
 static void discord_got_relationships(DiscordAccount *da, JsonNode *node, gpointer user_data);
 static void discord_got_private_channels(DiscordAccount *da, JsonNode *node, gpointer user_data);
 static void discord_got_presences(DiscordAccount *da, JsonNode *node, gpointer user_data);
-static void discord_got_avatar(DiscordAccount *ya, JsonNode *node, gpointer user_data);
+static void discord_got_avatar(DiscordAccount *da, JsonNode *node, gpointer user_data);
+static void discord_get_avatar(DiscordAccount *da, const gchar *username, const gchar *avatar_id);
 
 
 static void
@@ -1049,9 +1050,7 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 			}
 			
 			if (avatar_id) { //TODO what other types are there?
-				gchar *url = g_strdup_printf("https://cdn.discordapp.com/avatars/%s/%s.jpg", user_id, avatar_id); //TODO escape
-				discord_fetch_url(da, url, NULL, discord_got_avatar, buddy);
-				g_free(url);
+				discord_get_avatar(da, user_id, avatar_id);
 			}
 		}
 	} else if (purple_strequal(type, "READY")) {
@@ -1600,9 +1599,7 @@ discord_got_relationships(DiscordAccount *da, JsonNode *node, gpointer user_data
 			}
 			
 			if (type == 1 && avatar_id) { //TODO what other types are there?
-				gchar *url = g_strdup_printf("https://cdn.discordapp.com/avatars/%s/%s.jpg", user_id, avatar_id); //TODO escape
-				discord_fetch_url(da, url, NULL, discord_got_avatar, buddy);
-				g_free(url);
+				discord_get_avatar(da, user_id, avatar_id);
 			}
 		}
 	}
@@ -1641,9 +1638,7 @@ discord_got_private_channels(DiscordAccount *da, JsonNode *node, gpointer user_d
 			}
 			
 			if (type == 1 && avatar_id) { //TODO what other types are there?
-				gchar *url = g_strdup_printf("https://cdn.discordapp.com/avatars/%s/%s.jpg", user_id, avatar_id); //TODO escape
-				discord_fetch_url(da, url, NULL, discord_got_avatar, buddy);
-				g_free(url);
+				discord_get_avatar(da, user_id, avatar_id);
 			}
 		}
 	}
@@ -2999,12 +2994,18 @@ discord_chat_set_topic(PurpleConnection *pc, int id, const char *topic)
 	discord_socket_write_json(ya, data);*/
 }
 
+typedef struct {
+	gchar *username;
+	gchar *avatar_id;
+} DiscordBuddyAvatar;
+
 static void
 discord_got_avatar(DiscordAccount *ya, JsonNode *node, gpointer user_data)
 {
+	DiscordBuddyAvatar *dba = user_data;
+	
 	if (node != NULL) {
 		JsonObject *response = json_node_get_object(node);
-		PurpleBuddy *buddy = user_data;
 		const gchar *response_str;
 		gsize response_len;
 		gpointer response_dup;
@@ -3013,8 +3014,48 @@ discord_got_avatar(DiscordAccount *ya, JsonNode *node, gpointer user_data)
 		response_len = json_object_get_int_member(response, "len");
 		response_dup = g_memdup(response_str, response_len);
 		
-		purple_buddy_icons_set_for_user(ya->account, purple_buddy_get_name(buddy), response_dup, response_len, NULL);
+		purple_buddy_icons_set_for_user(ya->account, dba->username, response_dup, response_len, dba->avatar_id);
 	}
+	
+	g_free(dba->username);
+	g_free(dba->avatar_id);
+	g_free(dba);
+}
+
+static void
+discord_get_avatar(DiscordAccount *da, const gchar *user_id, const gchar *avatar_id)
+{
+	DiscordBuddyAvatar *dba;
+	GString *url;
+	const gchar *checksum;
+	const gchar *username;
+
+	if (!user_id || !avatar_id || !*user_id || !*avatar_id) {
+		return;
+	}
+
+	username = g_hash_table_lookup(da->ids_to_usernames, user_id);
+	if (username == NULL) {
+		return;
+	}
+	
+	checksum = purple_buddy_icons_get_checksum_for_user(purple_blist_find_buddy(da->account, username));
+	if (purple_strequal(checksum, avatar_id)) {
+		return;
+	}
+	
+	dba = g_new0(DiscordBuddyAvatar, 1);
+	dba->username = g_strdup(username);
+	dba->avatar_id = g_strdup(avatar_id);
+	
+	url = g_string_new("https://cdn.discordapp.com/avatars/");
+	g_string_append_printf(url, "%s", purple_url_encode(user_id));
+	g_string_append_c(url, '/');
+	g_string_append_printf(url, "%s", purple_url_encode(avatar_id));
+	
+	discord_fetch_url(da, url->str, NULL, discord_got_avatar, dba);
+	
+	g_string_free(url, TRUE);
 }
 
 static void
