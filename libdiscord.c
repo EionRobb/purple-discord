@@ -1017,7 +1017,7 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 				purple_chat_user_set_flags(cb, cbflags);
 			}
 		} else {
-			purple_serv_got_typing(da->pc, username, 999, PURPLE_IM_TYPING);
+			purple_serv_got_typing(da->pc, username, 10, PURPLE_IM_TYPING);
 			
 		}
 		
@@ -2770,7 +2770,7 @@ discord_conv_send_typing(PurpleConversation *conv, PurpleIMTypingState state, Di
 	discord_fetch_url(ya, url, "", NULL, NULL);
 	g_free(url);
 	
-	return 9999;
+	return 10;
 }
 
 static guint
