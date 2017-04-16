@@ -949,6 +949,7 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		const gchar *timestamp_str = json_object_get_string_member(data, "timestamp");
 		time_t timestamp = purple_str_to_time(timestamp_str, FALSE, NULL, NULL, NULL);
 		const gchar *nonce = json_object_get_string_member(data, "nonce");
+		gchar *escaped_content = purple_markup_escape_text(content, -1);
 		//const gchar *channel_name = g_hash_table_lookup(da->group_chats, channel_id);
 		
 		if (!g_hash_table_contains(da->ids_to_usernames, user_id)) {
@@ -973,14 +974,14 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 					}
 					conv = PURPLE_CONVERSATION(imconv);
 					
-					msg = purple_message_new_outgoing(username, content, PURPLE_MESSAGE_SEND);
+					msg = purple_message_new_outgoing(username, escaped_content, PURPLE_MESSAGE_SEND);
 					purple_message_set_time(msg, timestamp);
 					purple_conversation_write_message(conv, msg);
 					purple_message_destroy(msg);
 				}
 			} else {
 				gchar *merged_username = discord_combine_username(username, discriminator);
-				purple_serv_got_im(da->pc, merged_username, content, PURPLE_MESSAGE_RECV, timestamp);
+				purple_serv_got_im(da->pc, merged_username, escaped_content, PURPLE_MESSAGE_RECV, timestamp);
 				g_free(merged_username);
 			}
 			
@@ -995,10 +996,11 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 				// new_room = TRUE;
 			// }
 			
-			purple_serv_got_chat_in(da->pc, g_str_hash(channel_id), username, PURPLE_MESSAGE_RECV, content, timestamp);
+			purple_serv_got_chat_in(da->pc, g_str_hash(channel_id), username, PURPLE_MESSAGE_RECV, escaped_content, timestamp);
 			
 			g_free(merged_username);
 		}
+		g_free(escaped_content);
 	} else if (purple_strequal(type, "TYPING_START")) {
 		const gchar *channel_id = json_object_get_string_member(data, "channel_id");
 		const gchar *user_id = json_object_get_string_member(data, "user_id");
@@ -1734,7 +1736,7 @@ discord_login(PurpleAccount *account)
 	PurpleConnectionFlags pc_flags;
 	
 	pc_flags = purple_connection_get_flags(pc);
-	pc_flags |= PURPLE_CONNECTION_FLAG_HTML;
+	//pc_flags |= PURPLE_CONNECTION_FLAG_HTML;
 	pc_flags |= PURPLE_CONNECTION_FLAG_NO_FONTSIZE;
 	pc_flags |= PURPLE_CONNECTION_FLAG_NO_BGCOLOR;
 	purple_connection_set_flags(pc, pc_flags);
@@ -2834,29 +2836,34 @@ const gchar *message, PurpleMessageFlags flags)
 {
 #endif
 	
-	DiscordAccount *ya;
+	DiscordAccount *da;
 	const gchar *room_id;
 	PurpleChatConversation *chatconv;
 	gint ret;
+	gchar *stripped;
 	
-	ya = purple_connection_get_protocol_data(pc);
+	da = purple_connection_get_protocol_data(pc);
 	chatconv = purple_conversations_find_chat(pc, id);
 	room_id = purple_conversation_get_data(PURPLE_CONVERSATION(chatconv), "id");
 	if (!room_id) {
 		// Fix for a race condition around the chat data and serv_got_joined_chat()
 		room_id = purple_conversation_get_name(PURPLE_CONVERSATION(chatconv));
-		if (g_hash_table_lookup(ya->group_chats_rev, room_id)) {
+		if (g_hash_table_lookup(da->group_chats_rev, room_id)) {
 			// Convert friendly name into id
-			room_id = g_hash_table_lookup(ya->group_chats_rev, room_id);
+			room_id = g_hash_table_lookup(da->group_chats_rev, room_id);
 		}
 		g_return_val_if_fail(room_id, -1);
 	}
-	g_return_val_if_fail(g_hash_table_contains(ya->group_chats, room_id), -1); //TODO rejoin room?
+	g_return_val_if_fail(g_hash_table_contains(da->group_chats, room_id), -1); //TODO rejoin room?
 	
-	ret = discord_conversation_send_message(ya, room_id, message);
+	stripped = g_strstrip(purple_markup_strip_html(message));
+	
+	ret = discord_conversation_send_message(da, room_id, message);
 	if (ret > 0) {
-		purple_serv_got_chat_in(pc, g_str_hash(room_id), ya->self_user_id, PURPLE_MESSAGE_SEND, message, time(NULL));
+		purple_serv_got_chat_in(pc, g_str_hash(room_id), da->self_user_id, PURPLE_MESSAGE_SEND, message, time(NULL));
 	}
+	
+	g_free(stripped);
 	return ret;
 }
 
