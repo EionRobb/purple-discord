@@ -2835,24 +2835,6 @@ const gchar *message, PurpleMessageFlags flags)
 	return ret;
 }
 
-/*static void
-discord_created_direct_message(DiscordAccount *da, JsonNode *node, gpointer user_data)
-{
-	JsonObject *result = json_node_get_object(node);
-	const gchar *room_id = json_object_get_string_member(result, "id");
-	PurpleBuddy *buddy = user_data;
-	
-	if (buddy != NULL) {
-		const gchar *who = purple_buddy_get_name(buddy);
-		
-		g_hash_table_replace(da->one_to_ones, g_strdup(room_id), g_strdup(who));
-		g_hash_table_replace(da->one_to_ones_rev, g_strdup(who), g_strdup(room_id));
-	
-		purple_blist_node_set_string(PURPLE_BLIST_NODE(buddy), "room_id", room_id);
-	}
-	
-	discord_join_room(da, room_id);
-}*/
 
 static void
 discord_created_direct_message_send(DiscordAccount *da, JsonNode *node, gpointer user_data)
@@ -2901,7 +2883,7 @@ const gchar *who, const gchar *message, PurpleMessageFlags flags)
 	DiscordAccount *da = purple_connection_get_protocol_data(pc);
 	gchar *room_id = g_hash_table_lookup(da->one_to_ones_rev, who);
 	
-	//TODO create room
+	//Create DM if there isn't one
 	if (room_id == NULL) {
 		JsonObject *data;
 #if !PURPLE_VERSION_CHECK(3, 0, 0)
@@ -2926,37 +2908,6 @@ const gchar *who, const gchar *message, PurpleMessageFlags flags)
 	return discord_conversation_send_message(da, room_id, message);
 }
 
-// static const gchar *
-// discord_normalise_buddy(const PurpleAccount *account, const gchar *str)
-// {
-	// static gchar buf[26 + 1];
-	// gchar *tmp1, *tmp2;
-
-	// g_return_val_if_fail(str != NULL, NULL);
-
-	// tmp1 = g_ascii_strup(str, -1);
-	// use g_ascii_isalnum on each char
-	// g_snprintf(buf, sizeof(buf), "%26s", tmp1 ? tmp1 : "");
-	// g_free(tmp1);
-
-	// return buf;
-// }
-
-// static gchar *
-// discord_make_base32guid(guint64 id)
-// {
-	// guchar guid[16];
-	// guint64 be_id = GUINT64_TO_BE(id);
-	// gchar *base32guid;
-	
-	// memset(guid, 0, 16);
-	// memmove(guid + 8, &be_id, 8);
-	
-	// base32guid = purple_base32_encode(guid, 16);
-	// base32guid[26] = 0; // Strip off trailing padding
-	
-	// return base32guid;
-// }
 
 static void
 discord_chat_set_topic(PurpleConnection *pc, int id, const char *topic)
@@ -2965,7 +2916,6 @@ discord_chat_set_topic(PurpleConnection *pc, int id, const char *topic)
 	const gchar *room_id;
 	PurpleChatConversation *chatconv;
 	JsonObject *data;
-	JsonArray *params;
 	
 	ya = purple_connection_get_protocol_data(pc);
 	chatconv = purple_conversations_find_chat(pc, id);
@@ -2981,13 +2931,7 @@ discord_chat_set_topic(PurpleConnection *pc, int id, const char *topic)
 	}
 	g_return_if_fail(g_hash_table_contains(ya->group_chats, room_id)); //TODO rejoin room?
 	
-	//["{\"msg\":\"method\",\"method\":\"saveRoomSettings\",\"params\":[\"ocwXv7EvCJ69d3AdG\",\"roomTopic\",\"set topic here plzkthxbai\"],\"id\":\"16\"}"]
 	data = json_object_new();
-	params = json_array_new();
-	
-	json_array_add_string_element(params, room_id);
-	json_array_add_string_element(params, "roomTopic");
-	json_array_add_string_element(params, topic);
 	
 	json_object_set_string_member(data, "msg", "method");
 	json_object_set_string_member(data, "method", "saveRoomSettings");
@@ -2995,6 +2939,9 @@ discord_chat_set_topic(PurpleConnection *pc, int id, const char *topic)
 	json_object_set_string_member(data, "id", discord_get_next_id_str(ya));
 	
 	discord_socket_write_json(ya, data);*/
+	
+	//PATCH https://discordapp.com/api/v6/channels/%s channel
+	//{"name":"test","position":1,"topic":"new topic","bitrate":64000,"user_limit":0}
 }
 
 typedef struct {
@@ -3161,7 +3108,7 @@ discord_get_account_text_table(PurpleAccount *unused)
 
 	table = g_hash_table_new(g_str_hash, g_str_equal);
 
-	g_hash_table_insert(table, "login_label", (gpointer)_("Email or Username..."));
+	g_hash_table_insert(table, "login_label", (gpointer)_("Email address..."));
 
 	return table;
 }
@@ -3169,10 +3116,10 @@ discord_get_account_text_table(PurpleAccount *unused)
 static GList *
 discord_add_account_options(GList *account_options)
 {
-	PurpleAccountOption *option;
+	//PurpleAccountOption *option;
 	
-	option = purple_account_option_bool_new(N_("Auto-add buddies to the buddy list"), "auto-add-buddy", FALSE);
-	account_options = g_list_append(account_options, option);
+	//option = purple_account_option_bool_new(N_("Auto-add buddies to the buddy list"), "auto-add-buddy", FALSE);
+	//account_options = g_list_append(account_options, option);
 	
 	return account_options;
 }
