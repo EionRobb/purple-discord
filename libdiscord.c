@@ -845,7 +845,7 @@ discord_send_auth(DiscordAccount *da)
 	
 	json_object_set_string_member(data, "token", da->token);
 	
-	if (da->seq) {
+	if (da->seq && da->session_id) {
 		json_object_set_int_member(obj, "op", 6);
 
 		json_object_set_string_member(data, "session_id", da->session_id);
@@ -1072,7 +1072,7 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 			purple_account_set_alias(da->account, json_object_get_string_member(self_user, "username"));
 		}
 		
-		g_free(da->session_id); da->session_id = json_object_get_string_member(data, "session_id");
+		g_free(da->session_id); da->session_id = g_strdup(json_object_get_string_member(data, "session_id"));
 		
 		discord_got_relationships(da, json_object_get_member(data, "relationships"), NULL);
 		discord_got_private_channels(da, json_object_get_member(data, "private_channels"), NULL);
@@ -1877,6 +1877,13 @@ discord_process_frame(DiscordAccount *da, const gchar *frame)
 			}
 			case 7: {//Reconnect
 				discord_start_socket(da);
+				break;
+			}
+			case 9: {//Invalid session
+				da->seq = 0;
+				g_free(da->session_id); da->session_id = NULL;
+				
+				discord_send_auth(da);
 				break;
 			}
 			case 10: {//Hello
