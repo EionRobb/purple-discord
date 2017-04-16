@@ -154,7 +154,10 @@ json_object_to_string(JsonObject *obj)
 #define purple_connection_set_flags(pc, f)      ((pc)->flags = (f))
 #define purple_connection_get_flags(pc)         ((pc)->flags)
 #define purple_blist_find_group        purple_find_group
-#define purple_protocol_get_id  purple_plugin_get_id
+#define purple_protocol_action_get_connection(action)  ((PurpleConnection *) (action)->context)
+#define purple_protocol_action_new                     purple_plugin_action_new
+#define purple_protocol_get_id                         purple_plugin_get_id
+#define PurpleProtocolAction                           PurplePluginAction
 #define PurpleProtocolChatEntry  struct proto_chat_entry
 #define PurpleChatConversation             PurpleConvChat
 #define PurpleIMConversation               PurpleConvIm
@@ -253,6 +256,7 @@ purple_message_destroy(PurpleMessage *message)
 #define purple_account_privacy_deny_remove  purple_privacy_deny_remove
 #define PurpleHttpConnection  PurpleUtilFetchUrlData
 #define purple_buddy_set_name  purple_blist_rename_buddy
+#define purple_request_cpar_from_connection(a)  purple_connection_get_account(a), NULL, NULL
 
 #else
 // Purple3 helper functions
@@ -261,6 +265,8 @@ purple_message_destroy(PurpleMessage *message)
 #define purple_message_destroy          g_object_unref
 #define purple_chat_user_set_alias(cb, alias)  g_object_set((cb), "alias", (alias), NULL)
 #define purple_chat_get_alias(chat)  g_object_get_data(G_OBJECT(chat), "alias")
+#define purple_protocol_action_get_connection(action)  ((action)->connection)
+#define PURPLE_TYPE_STRING  G_TYPE_STRING
 #endif
 
 
@@ -2947,7 +2953,7 @@ discord_chat_set_topic(PurpleConnection *pc, int id, const char *topic)
 	
 	discord_socket_write_json(ya, data);*/
 	
-	//PATCH https://discordapp.com/api/v6/channels/%s channel
+	//PATCH https:// DISCORD_API_SERVER /api/v6/channels/%s channel
 	//{"name":"test","position":1,"topic":"new topic","bitrate":64000,"user_limit":0}
 }
 
@@ -3040,7 +3046,7 @@ discord_add_buddy(PurpleConnection *pc, PurpleBuddy *buddy, PurpleGroup *group
 	
 	postdata = json_object_to_string(data);
 	
-	discord_fetch_url(da, "https://discordapp.com/api/v6/users/@me/relationships", postdata, NULL, NULL);
+	discord_fetch_url(da, "https://" DISCORD_API_SERVER "/api/v6/users/@me/relationships", postdata, NULL, NULL);
 	
 	g_free(postdata);
 	g_strfreev(usersplit);	
@@ -3129,6 +3135,60 @@ discord_add_account_options(GList *account_options)
 	//account_options = g_list_append(account_options, option);
 	
 	return account_options;
+}
+
+void
+discord_join_server_text(gpointer user_data, const gchar *text)
+{
+	DiscordAccount *da = user_data;
+	gchar *url;
+	const gchar *invite_code;
+	
+	invite_code = strrchr(text, '/');
+	if (invite_code == NULL) {
+		invite_code = text;
+	}
+	
+	url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/v6/invite/%s", purple_url_encode(invite_code));
+	
+	discord_fetch_url(da, url, "", NULL, NULL);
+	
+	g_free(url);
+}
+
+void
+discord_join_server(PurpleProtocolAction *action)
+{
+	PurpleConnection *pc = purple_protocol_action_get_connection(action);
+	DiscordAccount *da = purple_connection_get_protocol_data(pc);
+	
+	purple_request_input(pc, _("Join a server"),
+					   _("Join a server"),
+					   _("Enter the join URL here"),
+					   NULL, FALSE, FALSE, "https://discord.gg/ABC123",
+					   _("_Search"), G_CALLBACK(discord_join_server_text),
+					   _("_Cancel"), NULL,
+					   purple_request_cpar_from_connection(pc),
+					   da);
+
+}
+
+static GList *
+discord_actions(
+#if !PURPLE_VERSION_CHECK(3, 0, 0)
+PurplePlugin *plugin, gpointer context
+#else
+PurpleConnection *pc
+#endif
+)
+{
+	GList *m = NULL;
+	PurpleProtocolAction *act;
+
+	act = purple_protocol_action_new(_("Join a server..."), discord_join_server);
+	m = g_list_append(m, act);
+
+	return m;
 }
 
 static PurpleCmdRet
@@ -3265,6 +3325,7 @@ plugin_init(PurplePlugin *plugin)
 	prpl_info->icon_spec.scale_rules = PURPLE_ICON_SCALE_DISPLAY;
 	
 	prpl_info->get_account_text_table = discord_get_account_text_table;
+	prpl_info->list_emblem = discord_list_emblem;
 	prpl_info->status_text = discord_status_text;
 	prpl_info->list_icon = discord_list_icon;
 	prpl_info->set_status = discord_set_status;
@@ -3293,26 +3354,26 @@ static PurplePluginInfo info = {
 	PURPLE_MINOR_VERSION,
 */
 	2, 1,
-	PURPLE_PLUGIN_PROTOCOL, /* type */
-	NULL, /* ui_requirement */
-	0, /* flags */
-	NULL, /* dependencies */
-	PURPLE_PRIORITY_DEFAULT, /* priority */
-	DISCORD_PLUGIN_ID, /* id */
-	"Discord", /* name */
-	DISCORD_PLUGIN_VERSION, /* version */
-	"", /* summary */
-	"", /* description */
-	"Eion Robb <eion@robbmob.com>", /* author */
-	DISCORD_PLUGIN_WEBSITE, /* homepage */
-	libpurple2_plugin_load, /* load */
-	libpurple2_plugin_unload, /* unload */
-	NULL, /* destroy */
-	NULL, /* ui_info */
-	NULL, /* extra_info */
-	NULL, /* prefs_info */
-	NULL/*plugin_actions*/, /* actions */
-	NULL, /* padding */
+	PURPLE_PLUGIN_PROTOCOL,   // type
+	NULL,                     // ui_requirement
+	0,                        // flags
+	NULL,                     // dependencies
+	PURPLE_PRIORITY_DEFAULT,  // priority
+	DISCORD_PLUGIN_ID,        // id
+	"Discord",                // name
+	DISCORD_PLUGIN_VERSION,   // version
+	"",                       // summary
+	"",                       // description
+	"Eion Robb <eion@robbmob.com>", // author
+	DISCORD_PLUGIN_WEBSITE,   // homepage
+	libpurple2_plugin_load,   // load
+	libpurple2_plugin_unload, // unload
+	NULL,                     // destroy
+	NULL,                     // ui_info
+	NULL,                     // extra_info
+	NULL,                     // prefs_info
+	discord_actions,          // actions
+	NULL,                     // padding
 	NULL,
 	NULL,
 	NULL
@@ -3398,6 +3459,8 @@ discord_protocol_client_iface_init(PurpleProtocolClientIface *prpl_info)
 {
 	prpl_info->get_account_text_table = discord_get_account_text_table;
 	prpl_info->status_text = discord_status_text;
+	prpl_info->get_actions = discord_actions;
+	prpl_info->list_emblem = discord_list_emblem;
 }
 
 static void 
