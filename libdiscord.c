@@ -2290,11 +2290,23 @@ discord_chat_info(PurpleConnection *pc)
 	m = g_list_append(m, pce);
 
 	pce = g_new0(PurpleProtocolChatEntry, 1);
-	pce->label = _("Group ID");
+	pce->label = _("Channel ID");
 	pce->identifier = "id";
 	m = g_list_append(m, pce);
 	
 	return m;
+}
+
+static gboolean
+str_is_number(const gchar *str)
+{
+	gint i = strlen(str) - 1;
+	for(; i >= 0; i--) {
+		if (!g_ascii_isdigit(str[i])) {
+			return FALSE;
+		}
+	}
+	return TRUE;
 }
 
 static GHashTable *
@@ -2304,9 +2316,9 @@ discord_chat_info_defaults(PurpleConnection *pc, const char *chatname)
 	
 	if (chatname != NULL)
 	{
-		if (*chatname == '#') {
+		if (strchr(chatname, '#')) {
 			g_hash_table_insert(defaults, "name", g_strdup(chatname + 1));
-		} else if (strlen(chatname) == 17) {
+		} else if (str_is_number(chatname)) {
 			g_hash_table_insert(defaults, "id", g_strdup(chatname));
 		} else {
 			g_hash_table_insert(defaults, "name", g_strdup(chatname));
@@ -2617,7 +2629,7 @@ discord_got_chat_name_id(DiscordAccount *ya, JsonNode *node, gpointer user_data)
 static void
 discord_join_chat(PurpleConnection *pc, GHashTable *chatdata)
 {
-	/*DiscordAccount *ya = purple_connection_get_protocol_data(pc);
+	DiscordAccount *da = purple_connection_get_protocol_data(pc);
 	gchar *id;
 	gchar *name;
 	PurpleChatConversation *chatconv = NULL;
@@ -2631,16 +2643,16 @@ discord_join_chat(PurpleConnection *pc, GHashTable *chatdata)
 	}
 	
 	if (id == NULL) {
-		id = g_hash_table_lookup(ya->group_chats_rev, name);
+		id = g_hash_table_lookup(da->group_chats_rev, name);
 	}
 	if (name == NULL) {
-		name = g_hash_table_lookup(ya->group_chats, id);
+		name = g_hash_table_lookup(da->group_chats, id);
 	}
 	
 	//TODO use the api look up name info from the id
 	
 	if (id == NULL) {
-		//["{\"msg\":\"method\",\"method\":\"getRoomIdByNameOrId\",\"params\":[\"general\"],\"id\":\"3\"}"]
+		/*//["{\"msg\":\"method\",\"method\":\"getRoomIdByNameOrId\",\"params\":[\"general\"],\"id\":\"3\"}"]
 		JsonObject *data;
 		JsonArray *params;
 		
@@ -2656,15 +2668,15 @@ discord_join_chat(PurpleConnection *pc, GHashTable *chatdata)
 		
 		discord_socket_write_json(ya, data);
 		
-		g_hash_table_ref(chatdata);
+		g_hash_table_ref(chatdata);*/
 		return;
 	}
 	
 	if (name != NULL) {
-		chatconv = purple_conversations_find_chat_with_account(name, ya->account);
+		chatconv = purple_conversations_find_chat_with_account(name, da->account);
 	}
 	if (chatconv == NULL) {
-		chatconv = purple_conversations_find_chat_with_account(id, ya->account);
+		chatconv = purple_conversations_find_chat_with_account(id, da->account);
 	}
 	if (chatconv != NULL && !purple_chat_conversation_has_left(chatconv)) {
 		purple_conversation_present(PURPLE_CONVERSATION(chatconv));
@@ -2678,14 +2690,13 @@ discord_join_chat(PurpleConnection *pc, GHashTable *chatdata)
 	
 	purple_conversation_present(PURPLE_CONVERSATION(chatconv));
 	
-	if (!g_hash_table_contains(ya->group_chats, id)) {
-		g_hash_table_replace(ya->group_chats, g_strdup(id), name ? g_strdup(name) : NULL);
+	if (!g_hash_table_contains(da->group_chats, id)) {
+		g_hash_table_replace(da->group_chats, g_strdup(id), name ? g_strdup(name) : NULL);
 	}
-	if (name != NULL && !g_hash_table_contains(ya->group_chats_rev, name)) {
-		g_hash_table_replace(ya->group_chats_rev, g_strdup(name), id ? g_strdup(id) : NULL);
+	if (name != NULL && !g_hash_table_contains(da->group_chats_rev, name)) {
+		g_hash_table_replace(da->group_chats_rev, g_strdup(name), id ? g_strdup(id) : NULL);
 	}
 	
-	discord_join_room(ya, id);*/
 }
 
 static void
