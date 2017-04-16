@@ -495,7 +495,7 @@ gpointer user_data, const gchar *url_text, gsize len, const gchar *error_message
 }
 
 static void
-discord_fetch_url(DiscordAccount *ya, const gchar *url, const gchar *postdata, DiscordProxyCallbackFunc callback, gpointer user_data)
+discord_fetch_url_with_method(DiscordAccount *ya, const gchar *method, const gchar *url, const gchar *postdata, DiscordProxyCallbackFunc callback, gpointer user_data)
 {
 	PurpleAccount *account;
 	DiscordProxyConnection *conn;
@@ -512,11 +512,16 @@ discord_fetch_url(DiscordAccount *ya, const gchar *url, const gchar *postdata, D
 	
 	cookies = discord_cookies_to_string(ya);
 	
+	if (method == NULL) {
+		method = "GET";
+	}
+	
 	purple_debug_info("discord", "Fetching url %s\n", url);
 
 #if PURPLE_VERSION_CHECK(3, 0, 0)
 	
 	PurpleHttpRequest *request = purple_http_request_new(url);
+	purple_http_request_set_method(request, method);
 	purple_http_request_header_set(request, "Accept", "*/*");
 	purple_http_request_header_set(request, "User-Agent", DISCORD_USERAGENT);
 	purple_http_request_header_set(request, "Cookie", cookies);
@@ -550,8 +555,8 @@ discord_fetch_url(DiscordAccount *ya, const gchar *url, const gchar *postdata, D
 	headers = g_string_new(NULL);
 	
 	//Use the full 'url' until libpurple can handle path's longer than 256 chars
-	g_string_append_printf(headers, "%s /%s HTTP/1.0\r\n", (postdata ? "POST" : "GET"), path);
-	//g_string_append_printf(headers, "%s %s HTTP/1.0\r\n", (postdata ? "POST" : "GET"), url);
+	g_string_append_printf(headers, "%s /%s HTTP/1.0\r\n", method, path);
+	//g_string_append_printf(headers, "%s %s HTTP/1.0\r\n", method, url);
 	g_string_append_printf(headers, "Connection: close\r\n");
 	g_string_append_printf(headers, "Host: %s\r\n", host);
 	g_string_append_printf(headers, "Accept: */*\r\n");
@@ -591,6 +596,13 @@ discord_fetch_url(DiscordAccount *ya, const gchar *url, const gchar *postdata, D
 #endif
 
 	g_free(cookies);
+}
+
+
+static void
+discord_fetch_url(DiscordAccount *da, const gchar *url, const gchar *postdata, DiscordProxyCallbackFunc callback, gpointer user_data)
+{
+	discord_fetch_url_with_method(da, (postdata ? "POST" : "GET"), url, postdata, callback, user_data);
 }
 
 
