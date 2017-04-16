@@ -1465,12 +1465,17 @@ discord_set_status(PurpleAccount *account, PurpleStatus *status)
 {
 	PurpleConnection *pc = purple_account_get_connection(account);
 	DiscordAccount *ya = purple_connection_get_protocol_data(pc);
+	const gchar *status_id = purple_status_get_id(status);
 	
 	JsonObject *obj = json_object_new();
 	JsonObject *data = json_object_new();
 	
+	if (g_str_has_prefix(status_id, "set-")) {
+		status_id = &status_id[4];
+	}
+	
 	json_object_set_int_member(obj, "op", 3);
-	json_object_set_string_member(data, "status", purple_status_get_id(status));
+	json_object_set_string_member(data, "status", status_id);
 	json_object_set_object_member(obj, "d", data);
 	
 	discord_socket_write_json(ya, data);
@@ -3124,13 +3129,24 @@ discord_status_types(PurpleAccount *account)
 	GList *types = NULL;
 	PurpleStatusType *status;
 
-	status = purple_status_type_new_with_attrs(PURPLE_STATUS_AVAILABLE, "online", "Online", TRUE, TRUE, FALSE, "message", "In-Game", purple_value_new(PURPLE_TYPE_STRING), NULL);
-	types = g_list_append(types, status);
-
-	status = purple_status_type_new_with_attrs(PURPLE_STATUS_AWAY, "idle", "Away", TRUE, TRUE, TRUE, "message", "In-Game", purple_value_new(PURPLE_TYPE_STRING), NULL);
+	// We can only set statuses without in-game info
+	status = purple_status_type_new_full(PURPLE_STATUS_AVAILABLE, "set-online", "Online", TRUE, TRUE, FALSE);
 	types = g_list_append(types, status);
 	
-	status = purple_status_type_new_full(PURPLE_STATUS_OFFLINE, "offline", "Offline", TRUE, TRUE, FALSE);
+	status = purple_status_type_new_full(PURPLE_STATUS_AWAY, "set-idle", "Away", TRUE, TRUE, FALSE);
+	types = g_list_append(types, status);
+	
+	status = purple_status_type_new_full(PURPLE_STATUS_OFFLINE, "set-offline", "Offline", TRUE, TRUE, FALSE);
+	types = g_list_append(types, status);
+	
+	// Other people can have an in-game display
+	status = purple_status_type_new_with_attrs(PURPLE_STATUS_AVAILABLE, "online", "Online", TRUE, FALSE, FALSE, "message", "In-Game", purple_value_new(PURPLE_TYPE_STRING), NULL);
+	types = g_list_append(types, status);
+
+	status = purple_status_type_new_with_attrs(PURPLE_STATUS_AWAY, "idle", "Away", TRUE, FALSE, FALSE, "message", "In-Game", purple_value_new(PURPLE_TYPE_STRING), NULL);
+	types = g_list_append(types, status);
+	
+	status = purple_status_type_new_with_attrs(PURPLE_STATUS_OFFLINE, "offline", "Offline", TRUE, FALSE, FALSE, "message", "In-Game", purple_value_new(PURPLE_TYPE_STRING), NULL);
 	types = g_list_append(types, status);
 	
 	return types;
