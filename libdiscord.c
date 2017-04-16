@@ -1074,8 +1074,8 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 	} else if (purple_strequal(type, "READY")) {
 		JsonObject *self_user = json_object_get_object_member(data, "user");
 		g_free(da->self_user_id); da->self_user_id = g_strdup(json_object_get_string_member(self_user, "id"));
-		if (!purple_account_get_alias(da->account)) {
-			purple_account_set_alias(da->account, json_object_get_string_member(self_user, "username"));
+		if (!purple_account_get_private_alias(da->account)) {
+			purple_account_set_private_alias(da->account, json_object_get_string_member(self_user, "username"));
 		}
 		
 		g_free(da->session_id); da->session_id = g_strdup(json_object_get_string_member(data, "session_id"));
@@ -3407,15 +3407,11 @@ static void
 discord_protocol_init(PurpleProtocol *prpl_info)
 {
 	PurpleProtocol *info = prpl_info;
-	PurpleAccountUserSplit *split;
 
 	info->id = DISCORD_PLUGIN_ID;
 	info->name = "Discord";
 	info->options = OPT_PROTO_CHAT_TOPIC | OPT_PROTO_SLASH_COMMANDS_NATIVE;
 	info->account_options = discord_add_account_options(info->account_options);
-	
-	split = purple_account_user_split_new(_("Server"), RC_DEFAULT_SERVER, RC_SERVER_SPLIT_CHAR);
-	info->user_splits = g_list_append(info->user_splits, split);
 }
 
 static void
