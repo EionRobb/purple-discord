@@ -2312,7 +2312,11 @@ discord_socket_failed(PurpleSslConnection *conn, PurpleSslErrorType errortype, g
 	da->websocket = NULL;
 	da->websocket_header_received = FALSE;
 	
-	discord_restart_channel(da);
+	if (da->frames_since_reconnect < 1) {
+		purple_connection_error(da->pc, PURPLE_CONNECTION_ERROR_NETWORK_ERROR, "Couldn't connect to gateway");
+	} else {
+		discord_restart_channel(da);
+	}
 }
 
 static void
