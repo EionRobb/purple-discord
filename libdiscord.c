@@ -279,6 +279,7 @@ typedef struct {
 	gchar *session_token;
 	gchar *channel;
 	gchar *self_user_id;
+	gchar *self_username;
 	
 	gint64 last_message_timestamp;
 	gint64 last_load_last_message_timestamp;
@@ -1089,6 +1090,11 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		if (!purple_account_get_private_alias(da->account)) {
 			purple_account_set_private_alias(da->account, json_object_get_string_member(self_user, "username"));
 		}
+		g_free(da->self_username); da->self_username = discord_combine_username(json_object_get_string_member(self_user, "username"), json_object_get_string_member(self_user, "discriminator"));
+		purple_connection_set_display_name(da->pc, da->self_username);
+		g_hash_table_replace(da->usernames_to_ids, g_strdup(da->self_username), g_strdup(da->self_user_id));
+		g_hash_table_replace(da->ids_to_usernames, g_strdup(da->self_user_id), g_strdup(da->self_username));
+		
 		
 		g_free(da->session_id); da->session_id = g_strdup(json_object_get_string_member(data, "session_id"));
 		
@@ -1917,6 +1923,7 @@ discord_close(PurpleConnection *pc)
 	g_free(da->frame); da->frame = NULL;
 	g_free(da->token); da->token = NULL;
 	g_free(da->session_id); da->session_id = NULL;
+	g_free(da->self_username); da->self_username = NULL;
 	g_free(da->self_user_id); da->self_user_id = NULL;
 	g_free(da);
 }
@@ -2952,8 +2959,7 @@ const gchar *message, PurpleMessageFlags flags)
 	
 	ret = discord_conversation_send_message(da, room_id, message);
 	if (ret > 0) {
-		const gchar *username = g_hash_table_lookup(da->ids_to_usernames, da->self_user_id);
-		purple_serv_got_chat_in(pc, g_str_hash(room_id), username ? username : da->self_user_id, PURPLE_MESSAGE_SEND, message, time(NULL));
+		purple_serv_got_chat_in(pc, g_str_hash(room_id), da->self_username, PURPLE_MESSAGE_SEND, message, time(NULL));
 	}
 	
 	g_free(stripped);
