@@ -947,7 +947,7 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 	} else if (purple_strequal(type, "MESSAGE_CREATE")/* || purple_strequal(type, "MESSAGE_UPDATE")*/) { //TODO
 		JsonObject *author = json_object_get_object_member(data, "author");
 		const gchar *username = json_object_get_string_member(author, "username");
-		const gchar *discriminator = json_object_get_string_member(author, "discriminator"); //TODO use me!!
+		const gchar *discriminator = json_object_get_string_member(author, "discriminator");
 		const gchar *user_id = json_object_get_string_member(author, "id");
 		const gchar *channel_id = json_object_get_string_member(data, "channel_id");
 		const gchar *content = json_object_get_string_member(data, "content");
@@ -1069,7 +1069,17 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 				g_hash_table_replace(da->group_chats, g_strdup(channel_id), NULL);
 			}
 		}
+	} else if (purple_strequal(type, "CHANNEL_UPDATE")) {
+		const gchar *channel_id = json_object_get_string_member(data, "id");
+		gint64 channel_type = json_object_get_int_member(data, "type");
 		
+		if ((channel_type == 0 && json_object_has_member(data, "topic")) ||
+				channel_type == 3) {
+			PurpleChatConversation *chatconv = purple_conversations_find_chat(da->pc, g_str_hash(channel_id));
+			if (chatconv) {
+				purple_chat_conversation_set_topic(chatconv, NULL, json_object_get_string_member(data, (channel_type == 1 ? "topic" : "name")));
+			}
+		}
 	} else if (purple_strequal(type, "RELATIONSHIP_ADD")) {
 		JsonObject *user = json_object_get_object_member(data, "user");
 		const gchar *username = json_object_get_string_member(user, "username");
@@ -1728,20 +1738,31 @@ discord_got_private_channels(DiscordAccount *da, JsonNode *node, gpointer user_d
 	for (i = len - 1; i >= 0; i--) {
 		JsonObject *channel = json_array_get_object_element(private_channels, i);
 		JsonArray *recipients = json_object_get_array_member(channel, "recipients");
-		JsonObject *user = json_array_get_object_element(recipients, 0);
-		const gchar *user_id = json_object_get_string_member(user, "id");
-		const gchar *username = json_object_get_string_member(user, "username");
-		const gchar *discriminator = json_object_get_string_member(user, "discriminator");
 		const gchar *room_id = json_object_get_string_member(channel, "id");
-		gchar *merged_username = discord_combine_username(username, discriminator);
+		gint64 room_type = json_object_get_int_member(channel, "type");
 		
-		g_hash_table_replace(da->usernames_to_ids, g_strdup(merged_username), g_strdup(user_id));
-		g_hash_table_replace(da->ids_to_usernames, g_strdup(user_id), g_strdup(merged_username));
-		
-		g_hash_table_replace(da->one_to_ones, g_strdup(room_id), g_strdup(merged_username));
-		g_hash_table_replace(da->one_to_ones_rev, g_strdup(merged_username), g_strdup(room_id));
-		
-		g_free(merged_username);
+		if (room_type == 1) {
+			//One-to-one DM
+			JsonObject *user = json_array_get_object_element(recipients, 0);
+			const gchar *user_id = json_object_get_string_member(user, "id");
+			const gchar *username = json_object_get_string_member(user, "username");
+			const gchar *discriminator = json_object_get_string_member(user, "discriminator");
+			gchar *merged_username = discord_combine_username(username, discriminator);
+			
+			g_hash_table_replace(da->usernames_to_ids, g_strdup(merged_username), g_strdup(user_id));
+			g_hash_table_replace(da->ids_to_usernames, g_strdup(user_id), g_strdup(merged_username));
+			
+			g_hash_table_replace(da->one_to_ones, g_strdup(room_id), g_strdup(merged_username));
+			g_hash_table_replace(da->one_to_ones_rev, g_strdup(merged_username), g_strdup(room_id));
+			
+			g_free(merged_username);
+		} else {
+			//Private group DM
+			if (!g_hash_table_contains(da->group_chats, room_id)) {
+				g_hash_table_replace(da->group_chats, g_strdup(room_id), g_strdup(room_id));
+				g_hash_table_replace(da->group_chats_rev, g_strdup(room_id), g_strdup(room_id));
+			}
+		}
 	}
 }
 
@@ -2568,8 +2589,8 @@ discord_got_history_of_room(DiscordAccount *ya, JsonNode *node, gpointer user_da
 
 	// libpurple can't store a 64bit int on a 32bit machine, so convert to something more usable instead (puke)
 	//  also needs to work cross platform, in case the accounts.xml is being shared (double puke)
-/*
-static gint64
+
+/*static gint64
 discord_get_room_last_timestamp(DiscordAccount *ya, const gchar *room_id)
 {
 	guint64 last_message_timestamp = ya->last_load_last_message_timestamp;
@@ -2596,9 +2617,9 @@ discord_get_room_last_timestamp(DiscordAccount *ya, const gchar *room_id)
 	}
 	
 	return last_message_timestamp;
-}*/
+}
 
-/*static void
+static void
 discord_set_room_last_timestamp(DiscordAccount *ya, const gchar *room_id, gint64 last_timestamp)
 {
 	PurpleBlistNode *blistnode = NULL;
@@ -2708,6 +2729,70 @@ discord_join_room(DiscordAccount *ya, const gchar *room_id)
 	
 }*/
 
+typedef struct {
+	DiscordAccount *da;
+	gchar *channel_id;
+	GList *allowed_roles;
+	GList *denied_roles;
+} DiscordChannelPermissionLookup;
+
+static void 
+discord_got_users_of_room(DiscordAccount *da, JsonNode *node, gpointer user_data)
+{
+	DiscordChannelPermissionLookup *lookup = user_data;
+	PurpleChatConversation *chatconv = purple_conversations_find_chat(da->pc, g_str_hash(lookup->channel_id));
+	
+	if (chatconv != NULL) {
+		JsonArray *members = json_node_get_array(node);
+		gint i, j;
+		guint len = json_array_get_length(members);
+		GList *users = NULL, *flags = NULL;
+	
+		for (i = len - 1; i >= 0; i--) {
+			JsonObject *member = json_array_get_object_element(members, i);
+			JsonArray *roles = json_object_get_array_member(member, "roles");
+			gboolean is_allowed = TRUE;
+			
+			if (lookup->allowed_roles || lookup->denied_roles) {
+				is_allowed = FALSE;
+				for (j = json_array_get_length(roles) - 1; j >= 0; j--) {
+					const gchar *role = json_array_get_string_element(roles, j);
+					
+					if (g_list_find_custom(lookup->allowed_roles, role, (GCompareFunc) g_strcmp0) ||
+						!g_list_find_custom(lookup->denied_roles, role, (GCompareFunc) g_strcmp0)) {
+						//TODO this logic for denied_roles isn't right
+						is_allowed = TRUE;
+						break;
+					}
+				}
+			}
+			
+			if (is_allowed) {
+				JsonObject *user = json_object_get_object_member(member, "user");
+				const gchar *username = json_object_get_string_member(user, "username");
+				const gchar *discriminator = json_object_get_string_member(user, "discriminator");
+				
+				users = g_list_prepend(users, discord_combine_username(username, discriminator));
+				flags = g_list_prepend(flags, GINT_TO_POINTER(PURPLE_CHAT_USER_NONE));
+			}
+		}
+	
+		purple_chat_conversation_add_users(chatconv, users, NULL, flags, FALSE);
+		
+		while (users != NULL) {
+			g_free(users->data);
+			users = g_list_delete_link(users, users);
+		}
+		
+		g_list_free(users);
+		g_list_free(flags);
+	}
+	
+	g_list_free(lookup->allowed_roles);
+	g_list_free(lookup->denied_roles);
+	g_free(lookup->channel_id);
+	g_free(lookup);
+}
 
 static void discord_join_chat(PurpleConnection *pc, GHashTable *chatdata);
 
@@ -2725,6 +2810,85 @@ discord_got_chat_name_id(DiscordAccount *ya, JsonNode *node, gpointer user_data)
 	discord_join_chat(ya->pc, chatdata);
 	g_hash_table_unref(chatdata);
 }*/
+static void
+discord_got_channel_info(DiscordAccount *da, JsonNode *node, gpointer user_data)
+{
+	JsonObject *channel = json_node_get_object(node);
+	const gchar *id = json_object_get_string_member(channel, "id");
+	//gint64 channel_type = json_object_get_int_member(channel, "type");
+	
+	PurpleChatConversation *chatconv = purple_conversations_find_chat(da->pc, g_str_hash(id));
+	
+	if (chatconv == NULL) {
+		return;
+	}
+	
+	if (json_object_has_member(channel, "topic")) {
+		purple_chat_conversation_set_topic(chatconv, NULL, json_object_get_string_member(channel, "topic"));
+	} else {
+		purple_chat_conversation_set_topic(chatconv, NULL, json_object_get_string_member(channel, "name"));
+	}
+	
+	if (json_object_has_member(channel, "recipients")) {
+		GString *recipient_names = g_string_new(NULL);
+		JsonArray *recipients = json_object_get_array_member(channel, "recipients");
+		gint i;
+		guint len = json_array_get_length(recipients);
+		GList *users = NULL, *flags = NULL;
+		
+		for (i = len - 1; i >= 0; i--) {
+			JsonObject *recipient = json_array_get_object_element(recipients, i);
+			const gchar *username = json_object_get_string_member(recipient, "username");
+			const gchar *discriminator = json_object_get_string_member(recipient, "discriminator");
+			
+			users = g_list_prepend(users, discord_combine_username(username, discriminator));
+			flags = g_list_prepend(flags, GINT_TO_POINTER(PURPLE_CHAT_USER_NONE));
+			
+			g_string_append_printf(recipient_names, ", %s", username);
+		}
+	
+		purple_chat_conversation_add_users(chatconv, users, NULL, flags, FALSE);
+		
+		while (users != NULL) {
+			g_free(users->data);
+			users = g_list_delete_link(users, users);
+		}
+		
+		g_list_free(users);
+		g_list_free(flags);
+		
+		purple_conversation_set_title(PURPLE_CONVERSATION(chatconv), recipient_names->str);
+		g_string_free(recipient_names, TRUE);
+	} else if (json_object_has_member(channel, "permission_overwrites")) {
+		DiscordChannelPermissionLookup *lookup = g_new0(DiscordChannelPermissionLookup, 1);
+		// assume default permission is to view rooms
+		// look through allow and deny roles for 0x400 - READ_MESSAGES
+		
+		JsonArray *permissions = json_object_get_array_member(channel, "permission_overwrites");
+		gint i;
+		guint len = json_array_get_length(permissions);
+		gchar *url;
+		
+		for (i = len - 1; i >= 0; i--) {
+			JsonObject *role = json_array_get_object_element(permissions, i);
+			const gchar *role_id = json_object_get_string_member(role, "id");
+			if (json_object_get_int_member(role, "allow") & 0x400) {
+				lookup->allowed_roles = g_list_prepend(lookup->allowed_roles, g_strdup(role_id));
+			}
+			if (json_object_get_int_member(role, "deny") & 0x400) {
+				lookup->denied_roles = g_list_prepend(lookup->denied_roles, g_strdup(role_id));
+			}
+		}
+		
+		lookup->da = da;
+		lookup->channel_id = g_strdup(id);
+		
+		url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/v6/guilds/%s/members?limit=1000", purple_url_encode(json_object_get_string_member(channel, "guild_id")));
+		discord_fetch_url(da, url, NULL, discord_got_users_of_room, lookup);
+		g_free(url);
+	}
+	
+}
 
 static void
 discord_join_chat(PurpleConnection *pc, GHashTable *chatdata)
@@ -2733,6 +2897,7 @@ discord_join_chat(PurpleConnection *pc, GHashTable *chatdata)
 	gchar *id;
 	gchar *name;
 	PurpleChatConversation *chatconv = NULL;
+	gchar *url;
 	
 	id = (gchar *) g_hash_table_lookup(chatdata, "id");
 	name = (gchar *) g_hash_table_lookup(chatdata, "name");
@@ -2750,25 +2915,7 @@ discord_join_chat(PurpleConnection *pc, GHashTable *chatdata)
 	}
 	
 	//TODO use the api look up name info from the id
-	
 	if (id == NULL) {
-		/*//["{\"msg\":\"method\",\"method\":\"getRoomIdByNameOrId\",\"params\":[\"general\"],\"id\":\"3\"}"]
-		JsonObject *data;
-		JsonArray *params;
-		
-		data = json_object_new();
-		params = json_array_new();
-		
-		json_array_add_string_element(params, name);
-		
-		json_object_set_string_member(data, "msg", "method");
-		json_object_set_string_member(data, "method", "getRoomIdByNameOrId");
-		json_object_set_array_member(data, "params", params);
-		json_object_set_string_member(data, "id", discord_get_next_id_str_callback(ya, discord_got_chat_name_id, chatdata));
-		
-		discord_socket_write_json(ya, data);
-		
-		g_hash_table_ref(chatdata);*/
 		return;
 	}
 	
@@ -2796,6 +2943,11 @@ discord_join_chat(PurpleConnection *pc, GHashTable *chatdata)
 	if (name != NULL && !g_hash_table_contains(da->group_chats_rev, name)) {
 		g_hash_table_replace(da->group_chats_rev, g_strdup(name), id ? g_strdup(id) : NULL);
 	}
+	
+	// Get info about the channel
+	url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/v6/channels/%s", purple_url_encode(id));
+	discord_fetch_url(da, url, NULL, discord_got_channel_info, NULL);
+	g_free(url);
 	
 }
 
