@@ -3095,11 +3095,14 @@ discord_conversation_send_message(DiscordAccount *da, const gchar *room_id, cons
 	gchar *url;
 	gchar *postdata;
 	gchar *nonce;
+	gchar *stripped;
 	
 	nonce = g_strdup_printf("%" G_GUINT32_FORMAT, g_random_int());
 	g_hash_table_insert(da->sent_message_ids, nonce, nonce);
 	
-	json_object_set_string_member(data, "content", message);
+	stripped = g_strstrip(purple_markup_strip_html(message));
+	
+	json_object_set_string_member(data, "content", stripped);
 	json_object_set_string_member(data, "nonce", nonce);
 	json_object_set_boolean_member(data, "tts", FALSE);
 	
@@ -3108,6 +3111,7 @@ discord_conversation_send_message(DiscordAccount *da, const gchar *room_id, cons
 	
 	discord_fetch_url(da, url, postdata, NULL, NULL);
 	
+	g_free(stripped);
 	g_free(url);
 	g_free(postdata);
 	json_object_unref(data);
@@ -3130,7 +3134,6 @@ const gchar *message, PurpleMessageFlags flags)
 	const gchar *room_id;
 	PurpleChatConversation *chatconv;
 	gint ret;
-	gchar *stripped;
 	
 	da = purple_connection_get_protocol_data(pc);
 	chatconv = purple_conversations_find_chat(pc, id);
@@ -3146,14 +3149,11 @@ const gchar *message, PurpleMessageFlags flags)
 	}
 	g_return_val_if_fail(g_hash_table_contains(da->group_chats, room_id), -1); //TODO rejoin room?
 	
-	stripped = g_strstrip(purple_markup_strip_html(message));
-	
 	ret = discord_conversation_send_message(da, room_id, message);
 	if (ret > 0) {
 		purple_serv_got_chat_in(pc, g_str_hash(room_id), da->self_username, PURPLE_MESSAGE_SEND, message, time(NULL));
 	}
 	
-	g_free(stripped);
 	return ret;
 }
 
