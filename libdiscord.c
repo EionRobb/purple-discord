@@ -927,6 +927,8 @@ static void discord_got_guilds(DiscordAccount *da, JsonNode *node, gpointer user
 static void discord_got_avatar(DiscordAccount *da, JsonNode *node, gpointer user_data);
 static void discord_get_avatar(DiscordAccount *da, const gchar *username, const gchar *avatar_id);
 
+static const gchar *discord_normalise_room_name(const gchar *guild_name, const gchar *name);
+
 
 static void
 discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data)
@@ -1036,9 +1038,9 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		
 	} else if (purple_strequal(type, "CHANNEL_CREATE")) {
 		const gchar *channel_id = json_object_get_string_member(data, "id");
-		const gchar *name = json_object_get_string_member(data, "name");
+		gint64 channel_type = json_object_get_int_member(data, "type");
 		
-		if (json_object_get_int_member(data, "type") == 1) {
+		if (channel_type == 1) {
 			JsonObject *first_recipient = json_array_get_object_element(json_object_get_array_member(data, "recipients"), 0);
 			
 			if (first_recipient != NULL) {
@@ -1054,8 +1056,18 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 			}
 			
 		} else {
-			g_hash_table_replace(da->group_chats, g_strdup(channel_id), g_strdup(name));
-			g_hash_table_replace(da->group_chats_rev, g_strdup(name), g_strdup(channel_id));
+			const gchar *name = json_object_get_string_member(data, "name");
+			
+			if (name != NULL) {
+				const gchar *guild_id = json_object_get_string_member(data, "guild_id");
+				const gchar *guild_name = g_hash_table_lookup(da->guilds, guild_id);
+				const gchar *channel_name = discord_normalise_room_name(guild_name, name);
+				
+				g_hash_table_replace(da->group_chats, g_strdup(channel_id), g_strdup(channel_name));
+				g_hash_table_replace(da->group_chats_rev, g_strdup(channel_name), g_strdup(channel_id));
+			} else {
+				g_hash_table_replace(da->group_chats, g_strdup(channel_id), NULL);
+			}
 		}
 		
 	} else if (purple_strequal(type, "RELATIONSHIP_ADD")) {
