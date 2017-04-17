@@ -1107,6 +1107,23 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		}
 		
 		g_free(merged_username);
+	} else if (purple_strequal(type, "RELATIONSHIP_REMOVE")) {
+		const gchar *user_id = json_object_get_string_member(data, "id");
+		gchar *username = g_strdup(g_hash_table_lookup(da->ids_to_usernames, user_id));
+		
+		if (username != NULL) {
+			PurpleBuddy *buddy = purple_blist_find_buddy(da->account, username);
+			purple_blist_remove_buddy(buddy);
+			
+			g_hash_table_remove(da->one_to_ones, g_hash_table_lookup(da->one_to_ones_rev, username));
+			g_hash_table_remove(da->one_to_ones_rev, username);
+			
+			g_hash_table_remove(da->usernames_to_ids, username);
+			g_hash_table_remove(da->ids_to_usernames, user_id);
+			
+		}
+		
+		g_free(username);
 	} else if (purple_strequal(type, "READY")) {
 		JsonObject *self_user = json_object_get_object_member(data, "user");
 		g_free(da->self_user_id); da->self_user_id = g_strdup(json_object_get_string_member(self_user, "id"));
@@ -3197,17 +3214,21 @@ const gchar *who, const gchar *message, PurpleMessageFlags flags)
 		const gchar *user_id = g_hash_table_lookup(da->usernames_to_ids, who);
 		gchar *postdata;
 
-		data = json_object_new();
-		json_object_set_string_member(data, "recipient_id", user_id);
-		
-		postdata = json_object_to_string(data);
-		
-		discord_fetch_url(da, "https://" DISCORD_API_SERVER "/api/v6/users/@me/channels", postdata, discord_created_direct_message_send, msg);
-		
-		g_free(postdata);
-		json_object_unref(data);
-		
-		return 1;
+		if (user_id != NULL) {
+			data = json_object_new();
+			json_object_set_string_member(data, "recipient_id", user_id);
+			
+			postdata = json_object_to_string(data);
+			
+			discord_fetch_url(da, "https://" DISCORD_API_SERVER "/api/v6/users/@me/channels", postdata, discord_created_direct_message_send, msg);
+			
+			g_free(postdata);
+			json_object_unref(data);
+			
+			return 1;
+		} else { 
+			return -1;
+		}
 	}
 	
 	return discord_conversation_send_message(da, room_id, message);
@@ -3341,7 +3362,37 @@ discord_add_buddy(PurpleConnection *pc, PurpleBuddy *buddy, PurpleGroup *group
 	discord_fetch_url(da, "https://" DISCORD_API_SERVER "/api/v6/users/@me/relationships", postdata, NULL, NULL);
 	
 	g_free(postdata);
-	g_strfreev(usersplit);	
+	g_strfreev(usersplit);
+	json_object_unref(data);
+}
+
+static void
+discord_buddy_remove(PurpleConnection *pc, PurpleBuddy *buddy, PurpleGroup *group)
+{
+	DiscordAccount *da = purple_connection_get_protocol_data(pc);
+	const gchar *buddy_name = purple_buddy_get_name(buddy);
+	gchar *url;
+	const gchar *user_id = g_hash_table_lookup(da->usernames_to_ids, buddy_name);
+	
+	if (!user_id) {
+		return;
+	}
+	
+	url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/v6/users/@me/relationships/%s", user_id);
+	discord_fetch_url_with_method(da, "DELETE", url, NULL, NULL, NULL);
+	g_free(url);
+}
+
+static void
+discord_fake_group_buddy(PurpleConnection *pc, const char *who, const char *old_group, const char *new_group)
+{
+	// Do nothing to stop the remove+add behaviour
+}
+
+static void
+discord_fake_group_rename(PurpleConnection *pc, const char *old_name, PurpleGroup *group, GList *moved_buddies)
+{
+	// Do nothing to stop the remove+add behaviour
 }
 
 
@@ -3635,6 +3686,9 @@ plugin_init(PurplePlugin *plugin)
 	prpl_info->chat_send = discord_chat_send;
 	prpl_info->set_chat_topic = discord_chat_set_topic;
 	prpl_info->add_buddy = discord_add_buddy;
+	prpl_info->remove_buddy = discord_buddy_remove;
+	prpl_info->group_buddy = discord_fake_group_buddy;
+	prpl_info->rename_group = discord_fake_group_rename;
 	
 	prpl_info->roomlist_get_list = discord_roomlist_get_list;
 	prpl_info->roomlist_room_serialize = discord_roomlist_serialize;
@@ -3738,8 +3792,11 @@ static void
 discord_protocol_server_iface_init(PurpleProtocolServerIface *prpl_info)
 {
 	prpl_info->add_buddy = discord_add_buddy;
+	prpl_info->remove_buddy = discord_buddy_remove;
 	prpl_info->set_status = discord_set_status;
 	prpl_info->set_idle = discord_set_idle;
+	prpl_info->group_buddy = discord_fake_group_buddy;
+	prpl_info->rename_group = discord_fake_group_rename;
 }
 
 static void 
