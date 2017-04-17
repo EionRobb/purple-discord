@@ -1620,7 +1620,7 @@ discord_set_status(PurpleAccount *account, PurpleStatus *status)
 	json_object_set_string_member(data, "status", status_id);
 	json_object_set_object_member(obj, "d", data);
 	
-	discord_socket_write_json(ya, data);
+	discord_socket_write_json(ya, obj);
 }
 
 void
@@ -1642,7 +1642,7 @@ discord_set_idle(PurpleConnection *pc, int idle_time)
 	json_object_set_int_member(data, "since", since);
 	json_object_set_object_member(obj, "d", data);
 	
-	discord_socket_write_json(ya, data);
+	discord_socket_write_json(ya, obj);
 }
 
 static void discord_start_socket(DiscordAccount *ya);
