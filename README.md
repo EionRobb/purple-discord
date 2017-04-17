@@ -18,6 +18,10 @@ Requires devel headers/libs for libpurple and libjson-glib [libglib2.0-dev, libj
 	sudo make install
 ```
 
+Where's my rooms?
+-----------------
+In Pidgin, look in Tools->Room List to get a list of rooms you're in.  It's recommended that you add them to your buddy list and mark them as 'persistent' and 'auto-join'.
+
 Show your appreciation
 ----------------------
 Did this plugin make your life happier?  [Send me $1](https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=PZMBF2QVF69GA) to say thanks!
