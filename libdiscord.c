@@ -312,6 +312,7 @@ typedef struct {
 	GSList *http_conns; /**< PurpleHttpConnection to be cancelled on logout */
 	gint frames_since_reconnect;
 	GSList *pending_writes;
+	gint roomlist_guild_count;
 } DiscordAccount;
 
 typedef void (*DiscordProxyCallbackFunc)(DiscordAccount *ya, JsonNode *node, gpointer user_data);
@@ -1513,8 +1514,11 @@ discord_roomlist_got_list(DiscordAccount *da, JsonNode *node, gpointer user_data
 		purple_roomlist_room_add(roomlist, room);
 	}
 	
-	//TODO only after last room
-	purple_roomlist_set_in_progress(roomlist, FALSE);
+	//Only after last guild
+	da->roomlist_guild_count--;
+	if (da->roomlist_guild_count <= 0) {
+		purple_roomlist_set_in_progress(roomlist, FALSE);
+	}
 }
 
 static gchar *
@@ -1573,6 +1577,8 @@ discord_roomlist_get_list(PurpleConnection *pc)
 		gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/v6/guilds/%s/channels", purple_url_encode(guild_id));
 		discord_fetch_url(da, url, NULL, discord_roomlist_got_list, roomlist);
 		g_free(url);
+		
+		da->roomlist_guild_count++;
 	}
 	
 	return roomlist;
