@@ -286,6 +286,7 @@ typedef struct {
 	
 	gchar *token;
 	gchar *session_id;
+	gchar *mfa_ticket;
 	
 	PurpleSslConnection *websocket;
 	gboolean websocket_header_received;
@@ -1839,10 +1840,39 @@ discord_got_guilds(DiscordAccount *da, JsonNode *node, gpointer user_data)
 	// discord_fetch_url(da, "https://" DISCORD_API_SERVER "/api/v6/users/@me/relationships", NULL, discord_got_relationships, NULL);
 // }
 
+static void discord_login_response(DiscordAccount *da, JsonNode *node, gpointer user_data);
+
+static void
+discord_mfa_text_entry(gpointer user_data, const gchar *code)
+{
+	DiscordAccount *da = user_data;
+	JsonObject *data = json_object_new();
+	gchar *str;
+	
+	json_object_set_string_member(data, "code", code);
+	json_object_set_string_member(data, "ticket", da->mfa_ticket);
+	
+	str = json_object_to_string(data);
+	discord_fetch_url(da, "https://" DISCORD_API_SERVER "/api/v6/auth/mfa/totp", str, discord_login_response, NULL);
+	
+	g_free(str);
+	json_object_unref(data);
+	
+	g_free(da->mfa_ticket);
+	da->mfa_ticket = NULL;
+}
+
+static void
+discord_mfa_cancel(gpointer user_data)
+{
+	DiscordAccount *da = user_data;
+	
+	purple_connection_error(da->pc, PURPLE_CONNECTION_ERROR_AUTHENTICATION_FAILED, "Cancelled 2FA auth");
+}
+
 static void
 discord_login_response(DiscordAccount *da, JsonNode *node, gpointer user_data)
 {
-	purple_connection_set_state(da->pc, PURPLE_CONNECTION_CONNECTED);
 	
 	if (node != NULL) {
 		JsonObject *response = json_node_get_object(node);
@@ -1852,8 +1882,35 @@ discord_login_response(DiscordAccount *da, JsonNode *node, gpointer user_data)
 		purple_account_set_string(da->account, "token", da->token);
 		
 		if (da->token) {
+			purple_connection_set_state(da->pc, PURPLE_CONNECTION_CONNECTED);
 			discord_start_socket(da);
 			//discord_get_buddies(da);
+			return;
+		}
+		
+		if (json_object_get_boolean_member(response, "mfa")) {
+			g_free(da->mfa_ticket);
+			da->mfa_ticket = g_strdup(json_object_get_string_member(response, "ticket"));
+			
+			purple_request_input(da->pc, _("Two-factor authentication"),
+							   _("Enter Discord auth code"),
+							   _("You can get this token from your two-factor authentication mobile app."),
+							   NULL, FALSE, FALSE, "",
+							   _("_Login"), G_CALLBACK(discord_mfa_text_entry),
+							   _("_Cancel"), G_CALLBACK(discord_mfa_cancel),
+							   purple_request_cpar_from_connection(da->pc),
+							   da);
+			return;
+		}
+		
+		if (json_object_has_member(response, "email")) {
+			// Probably an error about new location
+			purple_connection_error(da->pc, PURPLE_CONNECTION_ERROR_AUTHENTICATION_FAILED, json_object_get_string_member(response, "email"));
+			return;
+		}
+		if (json_object_has_member(response, "password")) {
+			// Probably an error about bad password
+			purple_connection_error(da->pc, PURPLE_CONNECTION_ERROR_AUTHENTICATION_FAILED, json_object_get_string_member(response, "password"));
 			return;
 		}
 	}
