@@ -963,12 +963,43 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		const gchar *nonce = json_object_get_string_member(data, "nonce");
 		gchar *escaped_content = purple_markup_escape_text(content, -1);
 		JsonArray *attachments = json_object_get_array_member(data, "attachments");
+		JsonArray *mentions = json_object_get_array_member(data, "mentions");
 		gint i;
 		
 		if (!g_hash_table_contains(da->ids_to_usernames, user_id)) {
 			g_hash_table_replace(da->usernames_to_ids, discord_combine_username(username, discriminator), g_strdup(user_id));
 			g_hash_table_replace(da->ids_to_usernames, g_strdup(user_id), discord_combine_username(username, discriminator));
 		}
+		
+		//Replace <@user_id> and <@!user_id> with usernames
+		if (mentions) {
+			for (i = json_array_get_length(mentions) - 1; i >= 0; i--) {
+				JsonObject *mention_user = json_array_get_object_element(mentions, i);
+				const gchar *user_id_replace = json_object_get_string_member(mention_user, "id");
+				const gchar *username_replace = json_object_get_string_member(mention_user, "username");
+				const gchar *discriminator_replace = json_object_get_string_member(mention_user, "discriminator");
+				
+				gchar *user_id_replace_str1 = g_strconcat("&lt;@", user_id_replace, "&gt;", NULL);
+				gchar *user_id_replace_str2 = g_strconcat("&lt;@!", user_id_replace, "&gt;", NULL);
+				gchar *combined_username_replace = discord_combine_username(username_replace, discriminator_replace);
+				gchar *tmp;
+				
+				//TODO make this a clickable link
+				tmp = g_strconcat("@", combined_username_replace, NULL);
+				g_free(combined_username_replace); combined_username_replace = tmp;
+				
+				tmp = purple_strreplace(escaped_content, user_id_replace_str1, combined_username_replace);
+				g_free(escaped_content); escaped_content = tmp;
+				
+				tmp = purple_strreplace(escaped_content, user_id_replace_str2, combined_username_replace);
+				g_free(escaped_content); escaped_content = tmp;
+				
+				g_free(combined_username_replace);
+				g_free(user_id_replace_str1);
+				g_free(user_id_replace_str2);
+			}
+		}
+		//TODO Replace <#channel_id> with channel names
 		
 		if (g_hash_table_contains(da->one_to_ones, channel_id)) {
 			//private message
