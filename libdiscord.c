@@ -274,7 +274,7 @@ purple_message_destroy(PurpleMessage *message)
 #define PURPLE_MESSAGE_REMOTE_SEND  0x10000
 #endif
 
-
+static GRegex *channel_mentions_regex = NULL;
 
 typedef struct {
 	PurpleAccount *account;
@@ -937,6 +937,27 @@ static void discord_get_avatar(DiscordAccount *da, const gchar *username, const 
 static const gchar *discord_normalise_room_name(const gchar *guild_name, const gchar *name);
 
 
+static gboolean
+discord_replace_channel(const GMatchInfo *match, GString *result, gpointer user_data)
+{
+	DiscordAccount *da = user_data;
+	gchar *match_string = g_match_info_fetch(match, 0);
+	gchar *channel_id = g_match_info_fetch(match, 1);
+	const gchar *channel_name = g_hash_table_lookup(da->group_chats, channel_id);
+	
+	if (channel_name) {
+		//TODO make this a clickable link
+		g_string_append_printf(result, "%s", channel_name);
+	} else {
+		g_string_append(result, match_string);
+	}
+	
+	g_free(channel_id);
+	g_free(match_string);
+
+	return FALSE;
+}
+
 static void
 discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data)
 {
@@ -964,6 +985,7 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		gchar *escaped_content = purple_markup_escape_text(content, -1);
 		JsonArray *attachments = json_object_get_array_member(data, "attachments");
 		JsonArray *mentions = json_object_get_array_member(data, "mentions");
+		gchar *tmp;
 		gint i;
 		
 		if (!g_hash_table_contains(da->ids_to_usernames, user_id)) {
@@ -982,7 +1004,6 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 				gchar *user_id_replace_str1 = g_strconcat("&lt;@", user_id_replace, "&gt;", NULL);
 				gchar *user_id_replace_str2 = g_strconcat("&lt;@!", user_id_replace, "&gt;", NULL);
 				gchar *combined_username_replace = discord_combine_username(username_replace, discriminator_replace);
-				gchar *tmp;
 				
 				//TODO make this a clickable link
 				tmp = g_strconcat("@", combined_username_replace, NULL);
@@ -999,7 +1020,13 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 				g_free(user_id_replace_str2);
 			}
 		}
-		//TODO Replace <#channel_id> with channel names
+		
+		//Replace <#channel_id> with channel names
+		tmp = g_regex_replace_eval(channel_mentions_regex, escaped_content, -1, 0, 0, discord_replace_channel, da, NULL);
+		if (tmp != NULL) {
+			g_free(escaped_content);
+			escaped_content = tmp;
+		}
 		
 		if (g_hash_table_contains(da->one_to_ones, channel_id)) {
 			//private message
@@ -1896,15 +1923,28 @@ static void
 discord_got_guilds(DiscordAccount *da, JsonNode *node, gpointer user_data)
 {
 	JsonArray *guilds = json_node_get_array(node);
-	gint i;
+	gint i, j;
 	guint len = json_array_get_length(guilds);
 
 	for (i = len - 1; i >= 0; i--) {
 		JsonObject *guild = json_array_get_object_element(guilds, i);
 		const gchar *id = json_object_get_string_member(guild, "id");
 		const gchar *name = json_object_get_string_member(guild, "name");
+		JsonArray *channels = json_object_get_array_member(guild, "channels");
 		
 		g_hash_table_replace(da->guilds, g_strdup(id), g_strdup(name));
+		
+		for (j = json_array_get_length(channels) - 1; j >= 0; j--) {
+			JsonObject *channel = json_array_get_object_element(channels, j);
+			const gchar *room_id = json_object_get_string_member(channel, "id");
+			const gchar *room_name = json_object_get_string_member(channel, "name");
+			const gchar *channel_name = discord_normalise_room_name(name, room_name);
+			
+			if (!g_hash_table_contains(da->group_chats, room_id)) {
+				g_hash_table_replace(da->group_chats, g_strdup(room_id), g_strdup(channel_name));
+				g_hash_table_replace(da->group_chats_rev, g_strdup(channel_name), g_strdup(room_id));
+			}
+		}
 	}
 	
 }
@@ -3693,6 +3733,9 @@ discord_cmd_leave(PurpleConversation *conv, const gchar *cmd, gchar **args, gcha
 static gboolean
 plugin_load(PurplePlugin *plugin, GError **error)
 {
+	
+	channel_mentions_regex = g_regex_new("&lt;#(\\d+)&gt;", G_REGEX_OPTIMIZE, 0, NULL);
+	
 	// purple_cmd_register("create", "s", PURPLE_CMD_P_PLUGIN, PURPLE_CMD_FLAG_CHAT | PURPLE_CMD_FLAG_IM |
 						// PURPLE_CMD_FLAG_PROTOCOL_ONLY | PURPLE_CMD_FLAG_ALLOW_WRONG_ARGS,
 						// DISCORD_PLUGIN_ID, discord_slash_command,
@@ -3755,6 +3798,8 @@ static gboolean
 plugin_unload(PurplePlugin *plugin, GError **error)
 {
 	purple_signals_disconnect_by_handle(plugin);
+	
+	g_regex_unref(channel_mentions_regex);
 	
 	return TRUE;
 }
