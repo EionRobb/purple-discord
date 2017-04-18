@@ -2976,7 +2976,14 @@ discord_got_channel_info(DiscordAccount *da, JsonNode *node, gpointer user_data)
 	const gchar *id = json_object_get_string_member(channel, "id");
 	//gint64 channel_type = json_object_get_int_member(channel, "type");
 	
-	PurpleChatConversation *chatconv = purple_conversations_find_chat(da->pc, g_str_hash(id));
+	PurpleChatConversation *chatconv;
+	
+	if (id == NULL) {
+		// No permissions?  Should be an error message in json_object_get_string_member(channel, "message")
+		return;
+	}
+	
+	chatconv = purple_conversations_find_chat(da->pc, g_str_hash(id));
 	
 	if (chatconv == NULL) {
 		return;
