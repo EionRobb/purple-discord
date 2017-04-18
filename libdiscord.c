@@ -251,6 +251,9 @@ purple_message_destroy(PurpleMessage *message)
 
 #define purple_message_get_recipient(message)  (message->who)
 #define purple_message_get_contents(message)   (message->what)
+#if	!PURPLE_VERSION_CHECK(2, 12, 0)
+#	define PURPLE_MESSAGE_REMOTE_SEND  0x10000
+#endif
 
 #define purple_account_privacy_deny_add     purple_privacy_deny_add
 #define purple_account_privacy_deny_remove  purple_privacy_deny_remove
@@ -267,6 +270,8 @@ purple_message_destroy(PurpleMessage *message)
 #define purple_chat_get_alias(chat)  g_object_get_data(G_OBJECT(chat), "alias")
 #define purple_protocol_action_get_connection(action)  ((action)->connection)
 #define PURPLE_TYPE_STRING  G_TYPE_STRING
+//TODO remove this when dx adds this to the PurpleMessageFlags enum
+#define PURPLE_MESSAGE_REMOTE_SEND  0x10000
 #endif
 
 
@@ -957,7 +962,8 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		time_t timestamp = purple_str_to_time(timestamp_str, FALSE, NULL, NULL, NULL);
 		const gchar *nonce = json_object_get_string_member(data, "nonce");
 		gchar *escaped_content = purple_markup_escape_text(content, -1);
-		//const gchar *channel_name = g_hash_table_lookup(da->group_chats, channel_id);
+		JsonArray *attachments = json_object_get_array_member(data, "attachments");
+		gint i;
 		
 		if (!g_hash_table_contains(da->ids_to_usernames, user_id)) {
 			g_hash_table_replace(da->usernames_to_ids, discord_combine_username(username, discriminator), g_strdup(user_id));
@@ -981,14 +987,41 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 					}
 					conv = PURPLE_CONVERSATION(imconv);
 					
-					msg = purple_message_new_outgoing(username, escaped_content, PURPLE_MESSAGE_SEND);
-					purple_message_set_time(msg, timestamp);
-					purple_conversation_write_message(conv, msg);
-					purple_message_destroy(msg);
+					if (escaped_content && *escaped_content) {
+						msg = purple_message_new_outgoing(username, escaped_content, PURPLE_MESSAGE_SEND | PURPLE_MESSAGE_REMOTE_SEND | PURPLE_MESSAGE_DELAYED);
+						purple_message_set_time(msg, timestamp);
+						purple_conversation_write_message(conv, msg);
+						purple_message_destroy(msg);
+					}
+					
+					if (attachments) {
+						for (i = json_array_get_length(attachments) - 1; i >= 0; i--) {
+							JsonObject *attachment = json_array_get_object_element(attachments, i);
+							const gchar *url = json_object_get_string_member(attachment, "url");
+							
+							msg = purple_message_new_outgoing(username, url, PURPLE_MESSAGE_SEND | PURPLE_MESSAGE_REMOTE_SEND | PURPLE_MESSAGE_DELAYED);
+							purple_message_set_time(msg, timestamp);
+							purple_conversation_write_message(conv, msg);
+							purple_message_destroy(msg);
+						}
+					}
 				}
 			} else {
 				gchar *merged_username = discord_combine_username(username, discriminator);
-				purple_serv_got_im(da->pc, merged_username, escaped_content, PURPLE_MESSAGE_RECV, timestamp);
+				
+				if (escaped_content && *escaped_content) {
+					purple_serv_got_im(da->pc, merged_username, escaped_content, PURPLE_MESSAGE_RECV, timestamp);
+				}
+				
+				if (attachments) {
+					for (i = json_array_get_length(attachments) - 1; i >= 0; i--) {
+						JsonObject *attachment = json_array_get_object_element(attachments, i);
+						const gchar *url = json_object_get_string_member(attachment, "url");
+						
+						purple_serv_got_im(da->pc, merged_username, url, PURPLE_MESSAGE_RECV, timestamp);
+					}
+				}
+				
 				g_free(merged_username);
 			}
 			
@@ -997,9 +1030,20 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 			PurpleMessageFlags flags = PURPLE_MESSAGE_RECV;
 			
 			if (purple_strequal(user_id, da->self_user_id)) {
-				flags = PURPLE_MESSAGE_SEND;
+				flags = PURPLE_MESSAGE_SEND | PURPLE_MESSAGE_REMOTE_SEND | PURPLE_MESSAGE_DELAYED;
 			}
-			purple_serv_got_chat_in(da->pc, g_str_hash(channel_id), merged_username, flags, escaped_content, timestamp);
+			if (escaped_content && *escaped_content) {
+				purple_serv_got_chat_in(da->pc, g_str_hash(channel_id), merged_username, flags, escaped_content, timestamp);
+			}
+			
+			if (attachments) {
+				for (i = json_array_get_length(attachments) - 1; i >= 0; i--) {
+					JsonObject *attachment = json_array_get_object_element(attachments, i);
+					const gchar *url = json_object_get_string_member(attachment, "url");
+					
+					purple_serv_got_chat_in(da->pc, g_str_hash(channel_id), merged_username, flags, url, timestamp);
+				}
+			}
 			
 			g_free(merged_username);
 		}
