@@ -1382,6 +1382,8 @@ discord_got_guilds(DiscordAccount *da, JsonNode *node, gpointer user_data)
 	JsonArray *guilds = json_node_get_array(node);
 	gint i, j;
 	guint len = json_array_get_length(guilds);
+	JsonArray *guild_ids = json_array_new();
+	JsonObject *obj;
 
 	for (i = len - 1; i >= 0; i--) {
 		JsonObject *guild = json_array_get_object_element(guilds, i);
@@ -1402,8 +1404,16 @@ discord_got_guilds(DiscordAccount *da, JsonNode *node, gpointer user_data)
 				g_hash_table_replace(da->group_chats_rev, g_strdup(channel_name), g_strdup(room_id));
 			}
 		}
+		
+		json_array_add_string_element(guild_ids, id);
 	}
 	
+	// Request more info about guilds (online/offline buddy status)
+	obj = json_object_new();
+	json_object_set_int_member(obj, "op", 12);
+	json_object_set_array_member(obj, "d", guild_ids);
+	
+	discord_socket_write_json(da, obj);
 }
 
 // static void
