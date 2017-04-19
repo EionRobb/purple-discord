@@ -985,12 +985,19 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		gchar *escaped_content = purple_markup_escape_text(content, -1);
 		JsonArray *attachments = json_object_get_array_member(data, "attachments");
 		JsonArray *mentions = json_object_get_array_member(data, "mentions");
+		PurpleMessageFlags flags;
 		gchar *tmp;
 		gint i;
 		
 		if (!g_hash_table_contains(da->ids_to_usernames, user_id)) {
 			g_hash_table_replace(da->usernames_to_ids, discord_combine_username(username, discriminator), g_strdup(user_id));
 			g_hash_table_replace(da->ids_to_usernames, g_strdup(user_id), discord_combine_username(username, discriminator));
+		}
+		
+		if (purple_strequal(user_id, da->self_user_id)) {
+			flags = PURPLE_MESSAGE_SEND | PURPLE_MESSAGE_REMOTE_SEND | PURPLE_MESSAGE_DELAYED;
+		} else {
+			flags = PURPLE_MESSAGE_RECV;
 		}
 		
 		//Replace <@user_id> and <@!user_id> with usernames
@@ -1004,6 +1011,10 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 				gchar *user_id_replace_str1 = g_strconcat("&lt;@", user_id_replace, "&gt;", NULL);
 				gchar *user_id_replace_str2 = g_strconcat("&lt;@!", user_id_replace, "&gt;", NULL);
 				gchar *combined_username_replace = discord_combine_username(username_replace, discriminator_replace);
+				
+				if (purple_strequal(user_id_replace, da->self_user_id)) {
+					flags |= PURPLE_MESSAGE_NICK;
+				}
 				
 				//TODO make this a clickable link
 				tmp = g_strconcat("@", combined_username_replace, NULL);
@@ -1046,7 +1057,7 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 					conv = PURPLE_CONVERSATION(imconv);
 					
 					if (escaped_content && *escaped_content) {
-						msg = purple_message_new_outgoing(username, escaped_content, PURPLE_MESSAGE_SEND | PURPLE_MESSAGE_REMOTE_SEND | PURPLE_MESSAGE_DELAYED);
+						msg = purple_message_new_outgoing(username, escaped_content, flags);
 						purple_message_set_time(msg, timestamp);
 						purple_conversation_write_message(conv, msg);
 						purple_message_destroy(msg);
@@ -1057,7 +1068,7 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 							JsonObject *attachment = json_array_get_object_element(attachments, i);
 							const gchar *url = json_object_get_string_member(attachment, "url");
 							
-							msg = purple_message_new_outgoing(username, url, PURPLE_MESSAGE_SEND | PURPLE_MESSAGE_REMOTE_SEND | PURPLE_MESSAGE_DELAYED);
+							msg = purple_message_new_outgoing(username, url, flags);
 							purple_message_set_time(msg, timestamp);
 							purple_conversation_write_message(conv, msg);
 							purple_message_destroy(msg);
@@ -1068,7 +1079,7 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 				gchar *merged_username = discord_combine_username(username, discriminator);
 				
 				if (escaped_content && *escaped_content) {
-					purple_serv_got_im(da->pc, merged_username, escaped_content, PURPLE_MESSAGE_RECV, timestamp);
+					purple_serv_got_im(da->pc, merged_username, escaped_content, flags, timestamp);
 				}
 				
 				if (attachments) {
@@ -1076,7 +1087,7 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 						JsonObject *attachment = json_array_get_object_element(attachments, i);
 						const gchar *url = json_object_get_string_member(attachment, "url");
 						
-						purple_serv_got_im(da->pc, merged_username, url, PURPLE_MESSAGE_RECV, timestamp);
+						purple_serv_got_im(da->pc, merged_username, url, flags, timestamp);
 					}
 				}
 				
@@ -1085,11 +1096,7 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 			
 		} else if (!nonce || !g_hash_table_remove(da->sent_message_ids, nonce)) {
 			gchar *merged_username = discord_combine_username(username, discriminator);
-			PurpleMessageFlags flags = PURPLE_MESSAGE_RECV;
 			
-			if (purple_strequal(user_id, da->self_user_id)) {
-				flags = PURPLE_MESSAGE_SEND | PURPLE_MESSAGE_REMOTE_SEND | PURPLE_MESSAGE_DELAYED;
-			}
 			if (escaped_content && *escaped_content) {
 				purple_serv_got_chat_in(da->pc, g_str_hash(channel_id), merged_username, flags, escaped_content, timestamp);
 			}
