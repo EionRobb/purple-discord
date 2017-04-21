@@ -1567,7 +1567,7 @@ discord_login(PurpleAccount *account)
 	da->usernames_to_ids = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
 	da->ids_to_usernames = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
 	da->guilds = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
-	da->online_users = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
+	da->online_users = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_list_free);
 	da->received_message_queue = g_queue_new();
 	
 	discord_build_groups_from_blist(da);
@@ -2332,7 +2332,6 @@ discord_got_channel_info(DiscordAccount *da, JsonNode *node, gpointer user_data)
 		JsonArray *permissions = json_object_get_array_member(channel, "permission_overwrites");
 		gint i;
 		guint len = json_array_get_length(permissions);
-		gchar *url;
 		
 		for (i = len - 1; i >= 0; i--) {
 			JsonObject *role = json_array_get_object_element(permissions, i);
@@ -2351,10 +2350,6 @@ discord_got_channel_info(DiscordAccount *da, JsonNode *node, gpointer user_data)
 			const gchar *user = g_hash_table_lookup(da->ids_to_usernames, l->data);
 			purple_chat_conversation_add_user(chat, user, NULL, PURPLE_CHAT_USER_NONE, FALSE);
 		}
-		
-		//url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/v6/guilds/%s/members?limit=1000", purple_url_encode(json_object_get_string_member(channel, "guild_id")));
-		//discord_fetch_url(da, url, NULL, discord_got_users_of_room, lookup);
-		//g_free(url);
 	}
 	
 }
