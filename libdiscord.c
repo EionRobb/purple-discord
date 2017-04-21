@@ -294,6 +294,7 @@ typedef struct {
 	GHashTable *usernames_to_ids; // username -> user id
 	GHashTable *ids_to_usernames; // user id -> username
 	GHashTable *guilds;           // A store of guild_id -> guild_name AKA Servers
+	GHashTable *online_users;     // A store of guild_id -> member list
 	GQueue *received_message_queue; // A store of the last 10 received message id's for de-dup
 
 	GSList *http_conns; /**< PurpleHttpConnection to be cancelled on logout */
@@ -986,8 +987,10 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 			g_hash_table_remove(da->one_to_ones, g_hash_table_lookup(da->one_to_ones_rev, username));
 			g_hash_table_remove(da->one_to_ones_rev, username);
 			
-			g_hash_table_remove(da->usernames_to_ids, username);
-			g_hash_table_remove(da->ids_to_usernames, user_id);
+			
+			//usernames are still valid, so we should probably keep them. (for group chats)
+			//g_hash_table_remove(da->usernames_to_ids, username);
+			//g_hash_table_remove(da->ids_to_usernames, user_id);
 			
 		}
 		
@@ -1010,6 +1013,36 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		discord_got_private_channels(da, json_object_get_member(data, "private_channels"), NULL);
 		discord_got_presences(da, json_object_get_member(data, "presences"), NULL);
 		discord_got_guilds(da, json_object_get_member(data, "guilds"), NULL);
+		
+	}  else if (purple_strequal(type, "GUILD_SYNC")) {
+		JsonArray *presences = json_object_get_array_member(data, "presences");
+		JsonArray *members = json_object_get_array_member(data, "members");
+
+		int i;
+		GList *user_list = NULL;
+		
+		for(i = 0; i < json_array_get_length(members); i++){
+			JsonObject *member = json_array_get_object_element(members, i);
+			JsonObject *user = json_object_get_object_member(member, "user");
+			const gchar *username = json_object_get_string_member(user, "username");
+			const gchar *discriminator = json_object_get_string_member(user, "discriminator");
+			const gchar *user_id = json_object_get_string_member(user, "id");
+			
+			if (!g_hash_table_contains(da->ids_to_usernames, user_id)) {
+				g_hash_table_replace(da->usernames_to_ids, discord_combine_username(username, discriminator), g_strdup(user_id));
+				g_hash_table_replace(da->ids_to_usernames, g_strdup(user_id), discord_combine_username(username, discriminator));
+			}
+			purple_debug_info("discord", "Got user '%s' | '%s' | '%s'\n", username, discriminator, user_id);
+		}
+		
+		
+		for(i = 0; i < json_array_get_length(presences); i++){
+			JsonObject *presence = json_array_get_object_element(presences, i);
+			JsonObject *user = json_object_get_object_member(presence, "user");
+			const gchar *user_id = json_object_get_string_member(user, "id");
+			user_list = g_list_append(user_list, g_strdup(user_id));
+		}
+		g_hash_table_insert(da->online_users, g_strdup(json_object_get_string_member(data, "id")), user_list);
 		
 	} else {
 		purple_debug_info("discord", "Unhandled message type '%s'\n", type);
@@ -1534,6 +1567,7 @@ discord_login(PurpleAccount *account)
 	da->usernames_to_ids = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
 	da->ids_to_usernames = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
 	da->guilds = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
+	da->online_users = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
 	da->received_message_queue = g_queue_new();
 	
 	discord_build_groups_from_blist(da);
@@ -1598,6 +1632,8 @@ discord_close(PurpleConnection *pc)
 	g_hash_table_unref(da->ids_to_usernames);
 	g_hash_table_remove_all(da->guilds);
 	g_hash_table_unref(da->guilds);
+	g_hash_table_remove_all(da->online_users);
+	g_hash_table_unref(da->online_users);
 	g_queue_free(da->received_message_queue);
 
 	while (da->http_conns) {
@@ -1622,20 +1658,6 @@ discord_close(PurpleConnection *pc)
 	g_free(da->self_user_id); da->self_user_id = NULL;
 	g_free(da);
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 //static void discord_start_polling(DiscordAccount *ya);
 
