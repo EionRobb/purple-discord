@@ -742,9 +742,9 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		
 		
 		if(guild_id){
+			GHashTable *online_users = g_hash_table_lookup(da->online_users, guild_id);
 			GList *l;
-			GList *online_users = g_hash_table_lookup(da->online_users, guild_id);
-			g_hash_table_steal(da->online_users, guild_id);
+			
 			for(l = g_hash_table_lookup(da->channels, guild_id); l != NULL; l = l->next ){
 				PurpleChatConversation *chat = purple_conversations_find_chat(da->pc, g_str_hash(l->data));
 				if(chat != NULL){
@@ -757,8 +757,17 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 					}
 				}
 			}
-			online_users = purple_strequal(status, "offline") ? g_list_remove(online_users, user_id) : g_list_append(online_users, user_id);
-			g_hash_table_insert(da->online_users, guild_id, online_users);
+			
+			if (online_users == NULL) {
+				online_users = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, NULL);
+				g_hash_table_insert(da->online_users, g_strdup(guild_id), online_users);
+			}
+			
+			if (purple_strequal(status, "offline")) {
+				g_hash_table_remove(online_users, user_id);
+			} else {
+				g_hash_table_replace(online_users, g_strdup(user_id), NULL);
+			}
 		}else if(username){
 			purple_protocol_got_user_status(da->account, username, status, "message", game, NULL);
 			purple_protocol_got_user_idle(da->account, username, idle_since ? TRUE : FALSE, 0);	
@@ -1049,9 +1058,10 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 	}  else if (purple_strequal(type, "GUILD_SYNC")) {
 		JsonArray *presences = json_object_get_array_member(data, "presences");
 		JsonArray *members = json_object_get_array_member(data, "members");
+		const gchar *guild_id = json_object_get_string_member(data, "id");
 
 		int j;
-		GList *user_list = NULL;
+		GHashTable *user_list = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, NULL);
 		
 		for (j = json_array_get_length(members) - 1; j >= 0; j--) {
 			JsonObject *member = json_array_get_object_element(members, j);
@@ -1068,13 +1078,15 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		
 		purple_debug_info("discord", "Room has '%d' Members\n", json_array_get_length(members));
 		
+		// Presence only contains online users
 		for (j = json_array_get_length(presences) - 1; j >= 0; j--) {
 			JsonObject *presence = json_array_get_object_element(presences, j);
 			JsonObject *user = json_object_get_object_member(presence, "user");
 			const gchar *user_id = json_object_get_string_member(user, "id");
-			user_list = g_list_append(user_list, g_strdup(user_id));
+			
+			g_hash_table_insert(user_list, g_strdup(user_id), NULL);
 		}
-		g_hash_table_insert(da->online_users, g_strdup(json_object_get_string_member(data, "id")), user_list);
+		g_hash_table_insert(da->online_users, g_strdup(guild_id), user_list);
 		
 	} else {
 		purple_debug_info("discord", "Unhandled message type '%s'\n", type);
@@ -1602,8 +1614,8 @@ discord_login(PurpleAccount *account)
 	da->usernames_to_ids = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
 	da->ids_to_usernames = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
 	da->guilds = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
-	da->channels = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_list_free);
-	da->online_users = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_list_free);
+	da->channels = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, (GDestroyNotify) g_list_free);
+	da->online_users = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, (GDestroyNotify) g_hash_table_unref);
 	da->received_message_queue = g_queue_new();
 	
 	discord_build_groups_from_blist(da);
@@ -2360,6 +2372,9 @@ discord_got_channel_info(DiscordAccount *da, JsonNode *node, gpointer user_data)
 		JsonArray *permissions = json_object_get_array_member(channel, "permission_overwrites");
 		gint i;
 		guint len = json_array_get_length(permissions);
+		PurpleChatConversation *chat = purple_conversations_find_chat(da->pc, g_str_hash(id));
+		GList *l;
+		GHashTable *online_users = g_hash_table_lookup(da->online_users, guild_id);
 		
 		for (i = len - 1; i >= 0; i--) {
 			JsonObject *role = json_array_get_object_element(permissions, i);
@@ -2371,10 +2386,8 @@ discord_got_channel_info(DiscordAccount *da, JsonNode *node, gpointer user_data)
 				lookup->denied_roles = g_list_prepend(lookup->denied_roles, g_strdup(role_id));
 			}
 		}
-
-		PurpleChatConversation *chat = purple_conversations_find_chat(da->pc, g_str_hash(id));
-		GList *l;
-		for(l = g_hash_table_lookup(da->online_users, guild_id); l != NULL; l = l->next ){
+		
+		for (l = g_hash_table_get_keys(online_users); l != NULL; l = l->next ){
 			const gchar *user = g_hash_table_lookup(da->ids_to_usernames, l->data);
 			purple_chat_conversation_add_user(chat, user, NULL, PURPLE_CHAT_USER_NONE, FALSE);
 		}
