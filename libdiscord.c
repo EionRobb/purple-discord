@@ -159,6 +159,8 @@ json_object_to_string(JsonObject *obj)
 #define purple_chat_conversation_add_user     purple_conv_chat_add_user
 #define purple_chat_conversation_add_users    purple_conv_chat_add_users
 #define purple_chat_conversation_remove_user  purple_conv_chat_remove_user
+#define purple_chat_conversation_clear_users  purple_conv_chat_clear_users
+#define purple_chat_conversation_has_user     purple_conv_chat_find_user
 #define purple_chat_conversation_get_topic    purple_conv_chat_get_topic
 #define purple_chat_conversation_set_topic    purple_conv_chat_set_topic
 #define PurpleChatUserFlags  PurpleConvChatBuddyFlags
@@ -750,9 +752,9 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 				if(chat != NULL){
 					purple_debug_info("discord", "conv = %p\n", chat);
 					const gchar *user = g_hash_table_lookup(da->ids_to_usernames, user_id);
-					if(purple_strequal(status, "offline")){
+					if (purple_strequal(status, "offline")) {
 						purple_chat_conversation_remove_user(chat, user, "offline");
-					}else{
+					} else if (!purple_chat_conversation_has_user(chat, user)) {
 						purple_chat_conversation_add_user(chat, user, NULL, PURPLE_CHAT_USER_NONE, FALSE);	
 					}
 				}
@@ -2351,7 +2353,8 @@ discord_got_channel_info(DiscordAccount *da, JsonNode *node, gpointer user_data)
 			
 			g_string_append_printf(recipient_names, ", %s", username);
 		}
-	
+		
+		purple_chat_conversation_clear_users(chatconv);
 		purple_chat_conversation_add_users(chatconv, users, NULL, flags, FALSE);
 		
 		while (users != NULL) {
@@ -2375,6 +2378,7 @@ discord_got_channel_info(DiscordAccount *da, JsonNode *node, gpointer user_data)
 		PurpleChatConversation *chat = purple_conversations_find_chat(da->pc, g_str_hash(id));
 		GList *l;
 		GHashTable *online_users = g_hash_table_lookup(da->online_users, guild_id);
+		GList *users = NULL, *flags = NULL;
 		
 		for (i = len - 1; i >= 0; i--) {
 			JsonObject *role = json_array_get_object_element(permissions, i);
@@ -2389,8 +2393,21 @@ discord_got_channel_info(DiscordAccount *da, JsonNode *node, gpointer user_data)
 		
 		for (l = g_hash_table_get_keys(online_users); l != NULL; l = l->next ){
 			const gchar *user = g_hash_table_lookup(da->ids_to_usernames, l->data);
-			purple_chat_conversation_add_user(chat, user, NULL, PURPLE_CHAT_USER_NONE, FALSE);
+			
+			users = g_list_prepend(users, g_strdup(user));
+			flags = g_list_prepend(flags, GINT_TO_POINTER(PURPLE_CHAT_USER_NONE));
 		}
+		
+		purple_chat_conversation_clear_users(chat);
+		purple_chat_conversation_add_users(chat, users, NULL, flags, FALSE);
+		
+		while (users != NULL) {
+			g_free(users->data);
+			users = g_list_delete_link(users, users);
+		}
+		
+		g_list_free(users);
+		g_list_free(flags);
 	}
 	
 }
