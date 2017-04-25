@@ -1061,6 +1061,7 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		JsonArray *presences = json_object_get_array_member(data, "presences");
 		JsonArray *members = json_object_get_array_member(data, "members");
 		const gchar *guild_id = json_object_get_string_member(data, "id");
+		GList *users, *flags, *l;
 
 		int j;
 		GHashTable *user_list = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, NULL);
@@ -1085,10 +1086,31 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 			JsonObject *presence = json_array_get_object_element(presences, j);
 			JsonObject *user = json_object_get_object_member(presence, "user");
 			const gchar *user_id = json_object_get_string_member(user, "id");
+			const gchar *combined_username = g_hash_table_lookup(da->ids_to_usernames, user_id);
 			
 			g_hash_table_insert(user_list, g_strdup(user_id), NULL);
+			
+			users = g_list_prepend(users, g_strdup(combined_username));
+			flags = g_list_prepend(flags, GINT_TO_POINTER(PURPLE_CHAT_USER_NONE));
 		}
 		g_hash_table_insert(da->online_users, g_strdup(guild_id), user_list);
+		
+		// Add all online people to any open chats
+		for(l = g_hash_table_lookup(da->channels, guild_id); l != NULL; l = l->next ){
+			PurpleChatConversation *chat = purple_conversations_find_chat(da->pc, g_str_hash(l->data));
+			if (chat != NULL){
+				purple_chat_conversation_clear_users(chat);
+				purple_chat_conversation_add_users(chat, users, NULL, flags, FALSE);
+			}
+		}
+		
+		while (users != NULL) {
+			g_free(users->data);
+			users = g_list_delete_link(users, users);
+		}
+		
+		g_list_free(users);
+		g_list_free(flags);
 		
 	} else {
 		purple_debug_info("discord", "Unhandled message type '%s'\n", type);
