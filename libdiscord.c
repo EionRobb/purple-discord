@@ -359,13 +359,17 @@ discord_update_cookies(DiscordAccount *ya, const GList *cookie_headers)
 		cookie_start = cur->data;
 		
 		cookie_end = strchr(cookie_start, '=');
-		cookie_name = g_strndup(cookie_start, cookie_end-cookie_start);
-		cookie_start = cookie_end + 1;
-		cookie_end = strchr(cookie_start, ';');
-		cookie_value= g_strndup(cookie_start, cookie_end-cookie_start);
-		cookie_start = cookie_end;
+		if (cookie_end != NULL) {
+			cookie_name = g_strndup(cookie_start, cookie_end-cookie_start);
+			cookie_start = cookie_end + 1;
+			cookie_end = strchr(cookie_start, ';');
+			if (cookie_end != NULL) {
+				cookie_value= g_strndup(cookie_start, cookie_end-cookie_start);
+				cookie_start = cookie_end;
 
-		g_hash_table_replace(ya->cookie_table, cookie_name, cookie_value);
+				g_hash_table_replace(ya->cookie_table, cookie_name, cookie_value);
+			}
+		}
 	}
 }
 
@@ -390,13 +394,17 @@ discord_update_cookies(DiscordAccount *ya, const gchar *headers)
 	{
 		cookie_start += 14;
 		cookie_end = strchr(cookie_start, '=');
-		cookie_name = g_strndup(cookie_start, cookie_end-cookie_start);
-		cookie_start = cookie_end + 1;
-		cookie_end = strchr(cookie_start, ';');
-		cookie_value= g_strndup(cookie_start, cookie_end-cookie_start);
-		cookie_start = cookie_end;
+		if (cookie_end != NULL) {
+			cookie_name = g_strndup(cookie_start, cookie_end-cookie_start);
+			cookie_start = cookie_end + 1;
+			cookie_end = strchr(cookie_start, ';');
+			if (cookie_end != NULL) {
+				cookie_value= g_strndup(cookie_start, cookie_end-cookie_start);
+				cookie_start = cookie_end;
 
-		g_hash_table_replace(ya->cookie_table, cookie_name, cookie_value);
+				g_hash_table_replace(ya->cookie_table, cookie_name, cookie_value);
+			}
+		}
 	}
 }
 #endif
@@ -1929,7 +1937,7 @@ discord_socket_got_data(gpointer userdata, PurpleSslConnection *conn, PurpleInpu
 					return;
 				} else if (ya->packet_code == 137) {
 					// Ping
-					gint ping_frame_len;
+					gint ping_frame_len = 0;
 					length_code = 0;
 					purple_ssl_read(conn, &length_code, 1);
 					if (length_code <= 125) {
@@ -2475,9 +2483,7 @@ discord_join_chat(PurpleConnection *pc, GHashTable *chatdata)
 	}
 	
 	chatconv = purple_serv_got_joined_chat(pc, g_str_hash(id), name ? name : id);
-	if (id != NULL) {
-		purple_conversation_set_data(PURPLE_CONVERSATION(chatconv), "id", g_strdup(id));
-	}
+	purple_conversation_set_data(PURPLE_CONVERSATION(chatconv), "id", g_strdup(id));
 	
 	purple_conversation_present(PURPLE_CONVERSATION(chatconv));
 	
