@@ -1069,7 +1069,7 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		JsonArray *presences = json_object_get_array_member(data, "presences");
 		JsonArray *members = json_object_get_array_member(data, "members");
 		const gchar *guild_id = json_object_get_string_member(data, "id");
-		GList *users, *flags, *l;
+		GList *users = NULL, *flags = NULL, *l;
 
 		int j;
 		GHashTable *user_list = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, NULL);
