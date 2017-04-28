@@ -9,6 +9,10 @@ WIN32_CC ?= $(WIN32_DEV_TOP)/mingw-4.7.2/bin/gcc
 PROTOC_C ?= protoc-c
 PKG_CONFIG ?= pkg-config
 
+DIR_PERM = 0755
+LIB_PERM = 0755
+FILE_PERM = 0644
+
 REVISION_ID = $(shell hg id -i)
 REVISION_NUMBER = $(shell hg id -n)
 ifneq ($(REVISION_ID),)
@@ -91,16 +95,16 @@ libdiscord3.dll: $(PURPLE_C_FILES) $(PURPLE_COMPAT_FILES)
 	$(WIN32_CC) -O0 -g -ggdb -shared -o $@ $^ $(WIN32_PIDGIN3_CFLAGS) $(WIN32_PIDGIN3_LDFLAGS)
 
 install: $(DISCORD_TARGET) install-icons
-	mkdir -p $(DISCORD_DEST)
-	install -p $(DISCORD_TARGET) $(DISCORD_DEST)
+	mkdir -m $(DIR_PERM) -p $(DISCORD_DEST)
+	install -m $(LIB_PERM) -p $(DISCORD_TARGET) $(DISCORD_DEST)
 
 install-icons: discord16.png discord22.png discord48.png
-	mkdir -p $(DISCORD_ICONS_DEST)/16
-	mkdir -p $(DISCORD_ICONS_DEST)/22
-	mkdir -p $(DISCORD_ICONS_DEST)/48
-	install discord16.png $(DISCORD_ICONS_DEST)/16/discord.png
-	install discord22.png $(DISCORD_ICONS_DEST)/22/discord.png
-	install discord48.png $(DISCORD_ICONS_DEST)/48/discord.png
+	mkdir -m $(DIR_PERM) -p $(DISCORD_ICONS_DEST)/16
+	mkdir -m $(DIR_PERM) -p $(DISCORD_ICONS_DEST)/22
+	mkdir -m $(DIR_PERM) -p $(DISCORD_ICONS_DEST)/48
+	install -m $(FILE_PERM) -p discord16.png $(DISCORD_ICONS_DEST)/16/discord.png
+	install -m $(FILE_PERM) -p discord22.png $(DISCORD_ICONS_DEST)/22/discord.png
+	install -m $(FILE_PERM) -p discord48.png $(DISCORD_ICONS_DEST)/48/discord.png
 
 FAILNOPURPLE:
 	echo "You need libpurple development headers installed to be able to compile this plugin"
