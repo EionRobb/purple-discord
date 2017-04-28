@@ -259,6 +259,73 @@ purple_message_destroy(PurpleMessage *message)
 
 static GRegex *channel_mentions_regex = NULL;
 
+typedef enum{
+	USER_ONLINE,
+	USER_IDLE,
+	USER_OFFLINE
+} DiscordStatus;
+
+typedef enum{
+	CHANNEL_TEXT,
+	CHANNEL_VOICE
+} DiscordChannelType;
+
+
+typedef struct {
+	guint64 id;
+	gchar *name;
+	int color;
+	gint64 permissions;
+} DiscordGuildRole;
+
+typedef struct {
+	guint64 id;
+	gint64 deny;
+	gint64 allow;
+} DiscordPermissionOverride;
+
+typedef struct {
+	guint64 id;
+	gchar *name;
+	gchar *topic;
+	DiscordChannelType type;
+	int position;
+	gchar *last_message_id;
+	GHashTable *permission_user_overrides;
+	GHashTable *permission_role_overrides;
+} DiscordChannel;
+
+typedef struct {
+	guint64 id;
+	gchar *name;
+	gchar *icon;
+	gchar *owner;
+	
+	GHashTable *roles;
+	GArray *members; //list of member ids
+	
+	GHashTable *channels;
+	int afk_timeout;
+	const gchar *afk_voice_channel;
+} DiscordGuild;
+
+typedef struct {
+	guint64 id;
+	gchar *nick;
+	gchar *joined_at;
+	GArray *roles; //list of ids
+} DiscordGuildMembership;
+
+typedef struct {
+	guint64 id;
+	gchar *name;
+	gchar *discriminator;
+	gchar *game;
+	gchar *avatar;
+	DiscordStatus status;
+	GHashTable *guild_memberships;
+} DiscordUser;
+
 typedef struct {
 	PurpleAccount *account;
 	PurpleConnection *pc;
@@ -299,12 +366,219 @@ typedef struct {
 	GHashTable *channels;           // A store of guild_id -> channel_id
 	GHashTable *online_users;     // A store of guild_id -> member list
 	GQueue *received_message_queue; // A store of the last 10 received message id's for de-dup
+	
+	GPtrArray *new_users;
+	GPtrArray *new_guilds;
 
 	GSList *http_conns; /**< PurpleHttpConnection to be cancelled on logout */
 	gint frames_since_reconnect;
 	GSList *pending_writes;
 	gint roomlist_guild_count;
 } DiscordAccount;
+
+static gpointer dup_int(guint64 value)
+{
+	guint64 *p = g_new(guint64, 1);
+	*p = value;
+	return p;
+}
+
+static to_int(const gchar *id)
+{
+	return g_strtoull(id, NULL, 10);
+}
+
+
+static void discord_free_guild_membership(gpointer data);
+static void discord_free_guild_role(gpointer data);
+static void discord_free_channel(gpointer data);
+static void discord_free_permission_override(gpointer data);
+static gboolean discord_permission_is_role(JsonObject *json);
+
+//creating
+
+static DiscordUser *discord_new_user(JsonObject *json)
+{
+	DiscordUser *user = g_new0(DiscordUser, 1);
+	
+	user->id = to_int(json_object_get_string_member(json, "id"));
+	user->name = g_strdup(json_object_get_string_member(json, "username"));
+	user->discriminator = g_strdup(json_object_get_string_member(json, "discriminator"));
+	user->avatar = g_strdup(json_object_get_string_member(json, "avatar"));
+	
+	user->guild_memberships = g_hash_table_new_full(g_int64_hash, g_int64_equal, g_free, discord_free_guild_membership);
+	user->status = USER_OFFLINE; //Is offline the best assumption on a new user?
+	
+	return user;
+}
+
+
+static DiscordGuild *discord_new_guild(JsonObject *json)
+{
+	DiscordGuild *guild = g_new0(DiscordGuild, 1);
+	
+	guild->id = to_int(json_object_get_string_member(json, "id"));
+	guild->name = g_strdup(json_object_get_string_member(json, "name"));
+	guild->icon = g_strdup(json_object_get_string_member(json, "icon"));
+	guild->owner = g_strdup(json_object_get_string_member(json, "owner_id"));
+	
+	guild->roles = g_hash_table_new_full(g_int64_hash, g_int64_equal, g_free, discord_free_guild_role);
+	guild->members = g_array_new(TRUE, TRUE, sizeof(guint64));
+	
+	guild->channels = g_hash_table_new_full(g_int64_hash, g_int64_equal, g_free, discord_free_channel);
+	guild->afk_timeout = json_object_get_int_member(json, "afk_timeout");
+	guild->afk_voice_channel = g_strdup(json_object_get_string_member(json, "afk_channel_id"));
+	
+	return guild;
+}
+
+static DiscordPermissionOverride *discord_new_permission_override(JsonObject *json)
+{
+	DiscordPermissionOverride *permission = g_new0(DiscordPermissionOverride, 1);
+	
+	permission->id = to_int(json_object_get_string_member(json, "id"));
+	permission->deny = json_object_get_int_member(json, "deny");
+	permission->allow = json_object_get_int_member(json, "allow");
+
+	return permission;
+}
+
+static DiscordChannel *discord_new_channel(JsonObject *json)
+{
+	DiscordChannel *channel = g_new0(DiscordChannel, 1);
+	
+	channel->id = to_int(json_object_get_string_member(json, "id"));
+	channel->name = g_strdup(json_object_get_string_member(json, "name"));
+	channel->topic = g_strdup(json_object_get_string_member(json, "topic"));
+	channel->type = json_object_get_int_member(json, "type") ? CHANNEL_VOICE : CHANNEL_TEXT;
+	channel->last_message_id = g_strdup(json_object_get_string_member(json, "last_message_id"));
+	
+	channel->permission_user_overrides = g_hash_table_new_full(g_int64_hash, g_int64_equal, g_free, g_free);
+	channel->permission_role_overrides = g_hash_table_new_full(g_int64_hash, g_int64_equal, g_free, g_free);
+	
+	return channel;
+}
+
+static DiscordGuildMembership *discord_new_guild_membership(JsonObject *json)
+{
+	DiscordGuildMembership *guild_membership = g_new0(DiscordGuildMembership, 1);
+	
+	guild_membership->id = to_int(json_object_get_string_member(json, "id"));
+	guild_membership->nick = g_strdup(json_object_get_string_member(json, "nick"));
+	guild_membership->joined_at = g_strdup(json_object_get_string_member(json, "joined_at"));
+	
+	guild_membership->roles = g_array_new(TRUE, TRUE, sizeof(guint64));
+	
+	return guild_membership;
+}
+
+static DiscordGuildRole *discord_new_guild_role(JsonObject *json)
+{
+	DiscordGuildRole *guild_role = g_new0(DiscordGuildRole, 1);
+	
+	guild_role->id = to_int(json_object_get_string_member(json, "id"));
+	guild_role->name = g_strdup(json_object_get_string_member(json, "name"));
+	guild_role->color = json_object_get_int_member(json, "color");
+	guild_role->permissions = json_object_get_int_member(json, "permissions");
+
+	return guild_role;
+}
+
+//freeing
+
+static void discord_free_guild_role(gpointer data)
+{
+	DiscordGuildRole *guild_role = data;
+	g_free(guild_role->name);
+	g_free(guild_role);
+}
+
+static void discord_free_guild_membership(gpointer data)
+{
+	DiscordGuildMembership *guild_membership = data;
+	g_free(guild_membership->nick);
+	g_free(guild_membership->joined_at);
+
+	g_ptr_array_unref(guild_membership->roles);
+	g_free(guild_membership);
+}
+
+static void discord_free_user(gpointer data)
+{
+	DiscordUser *user = data;
+	g_free(user->name);
+	g_free(user->discriminator);
+	g_free(user->game);
+	g_free(user->avatar);
+	
+	g_hash_table_unref(user->guild_memberships);
+	g_free(user);
+}
+
+static void discord_free_guild(gpointer data)
+{
+	DiscordGuild *guild = data;
+	g_free(guild->name);
+	g_free(guild->icon);
+	g_free(guild->owner);
+	
+	g_hash_table_unref(guild->roles);
+	g_ptr_array_unref(guild->members);
+	g_hash_table_unref(guild->channels);
+	g_free(guild);
+}
+
+static void discord_free_channel(gpointer data)
+{
+	DiscordChannel *channel = data;
+	g_free(channel->name);
+	g_free(channel->topic);
+	g_free(channel->last_message_id);
+
+	g_hash_table_unref(channel->permission_user_overrides);
+	g_hash_table_unref(channel->permission_role_overrides);
+	g_free(channel);
+}
+
+
+//updating
+
+static void discord_update_status(DiscordUser *user, JsonObject *json)
+{
+	json_object_get_string_member(json, "id");
+	if(json_object_has_member(json, "status")){
+		const gchar *status = json_object_get_string_member(json, "status");
+		if(purple_strequal("online", status)){
+			user->status = USER_ONLINE;
+		}else if(purple_strequal("idle", status)){
+			user->status = USER_IDLE;
+		}else{
+			user->status = USER_OFFLINE;  //All else fails probably offline...
+		}
+	}
+	
+	if(json_object_has_member(json, "game")){
+		const gchar *game = json_object_get_string_member(json_object_get_object_member(json, "game"), "name");
+		g_free(user->game);
+		user->game = g_strdup(game);
+	}
+}
+
+static void discord_add_channel(DiscordGuild *guild, JsonObject *json)
+{
+	
+}
+
+//managing
+static gboolean discord_permission_is_role(JsonObject *json)
+{
+	return purple_strequal(json_object_get_string_member(json, "type"), "role");
+}
+
+static void discord_append_permission_override(DiscordChannel *channel, DiscordPermissionOverride *permission, gboolean is_role)
+{
+	g_hash_table_replace(is_role ? channel->permission_role_overrides : channel->permission_user_overrides, g_strdup(permission->id), permission);
+}
 
 typedef void (*DiscordProxyCallbackFunc)(DiscordAccount *ya, JsonNode *node, gpointer user_data);
 
@@ -1649,6 +1923,10 @@ discord_login(PurpleAccount *account)
 	da->channels = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, (GDestroyNotify) g_list_free);
 	da->online_users = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, (GDestroyNotify) g_hash_table_unref);
 	da->received_message_queue = g_queue_new();
+	
+	//todo make these the roots of all discord data
+	da->new_users = g_ptr_array_new_with_free_func(discord_free_user);
+	da->new_guilds = g_ptr_array_new_with_free_func(discord_free_guild);
 	
 	discord_build_groups_from_blist(da);
 	
