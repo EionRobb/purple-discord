@@ -1279,6 +1279,7 @@ discord_set_status(PurpleAccount *account, PurpleStatus *status)
 	PurpleConnection *pc = purple_account_get_connection(account);
 	DiscordAccount *ya = purple_connection_get_protocol_data(pc);
 	const gchar *status_id = purple_status_get_id(status);
+	gchar *postdata;
 	
 	JsonObject *obj = json_object_new();
 	JsonObject *data = json_object_new();
@@ -1289,9 +1290,23 @@ discord_set_status(PurpleAccount *account, PurpleStatus *status)
 	
 	json_object_set_int_member(obj, "op", 3);
 	json_object_set_string_member(data, "status", status_id);
+	json_object_set_int_member(data, "since", 0);
+	json_object_set_string_member(data, "game", status_id);
+	json_object_set_boolean_member(data, "afk", FALSE);
 	json_object_set_object_member(obj, "d", data);
 	
 	discord_socket_write_json(ya, obj);
+	
+	
+	data = json_object_new();
+	json_object_set_string_member(data, "status", status_id);
+	postdata = json_object_to_string(data);
+	
+	discord_fetch_url_with_method(ya, "PATCH", "https://" DISCORD_API_SERVER "/api/v6/users/@me/settings", postdata, NULL, NULL);
+	
+	g_free(postdata);
+	json_object_unref(data);
+	
 }
 
 void
@@ -1311,6 +1326,7 @@ discord_set_idle(PurpleConnection *pc, int idle_time)
 	json_object_set_int_member(obj, "op", 3);
 	json_object_set_string_member(data, "status", status);
 	json_object_set_int_member(data, "since", since);
+	json_object_set_boolean_member(data, "afk", idle_time >= 20);
 	json_object_set_object_member(obj, "d", data);
 	
 	discord_socket_write_json(ya, obj);
@@ -2979,6 +2995,12 @@ discord_status_types(PurpleAccount *account)
 	types = g_list_append(types, status);
 	
 	status = purple_status_type_new_full(PURPLE_STATUS_AWAY, "set-idle", "Idle", TRUE, TRUE, FALSE);
+	types = g_list_append(types, status);
+	
+	status = purple_status_type_new_full(PURPLE_STATUS_UNAVAILABLE, "set-dnd", "Do Not Disturb", TRUE, TRUE, FALSE);
+	types = g_list_append(types, status);
+	
+	status = purple_status_type_new_full(PURPLE_STATUS_INVISIBLE, "set-invisible", "Invisible", TRUE, TRUE, FALSE);
 	types = g_list_append(types, status);
 	
 	status = purple_status_type_new_full(PURPLE_STATUS_OFFLINE, "set-offline", "Offline", TRUE, TRUE, FALSE);
