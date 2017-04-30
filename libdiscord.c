@@ -299,7 +299,7 @@ typedef struct {
 	guint64 id;
 	gchar *name;
 	gchar *icon;
-	gchar *owner;
+	guint64 owner;
 
 	GHashTable *roles;
 	GArray *members; //list of member ids
@@ -319,10 +319,10 @@ typedef struct {
 typedef struct {
 	guint64 id;
 	gchar *name;
-	gchar *discriminator;
+	int discriminator;
+	DiscordStatus status;
 	gchar *game;
 	gchar *avatar;
-	DiscordStatus status;
 	GHashTable *guild_memberships;
 } DiscordUser;
 
@@ -378,17 +378,18 @@ typedef struct {
 
 #define g_hash_table_insert_int64(a, b, c) g_hash_table_insert((a), g_memdup(&(b), sizeof(gint64)), (c))
 #define g_hash_table_replace_int64(a, b, c) g_hash_table_replace((a), g_memdup(&(b), sizeof(gint64)), (c))
+#define g_hash_table_steal_int64(a, b) g_hash_table_steal((a), &(b))
+#define g_hash_table_lookup_int64(a, b) g_hash_table_lookup((a), &(b))
+#define g_hash_table_lookup_extended_int64(a, b, c, d) g_hash_table_lookup_extended((a), &(b), (c), (d))
 
 static guint64 to_int(const gchar *id)
 {
 	return id ? g_ascii_strtoull(id, NULL, 10) : 0;
 }
 
-
 static void discord_free_guild_membership(gpointer data);
 static void discord_free_guild_role(gpointer data);
 static void discord_free_channel(gpointer data);
-static void discord_free_permission_override(gpointer data);
 static gboolean discord_permission_is_role(JsonObject *json);
 
 //creating
@@ -399,7 +400,7 @@ static DiscordUser *discord_new_user(JsonObject *json)
 
 	user->id = to_int(json_object_get_string_member(json, "id"));
 	user->name = g_strdup(json_object_get_string_member(json, "username"));
-	user->discriminator = g_strdup(json_object_get_string_member(json, "discriminator"));
+	user->discriminator = to_int(json_object_get_string_member(json, "discriminator"));
 	user->avatar = g_strdup(json_object_get_string_member(json, "avatar"));
 
 	user->guild_memberships = g_hash_table_new_full(g_int64_hash, g_int64_equal, g_free, discord_free_guild_membership);
@@ -416,7 +417,7 @@ static DiscordGuild *discord_new_guild(JsonObject *json)
 	guild->id = to_int(json_object_get_string_member(json, "id"));
 	guild->name = g_strdup(json_object_get_string_member(json, "name"));
 	guild->icon = g_strdup(json_object_get_string_member(json, "icon"));
-	guild->owner = g_strdup(json_object_get_string_member(json, "owner_id"));
+	guild->owner = to_int(json_object_get_string_member(json, "owner_id"));
 
 	guild->roles = g_hash_table_new_full(g_int64_hash, g_int64_equal, g_free, discord_free_guild_role);
 	guild->members = g_array_new(TRUE, TRUE, sizeof(guint64));
@@ -504,7 +505,6 @@ static void discord_free_user(gpointer data)
 {
 	DiscordUser *user = data;
 	g_free(user->name);
-	g_free(user->discriminator);
 	g_free(user->game);
 	g_free(user->avatar);
 
@@ -517,7 +517,6 @@ static void discord_free_guild(gpointer data)
 	DiscordGuild *guild = data;
 	g_free(guild->name);
 	g_free(guild->icon);
-	g_free(guild->owner);
 
 	g_hash_table_unref(guild->roles);
 	g_array_unref(guild->members);
@@ -572,6 +571,29 @@ static gboolean discord_permission_is_role(JsonObject *json)
 	return purple_strequal(json_object_get_string_member(json, "type"), "role");
 }
 
+static DiscordUser *discord_get_user_int(DiscordAccount *da, guint64 id)
+{
+	return g_hash_table_lookup_int64(da->new_users, id);
+}
+
+static DiscordUser *discord_get_user(DiscordAccount *da, gchar *id)
+{
+	return discord_get_user_int(da, to_int(id));
+}
+
+static DiscordUser *discord_new_or_steal_user(GHashTable *user_table, JsonObject *json)
+{
+	guint64 *key = NULL, user_id = to_int(json_object_get_string_member(json, "id"));
+	DiscordUser *user = NULL;
+	
+	if(g_hash_table_lookup_extended_int64(user_table, user_id, (gpointer)&key, (gpointer)&user)){
+		g_hash_table_steal_int64(user_table, user_id);
+		g_free(key);
+		return user;
+	}else{
+		return discord_new_user(json);
+	}
+}
 //debug
 
 #define discord_print_append(L, B, R, M, D) \
@@ -601,7 +623,7 @@ static void discord_print_guilds(GHashTable *guilds)
 		discord_print_append(0, buffer, row_buffer, "Guild id: %lu", guild->id);
 		discord_print_append(1, buffer, row_buffer, "name: %s", guild->name);
 		discord_print_append(1, buffer, row_buffer, "icon: %s", guild->icon);
-		discord_print_append(1, buffer, row_buffer, "owner: %s", guild->owner);
+		discord_print_append(1, buffer, row_buffer, "owner: %lu", guild->owner);
 		discord_print_append(1, buffer, row_buffer, "afk_timeout: %d", guild->afk_timeout);
 		discord_print_append(1, buffer, row_buffer, "afk_channel: %s", guild->afk_voice_channel);
 		//todo print roles
@@ -623,6 +645,41 @@ static void discord_print_guilds(GHashTable *guilds)
 	g_string_free(buffer, TRUE);
 	g_string_free(row_buffer, TRUE);
 }
+
+static void discord_print_users(GHashTable *users)
+{
+	GString *buffer = g_string_new("\n");
+	GString *row_buffer = g_string_new("");
+	GHashTableIter user_iter, guild_membership_iter;
+	gpointer key, value;
+
+	g_hash_table_iter_init(&user_iter, users);
+	while(g_hash_table_iter_next (&user_iter, &key, &value)){
+		DiscordUser *user = value;
+
+		discord_print_append(0, buffer, row_buffer, "User id: %lu", user->id);
+		discord_print_append(1, buffer, row_buffer, "Name: %s", user->name);
+		discord_print_append(1, buffer, row_buffer, "Discriminator: %d", user->discriminator);
+		discord_print_append(1, buffer, row_buffer, "Game: %s", user->game);
+		discord_print_append(1, buffer, row_buffer, "Avatar: %s", user->avatar);
+		discord_print_append(1, buffer, row_buffer, "Status: %d", user->status);
+		
+		g_hash_table_iter_init(&guild_membership_iter, user->guild_memberships);
+		while(g_hash_table_iter_next (&guild_membership_iter, &key, &value)){
+			DiscordGuildMembership *guild_membership = value;
+							     
+			discord_print_append(1, buffer, row_buffer, "Guild membership id: %lu", guild_membership->id);
+			discord_print_append(2, buffer, row_buffer, "Nick: %s", guild_membership->nick);
+			discord_print_append(2, buffer, row_buffer, "Joined at: %s", guild_membership->joined_at);
+			//todo print roles
+
+		}
+	}
+	purple_debug_info("discord", buffer->str);
+	g_string_free(buffer, TRUE);
+	g_string_free(row_buffer, TRUE);
+}
+
 
 static void discord_append_permission_override(DiscordChannel *channel, DiscordPermissionOverride *permission, gboolean is_role)
 {
@@ -1401,6 +1458,10 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		for (j = json_array_get_length(members) - 1; j >= 0; j--) {
 			JsonObject *member = json_array_get_object_element(members, j);
 			JsonObject *user = json_object_get_object_member(member, "user");
+			
+			DiscordUser *u = discord_new_or_steal_user(da->new_users, user);
+			g_hash_table_insert_int64(da->new_users, u->id, u);
+			
 			const gchar *username = json_object_get_string_member(user, "username");
 			const gchar *discriminator = json_object_get_string_member(user, "discriminator");
 			const gchar *user_id = json_object_get_string_member(user, "id");
@@ -1443,6 +1504,7 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 
 		g_list_free(users);
 		g_list_free(flags);
+		discord_print_users(da->new_users);
 
 	} else {
 		purple_debug_info("discord", "Unhandled message type '%s'\n", type);
