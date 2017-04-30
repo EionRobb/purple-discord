@@ -2895,6 +2895,72 @@ discord_fake_group_rename(PurpleConnection *pc, const char *old_name, PurpleGrou
 	// Do nothing to stop the remove+add behaviour
 }
 
+static void
+discord_got_info(DiscordAccount *da, JsonNode *node, gpointer user_data)
+{
+	gchar *username = user_data;
+	const gchar *user_id = g_hash_table_lookup(da->usernames_to_ids, username);
+	PurpleNotifyUserInfo *user_info;
+	JsonObject *info = json_node_get_object(node);
+	JsonObject *user = json_object_get_object_member(info, "user");
+	JsonArray *connected_accounts = json_object_get_array_member(info, "connected_accounts");
+	JsonArray *mutual_guilds = json_object_get_array_member(info, "mutual_guilds");
+	gint i;
+	
+	user_info = purple_notify_user_info_new();
+	
+	purple_notify_user_info_add_pair_html(user_info, _("Username"), json_object_get_string_member(user, "username"));
+	purple_notify_user_info_add_pair_html(user_info, _("Full Username"), username);
+	purple_notify_user_info_add_pair_html(user_info, _("ID"), user_id);
+	
+	//TODO display other info that we know about this buddy
+	//TODO online/idle status
+	//TODO in-game info
+	
+	purple_notify_user_info_add_pair_html(user_info, NULL, NULL);
+	purple_notify_user_info_add_pair_html(user_info, _("Connected Accounts"), NULL);
+	
+	for (i = json_array_get_length(connected_accounts) - 1; i >= 0; i--) {
+		JsonObject *account = json_array_get_object_element(connected_accounts, i);
+		const gchar *type = json_object_get_string_member(account, "type");
+		const gchar *name = json_object_get_string_member(account, "name");
+		//const gchar *id = json_object_get_string_member(account, "id"); //TODO href link to account?
+		
+		purple_notify_user_info_add_pair_html(user_info, type, name);
+	}
+	
+	purple_notify_user_info_add_pair_html(user_info, NULL, NULL);
+	purple_notify_user_info_add_pair_html(user_info, _("Mutual Servers"), NULL);
+	
+	for (i = json_array_get_length(mutual_guilds) - 1; i >= 0; i--) {
+		JsonObject *guild = json_array_get_object_element(mutual_guilds, i);
+		const gchar *id = json_object_get_string_member(guild, "id");
+		const gchar *name = g_hash_table_lookup(da->guilds, id);
+		
+		purple_notify_user_info_add_pair_html(user_info, NULL, name);
+	}
+	
+	purple_notify_userinfo(da->pc, username, user_info, NULL, NULL);
+	
+	g_free(username);
+}
+
+static void
+discord_get_info(PurpleConnection *pc, const gchar *username)
+{
+	DiscordAccount *da = purple_connection_get_protocol_data(pc);
+	gchar *url;
+	const gchar *user_id = g_hash_table_lookup(da->usernames_to_ids, username);
+	
+	if (!user_id) {
+		return;
+	}
+	
+	url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/v6/users/%s/profile", user_id);
+	discord_fetch_url(da, url, NULL, discord_got_info, g_strdup(username));
+	g_free(url);
+}
+
 
 static const char *
 discord_list_icon(PurpleAccount *account, PurpleBuddy *buddy)
@@ -3213,6 +3279,7 @@ plugin_init(PurplePlugin *plugin)
 	prpl_info->remove_buddy = discord_buddy_remove;
 	prpl_info->group_buddy = discord_fake_group_buddy;
 	prpl_info->rename_group = discord_fake_group_rename;
+	prpl_info->get_info = discord_get_info;
 	
 	prpl_info->roomlist_get_list = discord_roomlist_get_list;
 	prpl_info->roomlist_room_serialize = discord_roomlist_serialize;
@@ -3321,6 +3388,7 @@ discord_protocol_server_iface_init(PurpleProtocolServerIface *prpl_info)
 	prpl_info->set_idle = discord_set_idle;
 	prpl_info->group_buddy = discord_fake_group_buddy;
 	prpl_info->rename_group = discord_fake_group_rename;
+	prpl_info->get_info = discord_get_info;
 }
 
 static void 
