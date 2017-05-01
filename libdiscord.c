@@ -457,11 +457,11 @@ static DiscordChannel *discord_new_channel(JsonObject *json)
 	return channel;
 }
 
-static DiscordGuildMembership *discord_new_guild_membership(JsonObject *json)
+static DiscordGuildMembership *discord_new_guild_membership(guint64 id, JsonObject *json)
 {
 	DiscordGuildMembership *guild_membership = g_new0(DiscordGuildMembership, 1);
 
-	guild_membership->id = to_int(json_object_get_string_member(json, "id"));
+	guild_membership->id = id;
 	guild_membership->nick = g_strdup(json_object_get_string_member(json, "nick"));
 	guild_membership->joined_at = g_strdup(json_object_get_string_member(json, "joined_at"));
 
@@ -559,16 +559,27 @@ static void discord_update_status(DiscordUser *user, JsonObject *json)
 	}
 }
 
-static void discord_add_channel(DiscordGuild *guild, JsonObject *json)
+static DiscordChannel *discord_add_channel(DiscordGuild *guild, JsonObject *json)
 {
 	DiscordChannel *channel = discord_new_channel(json);
 	g_hash_table_insert_int64(guild->channels, channel->id, channel);
+	return channel;
 }
 
-static void discord_add_guild_role(DiscordGuild *guild, JsonObject *json)
+static DiscordGuildRole *discord_add_guild_role(DiscordGuild *guild, JsonObject *json)
 {
 	DiscordGuildRole *role = discord_new_guild_role(json);
 	g_hash_table_insert_int64(guild->roles, role->id, role);
+	return role;
+}
+
+static DiscordPermissionOverride *discord_add_permission_override(DiscordChannel *channel, JsonObject *json)
+{
+	DiscordPermissionOverride *permission_override = discord_new_permission_override(json);
+	gboolean is_role = discord_permission_is_role(json);
+	GHashTable *overrides = is_role ? channel->permission_role_overrides : channel->permission_user_overrides;
+	g_hash_table_replace_int64(overrides, permission_override->id, permission_override);
+	return permission_override;
 }
 
 //managing
@@ -587,17 +598,17 @@ static DiscordUser *discord_get_user(DiscordAccount *da, gchar *id)
 	return discord_get_user_int(da, to_int(id));
 }
 
-static DiscordUser *discord_new_or_steal_user(GHashTable *user_table, JsonObject *json)
+static DiscordUser *discord_upsert_user(GHashTable *user_table, JsonObject *json)
 {
 	guint64 *key = NULL, user_id = to_int(json_object_get_string_member(json, "id"));
 	DiscordUser *user = NULL;
 	
 	if(g_hash_table_lookup_extended_int64(user_table, user_id, (gpointer)&key, (gpointer)&user)){
-		g_hash_table_steal_int64(user_table, user_id);
-		g_free(key);
 		return user;
 	}else{
-		return discord_new_user(json);
+		user = discord_new_user(json);
+		g_hash_table_insert_int64(user_table, user->id, user);
+		return user;
 	}
 }
 //debug
@@ -607,8 +618,7 @@ static DiscordUser *discord_new_or_steal_user(GHashTable *user_table, JsonObject
 
 static void discord_print_append_row(int level, GString *buffer, GString *row)
 {
-	int i;
-	for(i = 0; i < level; i++){
+	for(int i = 0; i < level; i++){
 		g_string_prepend_c(row, '\t');
 	}
 	g_string_append(buffer, row->str);
@@ -619,7 +629,7 @@ static void discord_print_guilds(GHashTable *guilds)
 {
 	GString *buffer = g_string_new("\n");
 	GString *row_buffer = g_string_new("");
-	GHashTableIter guild_iter, channel_iter, role_iter;
+	GHashTableIter guild_iter, channel_iter, role_iter, permission_override_iter;
 	gpointer key, value;
 
 	g_hash_table_iter_init(&guild_iter, guilds);
@@ -659,6 +669,28 @@ static void discord_print_guilds(GHashTable *guilds)
 			discord_print_append(2, buffer, row_buffer, "Type: %d", channel->type);
 			discord_print_append(2, buffer, row_buffer, "Position: %d", channel->position);
 			discord_print_append(2, buffer, row_buffer, "Last message: %lu", channel->last_message_id);
+			
+			discord_print_append(2, buffer, row_buffer, "Role overrides count: %d", g_hash_table_size(channel->permission_role_overrides));
+			g_hash_table_iter_init(&permission_override_iter, channel->permission_role_overrides);
+			while(g_hash_table_iter_next (&permission_override_iter, &key, &value)){
+				DiscordPermissionOverride *permission_override = value;
+								     
+				discord_print_append(3, buffer, row_buffer, "Override id: %lu", permission_override->id);
+				discord_print_append(3, buffer, row_buffer, "Allow: %lu", permission_override->allow);
+				discord_print_append(3, buffer, row_buffer, "Deny: %lu", permission_override->deny);
+
+			}
+			
+			discord_print_append(2, buffer, row_buffer, "User overrides count: %d", g_hash_table_size(channel->permission_user_overrides));
+			g_hash_table_iter_init(&permission_override_iter, channel->permission_user_overrides);
+			while(g_hash_table_iter_next (&permission_override_iter, &key, &value)){
+				DiscordPermissionOverride *permission_override = value;
+								     
+				discord_print_append(3, buffer, row_buffer, "Override id: %lu", permission_override->id);
+				discord_print_append(3, buffer, row_buffer, "Allow: %lu", permission_override->allow);
+				discord_print_append(3, buffer, row_buffer, "Deny: %lu", permission_override->deny);
+
+			}
 
 		}
 	}
@@ -675,7 +707,7 @@ static void discord_print_users(GHashTable *users)
 	gpointer key, value;
 
 	g_hash_table_iter_init(&user_iter, users);
-	while(g_hash_table_iter_next (&user_iter, &key, &value)){
+	while(g_hash_table_iter_next(&user_iter, &key, &value)){
 		DiscordUser *user = value;
 
 		discord_print_append(0, buffer, row_buffer, "User id: %lu", user->id);
@@ -701,17 +733,12 @@ static void discord_print_users(GHashTable *users)
 
 		}
 	}
-	purple_debug_info("discord", buffer->str);
+	purple_debug_info("discord", "\n%s\n", buffer->str);
+
 	g_string_free(buffer, TRUE);
 	g_string_free(row_buffer, TRUE);
 }
 
-
-static void discord_append_permission_override(DiscordChannel *channel, DiscordPermissionOverride *permission, gboolean is_role)
-{
-	GHashTable *overrides = is_role ? channel->permission_role_overrides : channel->permission_user_overrides;
-	g_hash_table_replace_int64(overrides, permission->id, permission);
-}
 
 typedef void (*DiscordProxyCallbackFunc)(DiscordAccount *ya, JsonNode *node, gpointer user_data);
 
@@ -1142,6 +1169,8 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 
 	if (purple_strequal(type, "PRESENCE_UPDATE")) {
 		JsonObject *user = json_object_get_object_member(data, "user");
+		DiscordUser *u = discord_upsert_user(da->new_users, user);
+		discord_update_status(u, data);
 		const gchar *user_id = json_object_get_string_member(user, "id");
 		const gchar *status = json_object_get_string_member(data, "status");
 		const gchar *game = json_object_get_string_member(json_object_get_object_member(data, "game"), "name");
@@ -1476,18 +1505,25 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		JsonArray *presences = json_object_get_array_member(data, "presences");
 		JsonArray *members = json_object_get_array_member(data, "members");
 		const gchar *guild_id = json_object_get_string_member(data, "id");
+		guint64 gid = to_int(guild_id);
 		GList *users = NULL, *flags = NULL, *l;
 
-		int j;
 		GHashTable *user_list = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, NULL);
 
+		purple_debug_info("discord", "Guild id '%lu' \n", gid);
 		//all members in small groups, online in large
-		for (j = json_array_get_length(members) - 1; j >= 0; j--) {
+		for (int j = json_array_get_length(members) - 1; j >= 0; j--) {
 			JsonObject *member = json_array_get_object_element(members, j);
 			JsonObject *user = json_object_get_object_member(member, "user");
 			
-			DiscordUser *u = discord_new_or_steal_user(da->new_users, user);
-			g_hash_table_insert_int64(da->new_users, u->id, u);
+			DiscordUser *u = discord_upsert_user(da->new_users, user);
+			DiscordGuildMembership *membership = discord_new_guild_membership(gid, member);
+			g_hash_table_insert_int64(u->guild_memberships, gid, membership);
+			
+			JsonArray *roles = json_object_get_array_member(member, "roles");
+			for (int k = json_array_get_length(roles) - 1; k >= 0; k--) {
+				to_int(json_array_get_string_element(roles, k));
+			}
 			
 			const gchar *username = json_object_get_string_member(user, "username");
 			const gchar *discriminator = json_object_get_string_member(user, "discriminator");
@@ -1502,13 +1538,12 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		purple_debug_info("discord", "Room has '%d' Members\n", json_array_get_length(members));
 
 		// Presence only contains online users
-		for (j = json_array_get_length(presences) - 1; j >= 0; j--) {
+		for (int j = json_array_get_length(presences) - 1; j >= 0; j--) {
 			JsonObject *presence = json_array_get_object_element(presences, j);
 			JsonObject *user = json_object_get_object_member(presence, "user");
 			
-			DiscordUser *u = discord_new_or_steal_user(da->new_users, user);
+			DiscordUser *u = discord_upsert_user(da->new_users, user);
 			discord_update_status(u, presence);
-			g_hash_table_insert_int64(da->new_users, u->id, u);
 			
 			const gchar *user_id = json_object_get_string_member(user, "id");
 			const gchar *combined_username = g_hash_table_lookup(da->ids_to_usernames, user_id);
@@ -1934,7 +1969,7 @@ discord_got_guilds(DiscordAccount *da, JsonNode *node, gpointer user_data)
 		for (j = json_array_get_length(channels) - 1; j >= 0; j--) {
 			JsonObject *channel = json_array_get_object_element(channels, j);
 
-			discord_add_channel(g, channel);
+			DiscordChannel *c = discord_add_channel(g, channel);
 
 			const gchar *room_id = json_object_get_string_member(channel, "id");
 			const gchar *room_name = json_object_get_string_member(channel, "name");
@@ -1946,6 +1981,12 @@ discord_got_guilds(DiscordAccount *da, JsonNode *node, gpointer user_data)
 			}
 
 			channel_ids = g_list_append(channel_ids, g_strdup(room_id));
+			
+			JsonArray *permission_overrides = json_object_get_array_member(channel, "permission_overwrites");
+			for(int k = json_array_get_length(permission_overrides) - 1; k >= 0; k--){
+				JsonObject *permission_override = json_array_get_object_element(permission_overrides, k);
+				discord_add_permission_override(c, permission_override);
+			}
 		}
 		g_hash_table_insert(da->channels, g_strdup(id), channel_ids);
 		json_array_add_string_element(guild_ids, id);
