@@ -154,7 +154,17 @@ json_object_to_string(JsonObject *obj)
 #define PURPLE_CHAT_CONVERSATION(conv)        PURPLE_CONV_CHAT(conv)
 #define purple_conversation_present_error     purple_conv_present_error
 #define purple_serv_got_joined_chat(pc, id, name)  PURPLE_CONV_CHAT(serv_got_joined_chat(pc, id, name))
-#define purple_conversations_find_chat(pc, id)  PURPLE_CONV_CHAT(purple_find_chat(pc, id))
+static inline PurpleConvChat *
+purple_conversations_find_chat(PurpleConnection *pc, int id)
+{
+	PurpleConversation *conv = purple_find_chat(pc, id);
+	
+	if (conv != NULL) {
+		return PURPLE_CONV_CHAT(conv);
+	}
+	
+	return NULL;
+}
 #define purple_serv_got_chat_in                    serv_got_chat_in
 #define purple_chat_conversation_add_user     purple_conv_chat_add_user
 #define purple_chat_conversation_add_users    purple_conv_chat_add_users
