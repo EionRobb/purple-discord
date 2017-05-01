@@ -154,7 +154,17 @@ json_object_to_string(JsonObject *obj)
 #define PURPLE_CHAT_CONVERSATION(conv)        PURPLE_CONV_CHAT(conv)
 #define purple_conversation_present_error     purple_conv_present_error
 #define purple_serv_got_joined_chat(pc, id, name)  PURPLE_CONV_CHAT(serv_got_joined_chat(pc, id, name))
-#define purple_conversations_find_chat(pc, id)  PURPLE_CONV_CHAT(purple_find_chat(pc, id))
+static inline PurpleConvChat *
+purple_conversations_find_chat(PurpleConnection *pc, int id)
+{
+	PurpleConversation *conv = purple_find_chat(pc, id);
+	
+	if (conv != NULL) {
+		return PURPLE_CONV_CHAT(conv);
+	}
+	
+	return NULL;
+}
 #define purple_serv_got_chat_in                    serv_got_chat_in
 #define purple_chat_conversation_add_user     purple_conv_chat_add_user
 #define purple_chat_conversation_add_users    purple_conv_chat_add_users
@@ -243,6 +253,7 @@ purple_message_destroy(PurpleMessage *message)
 #define PurpleHttpConnection  PurpleUtilFetchUrlData
 #define purple_buddy_set_name  purple_blist_rename_buddy
 #define purple_request_cpar_from_connection(a)  purple_connection_get_account(a), NULL, NULL
+#define purple_notify_user_info_add_pair_html  purple_notify_user_info_add_pair
 
 #else
 // Purple3 helper functions
@@ -1173,7 +1184,8 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		discord_update_status(u, data);
 		const gchar *user_id = json_object_get_string_member(user, "id");
 		const gchar *status = json_object_get_string_member(data, "status");
-		const gchar *game = json_object_get_string_member(json_object_get_object_member(data, "game"), "name");
+		JsonObject *game = json_object_get_object_member(data, "game");
+		const gchar *game_name = json_object_get_string_member(game, "name");
 		if(json_object_has_member(user, "username")){
 			const gchar *username = json_object_get_string_member(user, "username");
 			const gchar *discriminator = json_object_get_string_member(user, "discriminator");
@@ -1215,7 +1227,7 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 				g_hash_table_replace(online_users, g_strdup(user_id), NULL);
 			}
 		}else if(username){
-			purple_protocol_got_user_status(da->account, username, status, "message", game, NULL);
+			purple_protocol_got_user_status(da->account, username, status, "message", game_name, NULL);
 			purple_protocol_got_user_idle(da->account, username, idle_since ? TRUE : FALSE, 0);
 		}
 	} else if (purple_strequal(type, "MESSAGE_CREATE")/* || purple_strequal(type, "MESSAGE_UPDATE")*/) { //TODO
@@ -1730,6 +1742,7 @@ discord_set_status(PurpleAccount *account, PurpleStatus *status)
 	PurpleConnection *pc = purple_account_get_connection(account);
 	DiscordAccount *ya = purple_connection_get_protocol_data(pc);
 	const gchar *status_id = purple_status_get_id(status);
+	gchar *postdata;
 
 	JsonObject *obj = json_object_new();
 	JsonObject *data = json_object_new();
@@ -1740,9 +1753,23 @@ discord_set_status(PurpleAccount *account, PurpleStatus *status)
 
 	json_object_set_int_member(obj, "op", 3);
 	json_object_set_string_member(data, "status", status_id);
+	json_object_set_int_member(data, "since", 0);
+	json_object_set_string_member(data, "game", status_id);
+	json_object_set_boolean_member(data, "afk", FALSE);
 	json_object_set_object_member(obj, "d", data);
 
 	discord_socket_write_json(ya, obj);
+	
+	
+	data = json_object_new();
+	json_object_set_string_member(data, "status", status_id);
+	postdata = json_object_to_string(data);
+	
+	discord_fetch_url_with_method(ya, "PATCH", "https://" DISCORD_API_SERVER "/api/v6/users/@me/settings", postdata, NULL, NULL);
+	
+	g_free(postdata);
+	json_object_unref(data);
+	
 }
 
 void
@@ -1762,6 +1789,7 @@ discord_set_idle(PurpleConnection *pc, int idle_time)
 	json_object_set_int_member(obj, "op", 3);
 	json_object_set_string_member(data, "status", status);
 	json_object_set_int_member(data, "since", since);
+	json_object_set_boolean_member(data, "afk", idle_time >= 20);
 	json_object_set_object_member(obj, "d", data);
 
 	discord_socket_write_json(ya, obj);
@@ -1925,13 +1953,14 @@ discord_got_presences(DiscordAccount *da, JsonNode *node, gpointer user_data)
 		const gchar *user_id = json_object_get_string_member(user, "id");
 		const gchar *username = json_object_get_string_member(user, "username");
 		const gchar *discriminator = json_object_get_string_member(user, "discriminator");
-		const gchar *game = json_object_get_string_member(presence, "game");
+		JsonObject *game = json_object_get_object_member(presence, "game");
+		const gchar *game_name = json_object_get_string_member(game, "name");
 		gchar *merged_username = discord_combine_username(username, discriminator);
 
 		g_hash_table_replace(da->usernames_to_ids, g_strdup(merged_username), g_strdup(user_id));
 		g_hash_table_replace(da->ids_to_usernames, g_strdup(user_id), g_strdup(merged_username));
 
-		purple_protocol_got_user_status(da->account, merged_username, status, "message", game, NULL);
+		purple_protocol_got_user_status(da->account, merged_username, status, "message", game_name, NULL);
 		purple_protocol_got_user_idle(da->account, merged_username, purple_strequal(status, "idle"), 0);
 
 		g_free(merged_username);
@@ -3373,6 +3402,72 @@ discord_fake_group_rename(PurpleConnection *pc, const char *old_name, PurpleGrou
 	// Do nothing to stop the remove+add behaviour
 }
 
+static void
+discord_got_info(DiscordAccount *da, JsonNode *node, gpointer user_data)
+{
+	gchar *username = user_data;
+	const gchar *user_id = g_hash_table_lookup(da->usernames_to_ids, username);
+	PurpleNotifyUserInfo *user_info;
+	JsonObject *info = json_node_get_object(node);
+	JsonObject *user = json_object_get_object_member(info, "user");
+	JsonArray *connected_accounts = json_object_get_array_member(info, "connected_accounts");
+	JsonArray *mutual_guilds = json_object_get_array_member(info, "mutual_guilds");
+	gint i;
+	
+	user_info = purple_notify_user_info_new();
+	
+	purple_notify_user_info_add_pair_html(user_info, _("Username"), json_object_get_string_member(user, "username"));
+	purple_notify_user_info_add_pair_html(user_info, _("Full Username"), username);
+	purple_notify_user_info_add_pair_html(user_info, _("ID"), user_id);
+	
+	//TODO display other info that we know about this buddy
+	//TODO online/idle status
+	//TODO in-game info
+	
+	purple_notify_user_info_add_pair_html(user_info, NULL, NULL);
+	purple_notify_user_info_add_pair_html(user_info, _("Connected Accounts"), NULL);
+	
+	for (i = json_array_get_length(connected_accounts) - 1; i >= 0; i--) {
+		JsonObject *account = json_array_get_object_element(connected_accounts, i);
+		const gchar *type = json_object_get_string_member(account, "type");
+		const gchar *name = json_object_get_string_member(account, "name");
+		//const gchar *id = json_object_get_string_member(account, "id"); //TODO href link to account?
+		
+		purple_notify_user_info_add_pair_html(user_info, type, name);
+	}
+	
+	purple_notify_user_info_add_pair_html(user_info, NULL, NULL);
+	purple_notify_user_info_add_pair_html(user_info, _("Mutual Servers"), NULL);
+	
+	for (i = json_array_get_length(mutual_guilds) - 1; i >= 0; i--) {
+		JsonObject *guild = json_array_get_object_element(mutual_guilds, i);
+		const gchar *id = json_object_get_string_member(guild, "id");
+		const gchar *name = g_hash_table_lookup(da->guilds, id);
+		
+		purple_notify_user_info_add_pair_html(user_info, NULL, name);
+	}
+	
+	purple_notify_userinfo(da->pc, username, user_info, NULL, NULL);
+	
+	g_free(username);
+}
+
+static void
+discord_get_info(PurpleConnection *pc, const gchar *username)
+{
+	DiscordAccount *da = purple_connection_get_protocol_data(pc);
+	gchar *url;
+	const gchar *user_id = g_hash_table_lookup(da->usernames_to_ids, username);
+	
+	if (!user_id) {
+		return;
+	}
+	
+	url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/v6/users/%s/profile", user_id);
+	discord_fetch_url(da, url, NULL, discord_got_info, g_strdup(username));
+	g_free(url);
+}
+
 
 static const char *
 discord_list_icon(PurpleAccount *account, PurpleBuddy *buddy)
@@ -3390,7 +3485,13 @@ discord_status_types(PurpleAccount *account)
 	status = purple_status_type_new_full(PURPLE_STATUS_AVAILABLE, "set-online", "Online", TRUE, TRUE, FALSE);
 	types = g_list_append(types, status);
 
-	status = purple_status_type_new_full(PURPLE_STATUS_AWAY, "set-idle", "Away", TRUE, TRUE, FALSE);
+	status = purple_status_type_new_full(PURPLE_STATUS_AWAY, "set-idle", "Idle", TRUE, TRUE, FALSE);
+	types = g_list_append(types, status);
+	
+	status = purple_status_type_new_full(PURPLE_STATUS_UNAVAILABLE, "set-dnd", "Do Not Disturb", TRUE, TRUE, FALSE);
+	types = g_list_append(types, status);
+	
+	status = purple_status_type_new_full(PURPLE_STATUS_INVISIBLE, "set-invisible", "Invisible", TRUE, TRUE, FALSE);
 	types = g_list_append(types, status);
 
 	status = purple_status_type_new_full(PURPLE_STATUS_OFFLINE, "set-offline", "Offline", TRUE, TRUE, FALSE);
@@ -3400,7 +3501,7 @@ discord_status_types(PurpleAccount *account)
 	status = purple_status_type_new_with_attrs(PURPLE_STATUS_AVAILABLE, "online", "Online", TRUE, FALSE, FALSE, "message", "In-Game", purple_value_new(PURPLE_TYPE_STRING), NULL);
 	types = g_list_append(types, status);
 
-	status = purple_status_type_new_with_attrs(PURPLE_STATUS_AWAY, "idle", "Away", TRUE, FALSE, FALSE, "message", "In-Game", purple_value_new(PURPLE_TYPE_STRING), NULL);
+	status = purple_status_type_new_with_attrs(PURPLE_STATUS_AWAY, "idle", "Idle", TRUE, FALSE, FALSE, "message", "In-Game", purple_value_new(PURPLE_TYPE_STRING), NULL);
 	types = g_list_append(types, status);
 
 	status = purple_status_type_new_with_attrs(PURPLE_STATUS_OFFLINE, "offline", "Offline", TRUE, FALSE, FALSE, "message", "In-Game", purple_value_new(PURPLE_TYPE_STRING), NULL);
@@ -3433,6 +3534,24 @@ discord_list_emblem(PurpleBuddy *buddy)
 	return NULL;
 
 	//TODO bot
+}
+
+void
+discord_tooltip_text(PurpleBuddy *buddy, PurpleNotifyUserInfo *user_info, gboolean full)
+{
+	PurplePresence *presence = purple_buddy_get_presence(buddy);
+	PurpleStatus *status = purple_presence_get_active_status(presence);
+	const gchar *message = purple_status_get_attr_string(status, "message");
+
+	purple_notify_user_info_add_pair_html(user_info, _("Status"), purple_status_get_name(status));
+	
+	if (message != NULL) {
+		gchar *escaped = g_markup_printf_escaped("%s", message);
+		
+		purple_notify_user_info_add_pair_html(user_info, _("Playing"), escaped);
+		
+		g_free(escaped);
+	}
 }
 
 static GHashTable *
@@ -3653,6 +3772,7 @@ plugin_init(PurplePlugin *plugin)
 	prpl_info->get_account_text_table = discord_get_account_text_table;
 	prpl_info->list_emblem = discord_list_emblem;
 	prpl_info->status_text = discord_status_text;
+	prpl_info->tooltip_text = discord_tooltip_text;
 	prpl_info->list_icon = discord_list_icon;
 	prpl_info->set_status = discord_set_status;
 	prpl_info->set_idle = discord_set_idle;
@@ -3672,6 +3792,7 @@ plugin_init(PurplePlugin *plugin)
 	prpl_info->remove_buddy = discord_buddy_remove;
 	prpl_info->group_buddy = discord_fake_group_buddy;
 	prpl_info->rename_group = discord_fake_group_rename;
+	prpl_info->get_info = discord_get_info;
 
 	prpl_info->roomlist_get_list = discord_roomlist_get_list;
 	prpl_info->roomlist_room_serialize = discord_roomlist_serialize;
@@ -3780,6 +3901,7 @@ discord_protocol_server_iface_init(PurpleProtocolServerIface *prpl_info)
 	prpl_info->set_idle = discord_set_idle;
 	prpl_info->group_buddy = discord_fake_group_buddy;
 	prpl_info->rename_group = discord_fake_group_rename;
+	prpl_info->get_info = discord_get_info;
 }
 
 static void
@@ -3789,6 +3911,7 @@ discord_protocol_client_iface_init(PurpleProtocolClientIface *prpl_info)
 	prpl_info->status_text = discord_status_text;
 	prpl_info->get_actions = discord_actions;
 	prpl_info->list_emblem = discord_list_emblem;
+	prpl_info->tooltip_text = discord_tooltip_text;
 }
 
 static void
