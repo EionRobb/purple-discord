@@ -676,8 +676,8 @@ static void discord_print_guilds(GHashTable *guilds)
 				DiscordPermissionOverride *permission_override = value;
 								     
 				discord_print_append(3, buffer, row_buffer, "Override id: %lu", permission_override->id);
-				discord_print_append(3, buffer, row_buffer, "Allow: %lu", permission_override->allow);
-				discord_print_append(3, buffer, row_buffer, "Deny: %lu", permission_override->deny);
+				discord_print_append(4, buffer, row_buffer, "Allow: %lu", permission_override->allow);
+				discord_print_append(4, buffer, row_buffer, "Deny: %lu", permission_override->deny);
 
 			}
 			
@@ -687,8 +687,8 @@ static void discord_print_guilds(GHashTable *guilds)
 				DiscordPermissionOverride *permission_override = value;
 								     
 				discord_print_append(3, buffer, row_buffer, "Override id: %lu", permission_override->id);
-				discord_print_append(3, buffer, row_buffer, "Allow: %lu", permission_override->allow);
-				discord_print_append(3, buffer, row_buffer, "Deny: %lu", permission_override->deny);
+				discord_print_append(4, buffer, row_buffer, "Allow: %lu", permission_override->allow);
+				discord_print_append(4, buffer, row_buffer, "Deny: %lu", permission_override->deny);
 
 			}
 
