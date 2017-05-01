@@ -565,6 +565,12 @@ static void discord_add_channel(DiscordGuild *guild, JsonObject *json)
 	g_hash_table_insert_int64(guild->channels, channel->id, channel);
 }
 
+static void discord_add_guild_role(DiscordGuild *guild, JsonObject *json)
+{
+	DiscordGuildRole *role = discord_new_guild_role(json);
+	g_hash_table_insert_int64(guild->roles, role->id, role);
+}
+
 //managing
 static gboolean discord_permission_is_role(JsonObject *json)
 {
@@ -613,7 +619,7 @@ static void discord_print_guilds(GHashTable *guilds)
 {
 	GString *buffer = g_string_new("\n");
 	GString *row_buffer = g_string_new("");
-	GHashTableIter guild_iter, channel_iter;
+	GHashTableIter guild_iter, channel_iter, role_iter;
 	gpointer key, value;
 
 	g_hash_table_iter_init(&guild_iter, guilds);
@@ -621,23 +627,38 @@ static void discord_print_guilds(GHashTable *guilds)
 		DiscordGuild *guild = value;
 
 		discord_print_append(0, buffer, row_buffer, "Guild id: %lu", guild->id);
-		discord_print_append(1, buffer, row_buffer, "name: %s", guild->name);
-		discord_print_append(1, buffer, row_buffer, "icon: %s", guild->icon);
-		discord_print_append(1, buffer, row_buffer, "owner: %lu", guild->owner);
-		discord_print_append(1, buffer, row_buffer, "afk_timeout: %d", guild->afk_timeout);
-		discord_print_append(1, buffer, row_buffer, "afk_channel: %s", guild->afk_voice_channel);
-		//todo print roles
-		//todo print members
+		discord_print_append(1, buffer, row_buffer, "Name: %s", guild->name);
+		discord_print_append(1, buffer, row_buffer, "Icon: %s", guild->icon);
+		discord_print_append(1, buffer, row_buffer, "Owner: %lu", guild->owner);
+		discord_print_append(1, buffer, row_buffer, "Afk timeout: %d", guild->afk_timeout);
+		discord_print_append(1, buffer, row_buffer, "Afk channel: %s", guild->afk_voice_channel);
+		
+		g_hash_table_iter_init(&role_iter, guild->roles);
+		while(g_hash_table_iter_next (&role_iter, &key, &value)){
+			DiscordGuildRole *role = value;
+			discord_print_append(1, buffer, row_buffer, "Role id: %lu", role->id);
+			discord_print_append(2, buffer, row_buffer, "Name: %s", role->name);
+			discord_print_append(2, buffer, row_buffer, "Color: %d", role->color);
+			discord_print_append(2, buffer, row_buffer, "Permissions: %lu", role->permissions);
+		}
+		
+		discord_print_append(1, buffer, row_buffer, "Member count: %d", guild->members->len);
+
+		for(int i = 0; i < guild->members->len; i++){
+			guint64 member_id = g_array_index(guild->members, guint64, i);
+			discord_print_append(3, buffer, row_buffer, "Member id: %lu", member_id);
+		}
+		
 		g_hash_table_iter_init(&channel_iter, guild->channels);
 		while(g_hash_table_iter_next (&channel_iter, &key, &value)){
 			DiscordChannel *channel = value;
 							     
 			discord_print_append(1, buffer, row_buffer, "Channel id: %lu", channel->id);
-			discord_print_append(2, buffer, row_buffer, "name: %s", channel->name);
-			discord_print_append(2, buffer, row_buffer, "topic: %s", channel->topic);
-			discord_print_append(2, buffer, row_buffer, "type: %d", channel->type);
-			discord_print_append(2, buffer, row_buffer, "position: %d", channel->position);
-			discord_print_append(2, buffer, row_buffer, "last message: %lu", channel->last_message_id);
+			discord_print_append(2, buffer, row_buffer, "Name: %s", channel->name);
+			discord_print_append(2, buffer, row_buffer, "Topic: %s", channel->topic);
+			discord_print_append(2, buffer, row_buffer, "Type: %d", channel->type);
+			discord_print_append(2, buffer, row_buffer, "Position: %d", channel->position);
+			discord_print_append(2, buffer, row_buffer, "Last message: %lu", channel->last_message_id);
 
 		}
 	}
@@ -671,7 +692,12 @@ static void discord_print_users(GHashTable *users)
 			discord_print_append(1, buffer, row_buffer, "Guild membership id: %lu", guild_membership->id);
 			discord_print_append(2, buffer, row_buffer, "Nick: %s", guild_membership->nick);
 			discord_print_append(2, buffer, row_buffer, "Joined at: %s", guild_membership->joined_at);
-			//todo print roles
+			discord_print_append(2, buffer, row_buffer, "Role count: %d", guild_membership->roles->len);
+
+			for(int i = 0; i < guild_membership->roles->len; i++){
+				guint64 role_id = g_array_index(guild_membership->roles, guint64, i);
+				discord_print_append(3, buffer, row_buffer, "Role id: %lu", role_id);
+			}
 
 		}
 	}
@@ -1035,7 +1061,7 @@ discord_send_auth(DiscordAccount *da)
 		json_object_set_int_member(obj, "op", 2);
 
 		json_object_set_boolean_member(data, "compress", FALSE);
-		json_object_set_int_member(data, "large_threshold", 250);
+		json_object_set_int_member(data, "large_threshold", 25000);
 
 		json_object_set_string_member(properties, "os",
 #if defined(_WIN32)
@@ -1455,6 +1481,7 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		int j;
 		GHashTable *user_list = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, NULL);
 
+		//all members in small groups, online in large
 		for (j = json_array_get_length(members) - 1; j >= 0; j--) {
 			JsonObject *member = json_array_get_object_element(members, j);
 			JsonObject *user = json_object_get_object_member(member, "user");
@@ -1478,6 +1505,11 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		for (j = json_array_get_length(presences) - 1; j >= 0; j--) {
 			JsonObject *presence = json_array_get_object_element(presences, j);
 			JsonObject *user = json_object_get_object_member(presence, "user");
+			
+			DiscordUser *u = discord_new_or_steal_user(da->new_users, user);
+			discord_update_status(u, presence);
+			g_hash_table_insert_int64(da->new_users, u->id, u);
+			
 			const gchar *user_id = json_object_get_string_member(user, "id");
 			const gchar *combined_username = g_hash_table_lookup(da->ids_to_usernames, user_id);
 
@@ -1889,9 +1921,15 @@ discord_got_guilds(DiscordAccount *da, JsonNode *node, gpointer user_data)
 		const gchar *id = json_object_get_string_member(guild, "id");
 		const gchar *name = json_object_get_string_member(guild, "name");
 		JsonArray *channels = json_object_get_array_member(guild, "channels");
+		JsonArray *roles = json_object_get_array_member(guild, "roles");
 
 		g_hash_table_replace(da->guilds, g_strdup(id), g_strdup(name));
 		GList *channel_ids = NULL;
+		
+		for (j = json_array_get_length(roles) - 1; j >= 0; j--) {
+			JsonObject *role = json_array_get_object_element(roles, j);
+			discord_add_guild_role(g, role);
+		}
 
 		for (j = json_array_get_length(channels) - 1; j >= 0; j--) {
 			JsonObject *channel = json_array_get_object_element(channels, j);
