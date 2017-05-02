@@ -373,7 +373,6 @@ typedef struct {
 	GHashTable *group_chats_rev;  // A store of known multi-user room name's -> room_id's
 	GHashTable *sent_message_ids; // A store of message id's that we generated from this instance
 	GHashTable *result_callbacks; // Result ID -> Callback function
-	GHashTable *guilds;           // A store of guild_id -> guild_name AKA Servers
 	GHashTable *channels;           // A store of guild_id -> channel_id
 	GHashTable *online_users;     // A store of guild_id -> member list
 	GQueue *received_message_queue; // A store of the last 10 received message id's for de-dup
@@ -657,6 +656,27 @@ static gchar *discord_create_fullname(DiscordUser *user)
 		return discord_create_fullname(user);
 	}
 	return NULL;
+}
+//todo try and remove non-int variants
+
+static DiscordUser *discord_get_guild_int(DiscordAccount *da, guint64 id)
+{
+	return g_hash_table_lookup_int64(da->new_guilds, id);
+}
+
+static DiscordUser *discord_get_guild(DiscordAccount *da, const gchar *id)
+{
+	return discord_get_guild_int(da, to_int(id));
+}
+
+static DiscordUser *discord_get_channel_int(DiscordGuild *guild, guint64 id)
+{
+	return g_hash_table_lookup_int64(guild->channels, id);
+}
+
+static DiscordUser *discord_get_channel(DiscordGuild *guild, const gchar *id)
+{
+	return discord_get_channel_int(guild, to_int(id));
 }
 //debug
 
@@ -1452,7 +1472,7 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 
 			if (name != NULL) {
 				const gchar *guild_id = json_object_get_string_member(data, "guild_id");
-				const gchar *guild_name = g_hash_table_lookup(da->guilds, guild_id);
+				const gchar *guild_name = discord_get_guild(da, guild_id)->name;
 				const gchar *channel_name = discord_normalise_room_name(guild_name, name);
 
 				g_hash_table_replace(da->group_chats, g_strdup(channel_id), g_strdup(channel_name));
@@ -1640,7 +1660,7 @@ discord_roomlist_got_list(DiscordAccount *da, JsonNode *node, gpointer user_data
 
 		if (i == 0) {
 			const gchar *guild_id = json_object_get_string_member(channel, "guild_id");
-			guild_name = g_hash_table_lookup(da->guilds, guild_id);
+			guild_name = discord_get_guild(da, guild_id)->name;
 			guild_category = purple_roomlist_room_new(PURPLE_ROOMLIST_ROOMTYPE_CATEGORY, guild_name, NULL);
 			purple_roomlist_room_add(roomlist, guild_category);
 		}
@@ -1722,14 +1742,18 @@ discord_roomlist_get_list(PurpleConnection *pc)
 	purple_roomlist_set_fields(roomlist, fields);
 	purple_roomlist_set_in_progress(roomlist, TRUE);
 
-	//Loop through guilds and request all channels
-	for(guilds = g_hash_table_get_keys(da->guilds); guilds; guilds = guilds->next)
-	{
-		const gchar *guild_id = guilds->data;
+	GHashTableIter iter;
+	gpointer key, value;
+
+	g_hash_table_iter_init(&iter, da->new_guilds);
+	while(g_hash_table_iter_next(&iter, &key, &value)){
+		DiscordGuild *guild = value;
+		
+		gchar *guild_id = g_strdup_printf("%lu", guild->id);
 		gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/v6/guilds/%s/channels", purple_url_encode(guild_id));
 		discord_fetch_url(da, url, NULL, discord_roomlist_got_list, roomlist);
 		g_free(url);
-
+		g_free(guild_id);
 		da->roomlist_guild_count++;
 	}
 
@@ -1980,7 +2004,6 @@ discord_got_guilds(DiscordAccount *da, JsonNode *node, gpointer user_data)
 		JsonArray *channels = json_object_get_array_member(guild, "channels");
 		JsonArray *roles = json_object_get_array_member(guild, "roles");
 
-		g_hash_table_replace(da->guilds, g_strdup(id), g_strdup(name));
 		GList *channel_ids = NULL;
 		
 		for (j = json_array_get_length(roles) - 1; j >= 0; j--) {
@@ -2139,7 +2162,6 @@ discord_login(PurpleAccount *account)
 	da->group_chats_rev = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
 	da->sent_message_ids = g_hash_table_new_full(g_str_insensitive_hash, g_str_insensitive_equal, g_free, NULL);
 	da->result_callbacks = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
-	da->guilds = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
 	da->channels = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, (GDestroyNotify) g_list_free);
 	da->online_users = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, (GDestroyNotify) g_hash_table_unref);
 	da->received_message_queue = g_queue_new();
@@ -2199,7 +2221,6 @@ discord_close(PurpleConnection *pc)
 	g_hash_table_unref(da->group_chats);
 	g_hash_table_unref(da->sent_message_ids);
 	g_hash_table_unref(da->result_callbacks);
-	g_hash_table_unref(da->guilds);
 	g_hash_table_unref(da->channels);
 	g_hash_table_unref(da->online_users);
 
@@ -3436,7 +3457,7 @@ discord_got_info(DiscordAccount *da, JsonNode *node, gpointer user_data)
 	for (i = json_array_get_length(mutual_guilds) - 1; i >= 0; i--) {
 		JsonObject *guild = json_array_get_object_element(mutual_guilds, i);
 		const gchar *id = json_object_get_string_member(guild, "id");
-		const gchar *name = g_hash_table_lookup(da->guilds, id);
+		const gchar *name = discord_get_guild(da, id)->name;
 		
 		purple_notify_user_info_add_pair_html(user_info, NULL, name);
 	}
