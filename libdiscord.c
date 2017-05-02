@@ -268,6 +268,8 @@ purple_message_destroy(PurpleMessage *message)
 #define PURPLE_MESSAGE_REMOTE_SEND  0x10000
 #endif
 
+#define IGNORE_PRINTS
+
 static GRegex *channel_mentions_regex = NULL;
 
 typedef enum{
@@ -690,6 +692,9 @@ static void discord_print_permission_override(GString *buffer, GHashTable *permi
 
 static void discord_print_guilds(GHashTable *guilds)
 {
+	#ifdef IGNORE_PRINTS
+		return;
+	#endif
 	GString *buffer = g_string_new("\n");
 	GString *row_buffer = g_string_new("");
 	GHashTableIter guild_iter, channel_iter, role_iter;
@@ -745,6 +750,9 @@ static void discord_print_guilds(GHashTable *guilds)
 
 static void discord_print_users(GHashTable *users)
 {
+	#ifdef IGNORE_PRINTS
+		return;
+	#endif
 	GString *buffer = g_string_new("\n");
 	GString *row_buffer = g_string_new("");
 	GHashTableIter user_iter, guild_membership_iter;
