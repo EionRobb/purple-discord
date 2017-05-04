@@ -390,8 +390,8 @@ typedef struct {
 } DiscordAccount;
 
 //just in case we optimize...
-#define g_hash_table_insert_int64(a, b, c) g_hash_table_insert((a), g_memdup(&(b), sizeof(gint64)), (c))
-#define g_hash_table_replace_int64(a, b, c) g_hash_table_replace((a), g_memdup(&(b), sizeof(gint64)), (c))
+#define g_hash_table_insert_int64(a, b, c) g_hash_table_insert((a), &(b), (c))
+#define g_hash_table_replace_int64(a, b, c) g_hash_table_replace((a), &(b), (c))
 #define g_hash_table_steal_int64(a, b) g_hash_table_steal((a), &(b))
 #define g_hash_table_lookup_int64(a, b) g_hash_table_lookup((a), &(b))
 #define g_hash_table_contains_int64(a, b) g_hash_table_contains((a), &(b))
@@ -418,7 +418,7 @@ static DiscordUser *discord_new_user(JsonObject *json)
 	user->discriminator = to_int(json_object_get_string_member(json, "discriminator"));
 	user->avatar = g_strdup(json_object_get_string_member(json, "avatar"));
 
-	user->guild_memberships = g_hash_table_new_full(g_int64_hash, g_int64_equal, g_free, discord_free_guild_membership);
+	user->guild_memberships = g_hash_table_new_full(g_int64_hash, g_int64_equal, NULL, discord_free_guild_membership);
 	user->status = USER_OFFLINE; //Is offline the best assumption on a new user?
 
 	return user;
@@ -434,10 +434,10 @@ static DiscordGuild *discord_new_guild(JsonObject *json)
 	guild->icon = g_strdup(json_object_get_string_member(json, "icon"));
 	guild->owner = to_int(json_object_get_string_member(json, "owner_id"));
 
-	guild->roles = g_hash_table_new_full(g_int64_hash, g_int64_equal, g_free, discord_free_guild_role);
+	guild->roles = g_hash_table_new_full(g_int64_hash, g_int64_equal, NULL, discord_free_guild_role);
 	guild->members = g_array_new(TRUE, TRUE, sizeof(guint64));
 
-	guild->channels = g_hash_table_new_full(g_int64_hash, g_int64_equal, g_free, discord_free_channel);
+	guild->channels = g_hash_table_new_full(g_int64_hash, g_int64_equal, NULL, discord_free_channel);
 	guild->afk_timeout = json_object_get_int_member(json, "afk_timeout");
 	guild->afk_voice_channel = g_strdup(json_object_get_string_member(json, "afk_channel_id"));
 
@@ -466,8 +466,8 @@ static DiscordChannel *discord_new_channel(JsonObject *json)
 	channel->type = json_object_get_int_member(json, "type") ? CHANNEL_VOICE : CHANNEL_TEXT;
 	channel->last_message_id = to_int(json_object_get_string_member(json, "last_message_id"));
 
-	channel->permission_user_overrides = g_hash_table_new_full(g_int64_hash, g_int64_equal, g_free, g_free);
-	channel->permission_role_overrides = g_hash_table_new_full(g_int64_hash, g_int64_equal, g_free, g_free);
+	channel->permission_user_overrides = g_hash_table_new_full(g_int64_hash, g_int64_equal, NULL, g_free);
+	channel->permission_role_overrides = g_hash_table_new_full(g_int64_hash, g_int64_equal, NULL, g_free);
 
 	return channel;
 }
@@ -807,7 +807,7 @@ static void discord_print_users(GHashTable *users)
 	g_hash_table_iter_init(&user_iter, users);
 	while(g_hash_table_iter_next(&user_iter, &key, &value)){
 		DiscordUser *user = value;
-
+		
 		discord_print_append(0, buffer, row_buffer, "User id: %lu", user->id);
 		discord_print_append(1, buffer, row_buffer, "Name: %s", user->name);
 		discord_print_append(1, buffer, row_buffer, "Discriminator: %d", user->discriminator);
@@ -2123,8 +2123,8 @@ discord_login(PurpleAccount *account)
 	da->received_message_queue = g_queue_new();
 
 	//todo make these the roots of all discord data
-	da->new_users = g_hash_table_new_full(g_int64_hash, g_int64_equal, g_free, discord_free_user);
-	da->new_guilds = g_hash_table_new_full(g_int64_hash, g_int64_equal, g_free, discord_free_guild);
+	da->new_users = g_hash_table_new_full(g_int64_hash, g_int64_equal, NULL, discord_free_user);
+	da->new_guilds = g_hash_table_new_full(g_int64_hash, g_int64_equal, NULL, discord_free_guild);
 
 	discord_build_groups_from_blist(da);
 
@@ -3210,10 +3210,7 @@ const gchar *who, const gchar *message, PurpleMessageFlags flags)
 
 		if (user) {
 			data = json_object_new();
-			gchar *buffer = g_strdup_printf("%lu", user->id);
-			json_object_set_string_member(data, "recipient_id", buffer);
-			g_free(buffer);
-
+			json_object_set_int_member(data, "recipient_id", user->id);
 			postdata = json_object_to_string(data);
 
 			discord_fetch_url(da, "https://" DISCORD_API_SERVER "/api/v6/users/@me/channels", postdata, discord_created_direct_message_send, msg);
@@ -3222,9 +3219,8 @@ const gchar *who, const gchar *message, PurpleMessageFlags flags)
 			json_object_unref(data);
 
 			return 1;
-		} else {
-			return -1;
 		}
+		return -1;
 	}
 
 	return discord_conversation_send_message(da, room_id, message);
