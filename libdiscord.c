@@ -3238,15 +3238,11 @@ discord_chat_set_topic(PurpleConnection *pc, int id, const char *topic)
 	//{"name":"test","position":1,"topic":"new topic","bitrate":64000,"user_limit":0}
 }
 
-typedef struct {
-	gchar *username;
-	gchar *avatar_id;
-} DiscordBuddyAvatar;
-
 static void
 discord_got_avatar(DiscordAccount *ya, JsonNode *node, gpointer user_data)
 {
-	DiscordBuddyAvatar *dba = user_data;
+	DiscordUser *user = user_data;
+	gchar *username = discord_create_fullname(user);
 
 	if (node != NULL) {
 		JsonObject *response = json_node_get_object(node);
@@ -3258,41 +3254,29 @@ discord_got_avatar(DiscordAccount *ya, JsonNode *node, gpointer user_data)
 		response_len = json_object_get_int_member(response, "len");
 		response_dup = g_memdup(response_str, response_len);
 
-		purple_buddy_icons_set_for_user(ya->account, dba->username, response_dup, response_len, dba->avatar_id);
+		purple_buddy_icons_set_for_user(ya->account, username, response_dup, response_len, user->avatar);
 	}
-
-	g_free(dba->username);
-	g_free(dba->avatar_id);
-	g_free(dba);
 }
 
 static void
 discord_get_avatar(DiscordAccount *da, DiscordUser *user)
 {
-	DiscordBuddyAvatar *dba;
-	GString *url;
-	const gchar *checksum;
-
 	if(!user) {
 		return;
 	}
 	gchar *username = discord_create_fullname(user);
-	checksum = purple_buddy_icons_get_checksum_for_user(purple_blist_find_buddy(da->account, username));
+	const gchar *checksum = purple_buddy_icons_get_checksum_for_user(purple_blist_find_buddy(da->account, username));
+	g_free(username);
 	if (purple_strequal(checksum, user->avatar)) {
-		g_free(username);
 		return;
 	}
-
-	dba = g_new0(DiscordBuddyAvatar, 1);
-	dba->username = username;
-	dba->avatar_id = g_strdup(user->avatar);
-
-	url = g_string_new("https://cdn.discordapp.com/avatars/");
+	
+	GString *url = g_string_new("https://cdn.discordapp.com/avatars/");
 	g_string_append_printf(url, "%lu", user->id);
 	g_string_append_c(url, '/');
 	g_string_append_printf(url, "%s", purple_url_encode(user->avatar));
 
-	discord_fetch_url(da, url->str, NULL, discord_got_avatar, dba);
+	discord_fetch_url(da, url->str, NULL, discord_got_avatar, user);
 
 	g_string_free(url, TRUE);
 }
