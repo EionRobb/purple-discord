@@ -1250,6 +1250,7 @@ static void discord_create_relationship(DiscordAccount *da, JsonObject *json);
 static void discord_got_relationships(DiscordAccount *da, JsonNode *node, gpointer user_data);
 static void discord_got_private_channels(DiscordAccount *da, JsonNode *node, gpointer user_data);
 static void discord_got_presences(DiscordAccount *da, JsonNode *node, gpointer user_data);
+static void discord_populate_guild(DiscordAccount *da, JsonObject *guild);
 static void discord_got_guilds(DiscordAccount *da, JsonNode *node, gpointer user_data);
 static void discord_got_avatar(DiscordAccount *da, JsonNode *node, gpointer user_data);
 static void discord_get_avatar(DiscordAccount *da, DiscordUser *user);
@@ -1541,6 +1542,10 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		discord_got_guilds(da, json_object_get_member(data, "guilds"), NULL);
 
 	}  else if (purple_strequal(type, "GUILD_SYNC") || purple_strequal(type, "GUILD_CREATE")) {
+		if(purple_strequal(type, "GUILD_CREATE")){
+			discord_populate_guild(da, data);
+		}
+		
 		JsonArray *presences = json_object_get_array_member(data, "presences");
 		JsonArray *members = json_object_get_array_member(data, "members");
 		const gchar *guild_id = json_object_get_string_member(data, "id");
@@ -1944,6 +1949,33 @@ discord_got_presences(DiscordAccount *da, JsonNode *node, gpointer user_data)
 }
 
 static void
+discord_populate_guild(DiscordAccount *da, JsonObject *guild)
+{
+	DiscordGuild *g = discord_new_guild(guild);
+	g_hash_table_insert_int64(da->new_guilds, g->id, g);
+
+	JsonArray *channels = json_object_get_array_member(guild, "channels");
+	JsonArray *roles = json_object_get_array_member(guild, "roles");
+
+	for (int j = json_array_get_length(roles) - 1; j >= 0; j--) {
+		JsonObject *role = json_array_get_object_element(roles, j);
+		discord_add_guild_role(g, role);
+	}
+
+	for (int j = json_array_get_length(channels) - 1; j >= 0; j--) {
+		JsonObject *channel = json_array_get_object_element(channels, j);
+
+		DiscordChannel *c = discord_add_channel(g, channel);
+
+		JsonArray *permission_overrides = json_object_get_array_member(channel, "permission_overwrites");
+		for(int k = json_array_get_length(permission_overrides) - 1; k >= 0; k--){
+			JsonObject *permission_override = json_array_get_object_element(permission_overrides, k);
+			discord_add_permission_override(c, permission_override);
+		}
+	}
+}
+
+static void
 discord_got_guilds(DiscordAccount *da, JsonNode *node, gpointer user_data)
 {
 	JsonArray *guilds = json_node_get_array(node);
@@ -1953,31 +1985,8 @@ discord_got_guilds(DiscordAccount *da, JsonNode *node, gpointer user_data)
 
 	for (int i = len - 1; i >= 0; i--) {
 		JsonObject *guild = json_array_get_object_element(guilds, i);
-
-		DiscordGuild *g = discord_new_guild(guild);
-		g_hash_table_insert_int64(da->new_guilds, g->id, g);
-
-		const gchar *id = json_object_get_string_member(guild, "id");
-		JsonArray *channels = json_object_get_array_member(guild, "channels");
-		JsonArray *roles = json_object_get_array_member(guild, "roles");
-
-		for (int j = json_array_get_length(roles) - 1; j >= 0; j--) {
-			JsonObject *role = json_array_get_object_element(roles, j);
-			discord_add_guild_role(g, role);
-		}
-
-		for (int j = json_array_get_length(channels) - 1; j >= 0; j--) {
-			JsonObject *channel = json_array_get_object_element(channels, j);
-
-			DiscordChannel *c = discord_add_channel(g, channel);
-
-			JsonArray *permission_overrides = json_object_get_array_member(channel, "permission_overwrites");
-			for(int k = json_array_get_length(permission_overrides) - 1; k >= 0; k--){
-				JsonObject *permission_override = json_array_get_object_element(permission_overrides, k);
-				discord_add_permission_override(c, permission_override);
-			}
-		}
-		json_array_add_string_element(guild_ids, id);
+		discord_populate_guild(da, guild);
+		json_array_add_string_element(guild_ids, json_object_get_string_member(guild, "id"));
 	}
 
 	discord_print_guilds(da->new_guilds);
