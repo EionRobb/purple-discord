@@ -1540,7 +1540,7 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		discord_got_presences(da, json_object_get_member(data, "presences"), NULL);
 		discord_got_guilds(da, json_object_get_member(data, "guilds"), NULL);
 
-	}  else if (purple_strequal(type, "GUILD_SYNC")) {
+	}  else if (purple_strequal(type, "GUILD_SYNC") || purple_strequal(type, "GUILD_CREATE")) {
 		JsonArray *presences = json_object_get_array_member(data, "presences");
 		JsonArray *members = json_object_get_array_member(data, "members");
 		const gchar *guild_id = json_object_get_string_member(data, "id");
@@ -2973,8 +2973,12 @@ discord_mark_conv_seen(PurpleConversation *conv, PurpleConversationUpdateType ty
 	ya = purple_connection_get_protocol_data(pc);
 
 	guint64 *room_id_ptr = purple_conversation_get_data(conv, "id");
-	g_return_if_fail(room_id_ptr);
-	guint64 room_id = *room_id_ptr;
+	guint64 room_id = 0;
+	if(room_id_ptr){
+		room_id = *room_id_ptr;	
+	}else{
+		room_id = to_int(g_hash_table_lookup(ya->one_to_ones_rev, purple_conversation_get_name(conv)));
+	}
 
 	discord_mark_room_messages_read(ya, room_id);
 }
@@ -2995,14 +2999,18 @@ discord_conv_send_typing(PurpleConversation *conv, PurpleIMTypingState state, Di
 
 	if (g_strcmp0(purple_protocol_get_id(purple_connection_get_protocol(pc)), DISCORD_PLUGIN_ID))
 		return 0;
-
+		
 	if (ya == NULL) {
 		ya = purple_connection_get_protocol_data(pc);
 	}
 
 	guint64 *room_id_ptr = purple_conversation_get_data(conv, "id");
-	g_return_val_if_fail(room_id_ptr, -1); //TODO create new conversation for this new person
-	guint64 room_id = *room_id_ptr;
+	guint64 room_id = 0;
+	if(room_id_ptr){
+		room_id = *room_id_ptr;	
+	}else{
+		room_id = to_int(g_hash_table_lookup(ya->one_to_ones_rev, purple_conversation_get_name(conv)));
+	}
 	
 	url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/v6/channels/%lu/typing", room_id);
 	discord_fetch_url(ya, url, "", NULL, NULL);
