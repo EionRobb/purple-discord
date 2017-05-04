@@ -593,7 +593,7 @@ static DiscordPermissionOverride *discord_add_permission_override(DiscordChannel
 	DiscordPermissionOverride *permission_override = discord_new_permission_override(json);
 	gboolean is_role = discord_permission_is_role(json);
 	GHashTable *overrides = is_role ? channel->permission_role_overrides : channel->permission_user_overrides;
-	g_hash_table_replace_int64(overrides, permission_override->id, permission_override);
+	g_hash_table_insert_int64(overrides, permission_override->id, permission_override);
 	return permission_override;
 }
 
