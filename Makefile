@@ -112,3 +112,6 @@ FAILNOPURPLE:
 clean:
 	rm -f $(DISCORD_TARGET) 
 
+gdb:
+	gdb --args pidgin -c ~/.fake_purple -n -m
+

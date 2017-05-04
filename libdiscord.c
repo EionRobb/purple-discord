@@ -706,7 +706,8 @@ static DiscordChannel *discord_get_channel_global_name(DiscordAccount *da, const
 
 	g_hash_table_iter_init(&guild_iter, da->new_guilds);
 	while(g_hash_table_iter_next(&guild_iter, &key, &value)){
-		g_hash_table_iter_init(&channel_iter, da->new_guilds);
+		DiscordGuild *guild = value;
+		g_hash_table_iter_init(&channel_iter, guild->channels);
 		while(g_hash_table_iter_next(&channel_iter, &key, &value)){
 			DiscordChannel *channel = value;
 			if(purple_strequal(name, channel->name)){
@@ -2649,7 +2650,7 @@ str_is_number(const gchar *str)
 	return TRUE;
 }
 
-static GHashTable *
+static __attribute__((optimize("O0"))) GHashTable *
 discord_chat_info_defaults(PurpleConnection *pc, const char *chatname)
 {
 	DiscordAccount *da = purple_connection_get_protocol_data(pc);
