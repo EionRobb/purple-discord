@@ -689,6 +689,20 @@ static DiscordGuild *discord_get_guild(DiscordAccount *da, const gchar *id)
 	// return discord_get_channel_int(guild, to_int(id));
 // }
 
+static DiscordGuild *discord_upsert_guild(GHashTable *guild_table, JsonObject *json)
+{
+	guint64 *key = NULL, guild_id = to_int(json_object_get_string_member(json, "id"));
+	DiscordGuild *guild = NULL;
+	
+	if(g_hash_table_lookup_extended_int64(guild_table, guild_id, (gpointer)&key, (gpointer)&guild)){
+		return guild;
+	}else{
+		guild = discord_new_guild(json);
+		g_hash_table_insert_int64(guild_table, guild->id, guild);
+		return guild;
+	}
+}
+
 static DiscordChannel *discord_get_channel_global_int(DiscordAccount *da, guint64 id)
 {
 	GHashTableIter iter;
@@ -1965,8 +1979,7 @@ discord_got_presences(DiscordAccount *da, JsonNode *node, gpointer user_data)
 static void
 discord_populate_guild(DiscordAccount *da, JsonObject *guild)
 {
-	DiscordGuild *g = discord_new_guild(guild);
-	g_hash_table_insert_int64(da->new_guilds, g->id, g);
+	DiscordGuild *g = discord_upsert_guild(da->new_guilds, guild);
 
 	JsonArray *channels = json_object_get_array_member(guild, "channels");
 	JsonArray *roles = json_object_get_array_member(guild, "roles");
