@@ -1280,10 +1280,10 @@ discord_replace_channel(const GMatchInfo *match, GString *result, gpointer user_
 		//TODO make this a clickable link
 		guild = discord_get_guild_int(da, channel->guild_id);
 		if (guild) {
-		    g_string_append_printf(result, discord_normalise_room_name(guild->name, channel->name));
-        } else {
-		    g_string_append_printf(result, "#%s", channel->name);
-        }
+			g_string_append_printf(result, discord_normalise_room_name(guild->name, channel->name));
+		} else {
+			g_string_append_printf(result, "#%s", channel->name);
+		}
 	} else {
 		g_string_append(result, match_string);
 	}
