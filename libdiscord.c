@@ -307,6 +307,7 @@ typedef struct {
 
 typedef struct {
 	guint64 id;
+	guint64 guild_id;
 	gchar *name;
 	gchar *topic;
 	DiscordChannelType type;
@@ -579,9 +580,10 @@ static void discord_update_status(DiscordUser *user, JsonObject *json)
 	}
 }
 
-static DiscordChannel *discord_add_channel(DiscordGuild *guild, JsonObject *json)
+static DiscordChannel *discord_add_channel(DiscordGuild *guild, JsonObject *json, guint64 guild_id)
 {
 	DiscordChannel *channel = discord_new_channel(json);
+	channel->guild_id = guild_id;
 	g_hash_table_insert_int64(guild->channels, channel->id, channel);
 	return channel;
 }
@@ -1271,11 +1273,17 @@ discord_replace_channel(const GMatchInfo *match, GString *result, gpointer user_
 	DiscordAccount *da = user_data;
 	gchar *match_string = g_match_info_fetch(match, 0);
 	gchar *channel_id = g_match_info_fetch(match, 1);
-	const gchar *channel_name = discord_get_channel_global(da, channel_id)->name;
+	DiscordChannel *channel = discord_get_channel_global(da, channel_id);
+	DiscordGuild *guild;
 
-	if (channel_name) {
+	if (channel) {
 		//TODO make this a clickable link
-		g_string_append_printf(result, "#%s", channel_name);
+		guild = discord_get_guild_int(da, channel->guild_id);
+		if (guild) {
+		    g_string_append_printf(result, discord_normalise_room_name(guild->name, channel->name));
+        } else {
+		    g_string_append_printf(result, "#%s", channel->name);
+        }
 	} else {
 		g_string_append(result, match_string);
 	}
@@ -1979,7 +1987,7 @@ discord_populate_guild(DiscordAccount *da, JsonObject *guild)
 	for (int j = json_array_get_length(channels) - 1; j >= 0; j--) {
 		JsonObject *channel = json_array_get_object_element(channels, j);
 
-		DiscordChannel *c = discord_add_channel(g, channel);
+		DiscordChannel *c = discord_add_channel(g, channel, g->id);
 
 		JsonArray *permission_overrides = json_object_get_array_member(channel, "permission_overwrites");
 		for(int k = json_array_get_length(permission_overrides) - 1; k >= 0; k--){
