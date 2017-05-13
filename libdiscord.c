@@ -1275,7 +1275,7 @@ discord_replace_channel(const GMatchInfo *match, GString *result, gpointer user_
 
 	if (channel_name) {
 		//TODO make this a clickable link
-		g_string_append_printf(result, "%s", channel_name);
+		g_string_append_printf(result, "#%s", channel_name);
 	} else {
 		g_string_append(result, match_string);
 	}
