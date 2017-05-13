@@ -21,7 +21,7 @@ else
 PLUGIN_VERSION ?= 0.9.$(shell date +%Y.%m.%d)
 endif
 
-CFLAGS	?= -O2 -g -pipe -Wall -DDISCORD_PLUGIN_VERSION='"$(PLUGIN_VERSION)"'
+CFLAGS	?= -std=c99 -O2 -g -pipe -Wall -DDISCORD_PLUGIN_VERSION='"$(PLUGIN_VERSION)"'
 LDFLAGS ?= -Wl,-z,relro 
 
 # Do some nasty OS and purple version detection
@@ -111,4 +111,7 @@ FAILNOPURPLE:
 
 clean:
 	rm -f $(DISCORD_TARGET) 
+
+gdb:
+	gdb --args pidgin -c ~/.fake_purple -n -m
 
