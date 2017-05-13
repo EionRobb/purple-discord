@@ -343,6 +343,7 @@ typedef struct {
 	gchar *game;
 	gchar *avatar;
 	GHashTable *guild_memberships;
+	gboolean bot;
 } DiscordUser;
 
 typedef struct {
@@ -415,10 +416,11 @@ static DiscordUser *discord_new_user(JsonObject *json)
 	user->id = to_int(json_object_get_string_member(json, "id"));
 	user->name = g_strdup(json_object_get_string_member(json, "username"));
 	user->discriminator = to_int(json_object_get_string_member(json, "discriminator"));
+	user->bot = json_object_get_boolean_member(json, "bot");
 	user->avatar = g_strdup(json_object_get_string_member(json, "avatar"));
 
 	user->guild_memberships = g_hash_table_new_full(g_int64_hash, g_int64_equal, NULL, discord_free_guild_membership);
-	user->status = USER_OFFLINE; //Is offline the best assumption on a new user?
+	user->status = user->bot ? USER_ONLINE : USER_OFFLINE; //Is offline the best assumption on a new user?
 
 	return user;
 }
@@ -3407,27 +3409,33 @@ discord_status_types(PurpleAccount *account)
 static gchar *
 discord_status_text(PurpleBuddy *buddy)
 {
-	const gchar *message = purple_status_get_attr_string(purple_presence_get_active_status(purple_buddy_get_presence(buddy)), "message");
+	PurpleAccount *account = purple_buddy_get_account(buddy);
+	PurpleConnection *pc = purple_account_get_connection(account);
+	DiscordAccount *da = purple_connection_get_protocol_data(pc);
+	DiscordUser *user = discord_get_user_fullname(da, purple_buddy_get_name(buddy));
 
-	if (message == NULL) {
+	if (user->game == NULL) {
 		return NULL;
 	}
 
-	return g_markup_printf_escaped(_("Playing %s"), message);
+	return g_markup_printf_escaped(_("Playing %s"), user->game);
 }
 
 const gchar *
 discord_list_emblem(PurpleBuddy *buddy)
 {
-	const gchar *message = purple_status_get_attr_string(purple_presence_get_active_status(purple_buddy_get_presence(buddy)), "message");
+	PurpleAccount *account = purple_buddy_get_account(buddy);
+	PurpleConnection *pc = purple_account_get_connection(account);
+	DiscordAccount *da = purple_connection_get_protocol_data(pc);
+	DiscordUser *user = discord_get_user_fullname(da, purple_buddy_get_name(buddy));
 
-	if (message != NULL) {
+	if (user->game != NULL) {
 		return "game";
+	} else if (user->bot) {
+		return "bot";
 	}
 
 	return NULL;
-
-	//TODO bot
 }
 
 void
