@@ -275,13 +275,15 @@ static GRegex *channel_mentions_regex = NULL;
 typedef enum{
 	USER_ONLINE,
 	USER_IDLE,
-	USER_OFFLINE
+	USER_OFFLINE,
+	USER_DND
 } DiscordStatus;
 
-gchar *status_strings[3] = {
+gchar *status_strings[4] = {
 	"Online",
 	"Idle",
-	"Offline"
+	"Offline",
+	"Do Not Disturb"
 };
 
 typedef enum{
@@ -563,6 +565,8 @@ static void discord_update_status(DiscordUser *user, JsonObject *json)
 			user->status = USER_ONLINE;
 		}else if(purple_strequal("idle", status)){
 			user->status = USER_IDLE;
+		} else if (purple_strequal("dnd", status)) {
+			user->status = USER_DND;
 		}else{
 			user->status = USER_OFFLINE;  //All else fails probably offline...
 		}
@@ -1312,7 +1316,8 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 				}
 			}
 		}else if(username){
-			purple_protocol_got_user_status(da->account, username, status_strings[user->status], "message", user->game, NULL);
+			const gchar *status = json_object_get_string_member(data, "status");
+			purple_protocol_got_user_status(da->account, username, status, "message", user->game, NULL);
 			purple_protocol_got_user_idle(da->account, username, idle_since ? TRUE : FALSE, 0);
 		}
 		g_free(username);
@@ -2890,7 +2895,7 @@ discord_got_channel_info(DiscordAccount *da, JsonNode *node, gpointer user_data)
 
 		for (guint i = 0; i < guild->members->len; i++){
 			DiscordUser *user = discord_get_user_int(da, g_array_index(guild->members, guint64, i));
-			if(user->status == USER_ONLINE){
+			if (user->status != USER_OFFLINE) {
 				users = g_list_prepend(users, discord_create_fullname(user));
 				flags = g_list_prepend(flags, GINT_TO_POINTER(PURPLE_CHAT_USER_NONE));
 			}
@@ -3398,6 +3403,9 @@ discord_status_types(PurpleAccount *account)
 	types = g_list_append(types, status);
 
 	status = purple_status_type_new_with_attrs(PURPLE_STATUS_AWAY, "idle", "Idle", TRUE, FALSE, FALSE, "message", "In-Game", purple_value_new(PURPLE_TYPE_STRING), NULL);
+	types = g_list_append(types, status);
+
+	status = purple_status_type_new_with_attrs(PURPLE_STATUS_UNAVAILABLE, "dnd", "Do Not Disturb", TRUE, FALSE, FALSE, "message", "In-Game", purple_value_new(PURPLE_TYPE_STRING), NULL);
 	types = g_list_append(types, status);
 
 	status = purple_status_type_new_with_attrs(PURPLE_STATUS_OFFLINE, "offline", "Offline", TRUE, FALSE, FALSE, "message", "In-Game", purple_value_new(PURPLE_TYPE_STRING), NULL);
