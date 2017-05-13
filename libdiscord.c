@@ -3312,9 +3312,11 @@ discord_got_info(DiscordAccount *da, JsonNode *node, gpointer user_data)
 	purple_notify_user_info_add_pair_html(user_info, _("Full Username"), buffer->str);
 	purple_notify_user_info_add_pair_html(user_info, _("Username"), user->name);
 	
-	//TODO display other info that we know about this buddy
-	//TODO online/idle status
-	//TODO in-game info
+	//Display other non-profile info that we know about this buddy
+	purple_notify_user_info_add_pair_html(user_info, _("Status"), status_strings[user->status]);
+	if (user->game != NULL) {
+		purple_notify_user_info_add_pair_html(user_info, _("In-Game"), user->game);
+	}
 	
 	purple_notify_user_info_add_pair_html(user_info, NULL, NULL);
 	purple_notify_user_info_add_pair_html(user_info, _("Connected Accounts"), NULL);
