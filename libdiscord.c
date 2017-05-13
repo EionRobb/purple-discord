@@ -1526,6 +1526,10 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 			g_free(username);
 		}
 
+	} else if (purple_strequal(type, "RESUMED")) {
+		
+		purple_connection_set_state(da->pc, PURPLE_CONNECTION_CONNECTED);
+		
 	} else if (purple_strequal(type, "READY")) {
 		JsonObject *self_user = json_object_get_object_member(data, "user");
 		da->self_user_id = to_int(json_object_get_string_member(self_user, "id"));
@@ -1542,6 +1546,8 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		discord_got_presences(da, json_object_get_member(data, "presences"), NULL);
 		discord_got_guilds(da, json_object_get_member(data, "guilds"), NULL);
 
+		purple_connection_set_state(da->pc, PURPLE_CONNECTION_CONNECTED);
+		
 	}  else if (purple_strequal(type, "GUILD_SYNC") || purple_strequal(type, "GUILD_CREATE")) {
 		if(purple_strequal(type, "GUILD_CREATE")){
 			discord_populate_guild(da, data);
@@ -2048,7 +2054,6 @@ discord_login_response(DiscordAccount *da, JsonNode *node, gpointer user_data)
 		purple_account_set_string(da->account, "token", da->token);
 
 		if (da->token) {
-			purple_connection_set_state(da->pc, PURPLE_CONNECTION_CONNECTED);
 			discord_start_socket(da);
 			//discord_get_buddies(da);
 			return;
@@ -2498,8 +2503,6 @@ discord_socket_connected(gpointer userdata, PurpleSslConnection *conn, PurpleInp
 	DiscordAccount *da = userdata;
 	gchar *websocket_header;
 	const gchar *websocket_key = "15XF+ptKDhYVERXoGcdHTA=="; //TODO don't be lazy
-
-	purple_connection_set_state(da->pc, PURPLE_CONNECTION_CONNECTED);
 
 	purple_ssl_input_add(da->websocket, discord_socket_got_data, da);
 
