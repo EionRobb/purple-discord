@@ -836,9 +836,9 @@ static void discord_print_guilds(GHashTable *guilds)
 
 static void discord_print_users(GHashTable *users)
 {
-	#ifdef IGNORE_PRINTS
+#ifdef IGNORE_PRINTS
 		return;
-	#endif
+#else
 	GString *buffer = g_string_new("\n");
 	GString *row_buffer = g_string_new("");
 	GHashTableIter user_iter, guild_membership_iter;
@@ -875,6 +875,7 @@ static void discord_print_users(GHashTable *users)
 
 	g_string_free(buffer, TRUE);
 	g_string_free(row_buffer, TRUE);
+#endif
 }
 
 
@@ -1482,10 +1483,11 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		const gchar *channel_id = json_object_get_string_member(data, "channel_id");
 		const gchar *user_id = json_object_get_string_member(data, "user_id");
 		gchar *username = discord_create_fullname_from_id(da, to_int(user_id));
+		DiscordChannel *channel = discord_get_channel_global(da, channel_id);
 
-		if (discord_get_channel_global(da, channel_id)) {
+		if (channel != NULL) {
 			// This is a group conversation
-			PurpleChatConversation *chatconv = purple_conversations_find_chat_with_account(discord_get_channel_global(da, channel_id)->name, da->account);
+			PurpleChatConversation *chatconv = purple_conversations_find_chat_with_account(channel->name, da->account);
 			if (chatconv == NULL) {
 				chatconv = purple_conversations_find_chat_with_account(channel_id, da->account);
 			}
@@ -2689,13 +2691,17 @@ discord_chat_info_defaults(PurpleConnection *pc, const char *chatname)
 
 	if (chatname != NULL){
 		if (str_is_number(chatname)) {
-			const gchar *name = discord_get_channel_global(da, chatname)->name;
+			DiscordChannel *channel = discord_get_channel_global(da, chatname);
+			if (channel != NULL) {
+				g_hash_table_insert(defaults, "name", g_strdup(channel->name));
+			}
 			g_hash_table_insert(defaults, "id", g_strdup(chatname));
-			g_hash_table_insert(defaults, "name", g_strdup(name));
 		} else {
 			DiscordChannel *channel = discord_get_channel_global_name(da, chatname);
-			g_hash_table_insert(defaults, "name", g_strdup(channel->name));
-			g_hash_table_insert(defaults, "id", g_strdup_printf("%" G_GUINT64_FORMAT, channel->id));
+			if (channel != NULL) {
+				g_hash_table_insert(defaults, "name", g_strdup(channel->name));
+				g_hash_table_insert(defaults, "id", g_strdup_printf("%" G_GUINT64_FORMAT, channel->id));
+			}
 		}
 	}
 
@@ -2948,7 +2954,10 @@ discord_join_chat(PurpleConnection *pc, GHashTable *chatdata)
 	gchar *name = (gchar *) g_hash_table_lookup(chatdata, "name");
 
 	if (name == NULL) {
-		name = discord_get_channel_global_int(da, id)->name;
+		DiscordChannel *channel = discord_get_channel_global_int(da, id);
+		if (channel != NULL) {
+			name = channel->name;
+		}
 	}
 
 	if (name != NULL) {
