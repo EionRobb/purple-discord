@@ -3537,6 +3537,8 @@ discord_join_server_text(gpointer user_data, const gchar *text)
 	invite_code = strrchr(text, '/');
 	if (invite_code == NULL) {
 		invite_code = text;
+	} else {
+		invite_code += 1;
 	}
 
 	url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/v6/invite/%s", purple_url_encode(invite_code));
@@ -3556,7 +3558,7 @@ discord_join_server(PurpleProtocolAction *action)
 					   _("Join a server"),
 					   _("Enter the join URL here"),
 					   NULL, FALSE, FALSE, "https://discord.gg/ABC123",
-					   _("_Search"), G_CALLBACK(discord_join_server_text),
+					   _("_Join"), G_CALLBACK(discord_join_server_text),
 					   _("_Cancel"), NULL,
 					   purple_request_cpar_from_connection(pc),
 					   da);
