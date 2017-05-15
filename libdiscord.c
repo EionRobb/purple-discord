@@ -584,14 +584,14 @@ static DiscordChannel *discord_add_channel(DiscordGuild *guild, JsonObject *json
 {
 	DiscordChannel *channel = discord_new_channel(json);
 	channel->guild_id = guild_id;
-	g_hash_table_insert_int64(guild->channels, channel->id, channel);
+	g_hash_table_replace_int64(guild->channels, channel->id, channel);
 	return channel;
 }
 
 static DiscordGuildRole *discord_add_guild_role(DiscordGuild *guild, JsonObject *json)
 {
 	DiscordGuildRole *role = discord_new_guild_role(json);
-	g_hash_table_insert_int64(guild->roles, role->id, role);
+	g_hash_table_replace_int64(guild->roles, role->id, role);
 	return role;
 }
 
@@ -600,7 +600,7 @@ static DiscordPermissionOverride *discord_add_permission_override(DiscordChannel
 	DiscordPermissionOverride *permission_override = discord_new_permission_override(json);
 	gboolean is_role = discord_permission_is_role(json);
 	GHashTable *overrides = is_role ? channel->permission_role_overrides : channel->permission_user_overrides;
-	g_hash_table_insert_int64(overrides, permission_override->id, permission_override);
+	g_hash_table_replace_int64(overrides, permission_override->id, permission_override);
 	return permission_override;
 }
 
@@ -651,7 +651,7 @@ static DiscordUser *discord_upsert_user(GHashTable *user_table, JsonObject *json
 		return user;
 	}else{
 		user = discord_new_user(json);
-		g_hash_table_insert_int64(user_table, user->id, user);
+		g_hash_table_replace_int64(user_table, user->id, user);
 		return user;
 	}
 }
@@ -700,7 +700,7 @@ static DiscordGuild *discord_upsert_guild(GHashTable *guild_table, JsonObject *j
 		return guild;
 	}else{
 		guild = discord_new_guild(json);
-		g_hash_table_insert_int64(guild_table, guild->id, guild);
+		g_hash_table_replace_int64(guild_table, guild->id, guild);
 		return guild;
 	}
 }
@@ -876,6 +876,41 @@ static void discord_print_users(GHashTable *users)
 	g_string_free(buffer, TRUE);
 	g_string_free(row_buffer, TRUE);
 #endif
+}
+
+
+PurpleChatUserFlags
+discord_get_user_flags(DiscordAccount *da, const gchar *guild_id, const gchar *username)
+{
+	DiscordGuild *guild = discord_get_guild(da, guild_id);
+	DiscordUser *user = discord_get_user_fullname(da, username);
+	guint64 gid = to_int(guild_id);
+	DiscordGuildMembership *guild_membership = g_hash_table_lookup_int64(user->guild_memberships, gid);
+	PurpleConvChatBuddyFlags best_flag = user->bot ? PURPLE_CHAT_USER_VOICE : PURPLE_CHAT_USER_NONE;
+	
+	if (guild_membership == NULL) {
+		return best_flag;
+	}
+	
+	for(guint i = 0; i < guild_membership->roles->len; i++){
+		guint64 role_id = g_array_index(guild_membership->roles, guint64, i);
+		DiscordGuildRole *role = g_hash_table_lookup_int64(guild->roles, role_id);
+		PurpleConvChatBuddyFlags this_flag = PURPLE_CHAT_USER_NONE;
+		
+		if (role != NULL) {
+			if (role->permissions & 0x8) { //Admin
+				this_flag = PURPLE_CHAT_USER_OP;
+			} else if (role->permissions & (0x2 | 0x4)) { // Ban/kick
+				this_flag = PURPLE_CHAT_USER_HALFOP;
+			}
+		}
+		
+		if (this_flag > best_flag) {
+			best_flag = this_flag;
+		}
+	}
+	
+	return best_flag;
 }
 
 
@@ -1334,7 +1369,8 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 					if (user->status == USER_OFFLINE) {
 						purple_chat_conversation_remove_user(chat, username, NULL);
 					} else if (!purple_chat_conversation_has_user(chat, username)) {
-						purple_chat_conversation_add_user(chat, username, NULL, PURPLE_CHAT_USER_NONE, FALSE);
+						PurpleChatUserFlags flags = discord_get_user_flags(da, guild_id, username);
+						purple_chat_conversation_add_user(chat, username, NULL, flags, FALSE);
 					}
 				}
 			}
@@ -1602,12 +1638,13 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 			
 			DiscordUser *u = discord_upsert_user(da->new_users, user);
 			DiscordGuildMembership *membership = discord_new_guild_membership(gid, member);
-			g_hash_table_insert_int64(u->guild_memberships, gid, membership);
+			g_hash_table_replace_int64(u->guild_memberships, gid, membership);
 			g_array_append_val(guild->members, u->id);
 			
 			JsonArray *roles = json_object_get_array_member(member, "roles");
 			for (int k = json_array_get_length(roles) - 1; k >= 0; k--) {
-				to_int(json_array_get_string_element(roles, k));
+				guint64 role = to_int(json_array_get_string_element(roles, k));
+				g_array_append_val(membership->roles, role);
 			}
 		}
 
@@ -1622,8 +1659,11 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 
 			g_hash_table_insert(user_list, g_strdup_printf("%" G_GUINT64_FORMAT, user->id), NULL);
 
-			users = g_list_prepend(users, discord_create_fullname(user));
-			flags = g_list_prepend(flags, GINT_TO_POINTER(PURPLE_CHAT_USER_NONE));
+			gchar *full_username = discord_create_fullname(user);
+			PurpleChatUserFlags cbflags = discord_get_user_flags(da, guild_id, full_username);	
+			
+			users = g_list_prepend(users, full_username);
+			flags = g_list_prepend(flags, GINT_TO_POINTER(cbflags));
 		}
 
 		// Add all online people to any open chats			
@@ -2889,9 +2929,11 @@ discord_got_channel_info(DiscordAccount *da, JsonNode *node, gpointer user_data)
 			JsonObject *recipient = json_array_get_object_element(recipients, i);
 			const gchar *username = json_object_get_string_member(recipient, "username");
 			const gchar *discriminator = json_object_get_string_member(recipient, "discriminator");
-
-			users = g_list_prepend(users, discord_combine_username(username, discriminator));
-			flags = g_list_prepend(flags, GINT_TO_POINTER(PURPLE_CHAT_USER_NONE));
+			gchar *full_username = discord_combine_username(username, discriminator);
+			PurpleChatUserFlags cbflags = discord_get_user_flags(da, guild_id, full_username);	
+			
+			users = g_list_prepend(users, full_username);
+			flags = g_list_prepend(flags, GINT_TO_POINTER(cbflags));
 
 			g_string_append_printf(recipient_names, ", %s", username);
 		}
@@ -2934,9 +2976,12 @@ discord_got_channel_info(DiscordAccount *da, JsonNode *node, gpointer user_data)
 
 		for (guint i = 0; i < guild->members->len; i++){
 			DiscordUser *user = discord_get_user_int(da, g_array_index(guild->members, guint64, i));
+			gchar *full_username = discord_create_fullname(user);
+			PurpleChatUserFlags cbflags = discord_get_user_flags(da, guild_id, full_username);	
+			
 			if (user->status != USER_OFFLINE) {
-				users = g_list_prepend(users, discord_create_fullname(user));
-				flags = g_list_prepend(flags, GINT_TO_POINTER(PURPLE_CHAT_USER_NONE));
+				users = g_list_prepend(users, full_username);
+				flags = g_list_prepend(flags, GINT_TO_POINTER(cbflags));
 			}
 		}
 
