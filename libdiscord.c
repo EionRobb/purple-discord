@@ -2207,16 +2207,19 @@ discord_close(PurpleConnection *pc)
 	purple_timeout_remove(da->heartbeat_timeout);
 
 	// account = purple_connection_get_account(pc);
-	if (da->websocket != NULL) purple_ssl_close(da->websocket);
+	if (da->websocket != NULL) {
+		purple_ssl_close(da->websocket);
+		da->websocket = NULL;
+	}
 
-	g_hash_table_unref(da->one_to_ones);
-	g_hash_table_unref(da->one_to_ones_rev);
-	g_hash_table_unref(da->sent_message_ids);
-	g_hash_table_unref(da->result_callbacks);
+	g_hash_table_unref(da->one_to_ones); da->one_to_ones = NULL;
+	g_hash_table_unref(da->one_to_ones_rev); da->one_to_ones_rev = NULL;
+	g_hash_table_unref(da->sent_message_ids); da->sent_message_ids = NULL;
+	g_hash_table_unref(da->result_callbacks); da->result_callbacks = NULL;
 
-	g_hash_table_unref(da->new_users);
-	g_hash_table_unref(da->new_guilds);
-	g_queue_free(da->received_message_queue);
+	g_hash_table_unref(da->new_users); da->new_users = NULL;
+	g_hash_table_unref(da->new_guilds); da->new_guilds = NULL;
+	g_queue_free(da->received_message_queue); da->received_message_queue = NULL;
 
 	while (da->http_conns) {
 #	if !PURPLE_VERSION_CHECK(3, 0, 0)
@@ -3458,29 +3461,37 @@ static gchar *
 discord_status_text(PurpleBuddy *buddy)
 {
 	PurpleAccount *account = purple_buddy_get_account(buddy);
-	PurpleConnection *pc = purple_account_get_connection(account);
-	DiscordAccount *da = purple_connection_get_protocol_data(pc);
-	DiscordUser *user = discord_get_user_fullname(da, purple_buddy_get_name(buddy));
+	
+	if (purple_account_is_connected(account)) {	
+		PurpleConnection *pc = purple_account_get_connection(account);
+		DiscordAccount *da = purple_connection_get_protocol_data(pc);
+		DiscordUser *user = discord_get_user_fullname(da, purple_buddy_get_name(buddy));
 
-	if (user->game == NULL) {
-		return NULL;
+		if (user->game == NULL) {
+			return NULL;
+		}
+
+		return g_markup_printf_escaped(_("Playing %s"), user->game);
 	}
-
-	return g_markup_printf_escaped(_("Playing %s"), user->game);
+	
+	return NULL;
 }
 
 const gchar *
 discord_list_emblem(PurpleBuddy *buddy)
 {
 	PurpleAccount *account = purple_buddy_get_account(buddy);
-	PurpleConnection *pc = purple_account_get_connection(account);
-	DiscordAccount *da = purple_connection_get_protocol_data(pc);
-	DiscordUser *user = discord_get_user_fullname(da, purple_buddy_get_name(buddy));
+	
+	if (purple_account_is_connected(account)) {	
+		PurpleConnection *pc = purple_account_get_connection(account);
+		DiscordAccount *da = purple_connection_get_protocol_data(pc);
+		DiscordUser *user = discord_get_user_fullname(da, purple_buddy_get_name(buddy));
 
-	if (user->game != NULL) {
-		return "game";
-	} else if (user->bot) {
-		return "bot";
+		if (user->game != NULL) {
+			return "game";
+		} else if (user->bot) {
+			return "bot";
+		}
 	}
 
 	return NULL;
