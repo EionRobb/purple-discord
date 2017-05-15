@@ -3533,7 +3533,7 @@ discord_status_text(PurpleBuddy *buddy)
 		DiscordAccount *da = purple_connection_get_protocol_data(pc);
 		DiscordUser *user = discord_get_user_fullname(da, purple_buddy_get_name(buddy));
 
-		if (user->game == NULL) {
+		if (user == NULL || user->game == NULL) {
 			return NULL;
 		}
 
@@ -3553,10 +3553,12 @@ discord_list_emblem(PurpleBuddy *buddy)
 		DiscordAccount *da = purple_connection_get_protocol_data(pc);
 		DiscordUser *user = discord_get_user_fullname(da, purple_buddy_get_name(buddy));
 
-		if (user->game != NULL) {
-			return "game";
-		} else if (user->bot) {
-			return "bot";
+		if (user != NULL) {
+			if (user->game != NULL) {
+				return "game";
+			} else if (user->bot) {
+				return "bot";
+			}
 		}
 	}
 
