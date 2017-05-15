@@ -1638,7 +1638,7 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 			
 			DiscordUser *u = discord_upsert_user(da->new_users, user);
 			DiscordGuildMembership *membership = discord_new_guild_membership(gid, member);
-			g_hash_table_replace_int64(u->guild_memberships, gid, membership);
+			g_hash_table_replace_int64(u->guild_memberships, membership->id, membership);
 			g_array_append_val(guild->members, u->id);
 			
 			JsonArray *roles = json_object_get_array_member(member, "roles");
