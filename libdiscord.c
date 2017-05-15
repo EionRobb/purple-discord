@@ -610,6 +610,19 @@ static gboolean discord_permission_is_role(JsonObject *json)
 	return purple_strequal(json_object_get_string_member(json, "type"), "role");
 }
 
+void 
+discord_dump_int64_hashtable_keys(GHashTable *hash_table)
+{
+	GHashTableIter iter;
+	guint64 *key;
+	gpointer value;
+
+	g_hash_table_iter_init(&iter, hash_table);
+	while(g_hash_table_iter_next(&iter, (gpointer *) &key, &value)){
+		purple_debug_info("discord", "%" G_GUINT64_FORMAT, *key);
+	}
+}
+
 static DiscordUser *discord_get_user_name(DiscordAccount *da, int discriminator, gchar *name)
 {
 	GHashTableIter iter;
@@ -749,6 +762,7 @@ static DiscordChannel *discord_get_channel_global(DiscordAccount *da, const gcha
 #define discord_print_append(L, B, R, M, D) \
 	g_string_printf((R), (M), (D)); discord_print_append_row((L), (B), (R));
 
+#ifndef IGNORE_PRINTS
 static void discord_print_append_row(int level, GString *buffer, GString *row)
 {
 	for(int i = 0; i < level; i++){
@@ -775,12 +789,13 @@ static void discord_print_permission_override(GString *buffer, GHashTable *permi
 		discord_print_append(4, buffer, row_buffer, "Deny: %" G_GUINT64_FORMAT, permission_override->deny);
 	}
 }
+#endif
 
 static void discord_print_guilds(GHashTable *guilds)
 {
-	#ifdef IGNORE_PRINTS
-		//return;
-	#endif
+#ifdef IGNORE_PRINTS
+		return;
+#else
 	GString *buffer = g_string_new("\n");
 	GString *row_buffer = g_string_new("");
 	GHashTableIter guild_iter, channel_iter, role_iter;
@@ -832,6 +847,7 @@ static void discord_print_guilds(GHashTable *guilds)
 	purple_debug_info("discord", "%s", buffer->str);
 	g_string_free(buffer, TRUE);
 	g_string_free(row_buffer, TRUE);
+#endif
 }
 
 static void discord_print_users(GHashTable *users)
