@@ -900,6 +900,11 @@ discord_get_user_flags(DiscordAccount *da, const gchar *guild_id, const gchar *u
 {
 	DiscordGuild *guild = discord_get_guild(da, guild_id);
 	DiscordUser *user = discord_get_user_fullname(da, username);
+	
+	if (user == NULL) {
+		return PURPLE_CHAT_USER_NONE;
+	}
+	
 	guint64 gid = to_int(guild_id);
 	DiscordGuildMembership *guild_membership = g_hash_table_lookup_int64(user->guild_memberships, gid);
 	PurpleChatUserFlags best_flag = user->bot ? PURPLE_CHAT_USER_VOICE : PURPLE_CHAT_USER_NONE;
