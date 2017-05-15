@@ -886,7 +886,7 @@ discord_get_user_flags(DiscordAccount *da, const gchar *guild_id, const gchar *u
 	DiscordUser *user = discord_get_user_fullname(da, username);
 	guint64 gid = to_int(guild_id);
 	DiscordGuildMembership *guild_membership = g_hash_table_lookup_int64(user->guild_memberships, gid);
-	PurpleConvChatBuddyFlags best_flag = user->bot ? PURPLE_CHAT_USER_VOICE : PURPLE_CHAT_USER_NONE;
+	PurpleChatUserFlags best_flag = user->bot ? PURPLE_CHAT_USER_VOICE : PURPLE_CHAT_USER_NONE;
 	
 	if (guild_membership == NULL) {
 		return best_flag;
@@ -895,7 +895,7 @@ discord_get_user_flags(DiscordAccount *da, const gchar *guild_id, const gchar *u
 	for(guint i = 0; i < guild_membership->roles->len; i++){
 		guint64 role_id = g_array_index(guild_membership->roles, guint64, i);
 		DiscordGuildRole *role = g_hash_table_lookup_int64(guild->roles, role_id);
-		PurpleConvChatBuddyFlags this_flag = PURPLE_CHAT_USER_NONE;
+		PurpleChatUserFlags this_flag = PURPLE_CHAT_USER_NONE;
 		
 		if (role != NULL) {
 			if (role->permissions & 0x8) { //Admin
