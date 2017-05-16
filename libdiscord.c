@@ -3031,6 +3031,7 @@ discord_join_chat(PurpleConnection *pc, GHashTable *chatdata)
 	DiscordChannel *channel = discord_get_channel_global_int(da, id);
 	
 	if(channel->type == CHANNEL_VOICE){
+		purple_notify_error(da, _("Bad channel type"), _("Cannot join a voice channel as text"), "");
 		return;
 	}
 	
