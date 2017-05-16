@@ -3028,11 +3028,15 @@ discord_join_chat(PurpleConnection *pc, GHashTable *chatdata)
 	gchar *url;
 
 	guint64 id = to_int(g_hash_table_lookup(chatdata, "id"));
+	DiscordChannel *channel = discord_get_channel_global_int(da, id);
+	
+	if(channel->type == CHANNEL_VOICE){
+		return;
+	}
 	
 	gchar *name = (gchar *) g_hash_table_lookup(chatdata, "name");
 
 	if (name == NULL) {
-		DiscordChannel *channel = discord_get_channel_global_int(da, id);
 		if (channel != NULL) {
 			name = channel->name;
 		}
