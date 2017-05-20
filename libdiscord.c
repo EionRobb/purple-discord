@@ -1741,7 +1741,8 @@ discord_normalise_room_name(const gchar *guild_name, const gchar *name)
 	g_free(old_name);
 	old_name = g_ascii_strdown(channel_name, -1);
 	purple_util_chrreplace(old_name, ' ', '_');
-
+	g_free(channel_name);
+	
 	return old_name;
 }
 
