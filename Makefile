@@ -1,3 +1,4 @@
+PKG_DESCRIPTION = "Discord protocol plugin for libpurple"
 
 PIDGIN_TREE_TOP ?= ../pidgin-2.10.11
 PIDGIN3_TREE_TOP ?= ../pidgin-main
@@ -21,7 +22,12 @@ else
 PLUGIN_VERSION ?= 0.9.$(shell date +%Y.%m.%d)
 endif
 
-CFLAGS	?= -O2 -g -pipe -Wall
+GIT_COMMIT = $(shell git log -1 --pretty='format:%h')
+ifneq ($(GIT_COMMIT),)
+PLUGIN_VERSION = 0.9.$(shell date +%Y.%m.%d).git.$(GIT_COMMIT)
+endif
+
+CFLAGS	?= -std=c99 -O2 -g -pipe -Wall
 LDFLAGS ?= -Wl,-z,relro 
 
 CFLAGS  += -std=c99 -DDISCORD_PLUGIN_VERSION='"$(PLUGIN_VERSION)"'
@@ -80,7 +86,7 @@ PURPLE_C_FILES := libdiscord.c $(C_FILES)
 
 
 
-.PHONY:	all install FAILNOPURPLE clean install-icons
+.PHONY:	all install FAILNOPURPLE clean install-icons checkpackaging
 
 all: $(DISCORD_TARGET)
 
@@ -107,6 +113,27 @@ install-icons: discord16.png discord22.png discord48.png
 	install -m $(FILE_PERM) -p discord16.png $(DISCORD_ICONS_DEST)/16/discord.png
 	install -m $(FILE_PERM) -p discord22.png $(DISCORD_ICONS_DEST)/22/discord.png
 	install -m $(FILE_PERM) -p discord48.png $(DISCORD_ICONS_DEST)/48/discord.png
+
+# Requires FPM: https://github.com/jordansissel/fpm
+# Use a temp DESTDIR target, no sudo required: make DESTDIR=/tmp/pluginpackage deb
+deb: checkpackaging install
+	fpm -s dir -t deb -n pidgin-discord -v $(PLUGIN_VERSION) -C $(DESTDIR) \
+	    -d libpurple0 -d libglib2.0-0 -d libjson-glib-1.0-0 \
+	    --description $(PKG_DESCRIPTION)
+
+# Requires FPM: https://github.com/jordansissel/fpm
+# Use a temp DESTDIR target, no sudo required: make DESTDIR=/tmp/pluginpackage rpm
+rpm: checkpackaging install
+	fpm -s dir -t rpm -n purple-discord -v $(PLUGIN_VERSION) -C $(DESTDIR) \
+	    -d libpurple -d glib2 -d json-glib \
+	    --description $(PKG_DESCRIPTION)
+
+checkpackaging:
+ifeq ($(DESTDIR),)
+	@echo " *** ERROR: to build packages, use a temp DESTDIR target, no sudo required:"
+	@echo " ***        make DESTDIR=/tmp/pluginpackage ..."
+	@exit 1
+endif
 
 FAILNOPURPLE:
 	echo "You need libpurple development headers installed to be able to compile this plugin"
