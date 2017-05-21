@@ -1771,11 +1771,10 @@ discord_roomlist_got_list(DiscordAccount *da, DiscordGuild *guild, gpointer user
 		DiscordChannel *channel = value;
 		PurpleRoomlistRoom *room;
 
-		const gchar *channel_name = discord_normalise_room_name(guild->name, channel->name);
 		gchar *channel_id = g_strdup_printf("%" G_GUINT64_FORMAT, channel->id);
 		gchar *type_str;
 
-		room = purple_roomlist_room_new(PURPLE_ROOMLIST_ROOMTYPE_ROOM, channel_name, category);
+		room = purple_roomlist_room_new(PURPLE_ROOMLIST_ROOMTYPE_ROOM, channel_id, category);
 
 		purple_roomlist_room_add_field(roomlist, room, channel_id);
 		purple_roomlist_room_add_field(roomlist, room, channel->name);
