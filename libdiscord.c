@@ -2507,6 +2507,25 @@ discord_socket_got_data(gpointer userdata, PurpleSslConnection *conn, PurpleInpu
 				if (ya->packet_code == 136) {
 					purple_debug_error("discord", "websocket closed\n");
 
+					length_code = 0;
+					purple_ssl_read(conn, &length_code, 1);
+					
+					if (length_code > 0 && length_code <= 125) {
+						guchar error_buf[2];
+						if (purple_ssl_read(conn, &error_buf, 2) == 2) {
+							gint error_code = (error_buf[0] << 8) + error_buf[1];
+							purple_debug_error("discord", "error code %d\n", error_code);
+							
+							if (error_code == 4004) {
+								//bad auth token, clear and reset
+								purple_account_set_string(ya->account, "token", NULL);
+								
+								purple_connection_error(ya->pc, PURPLE_CONNECTION_ERROR_NETWORK_ERROR, "Reauthentication required");
+								return;
+							}
+						}
+					}
+					
 					// Try reconnect
 					discord_start_socket(ya);
 
