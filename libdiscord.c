@@ -1961,6 +1961,48 @@ static gulong chat_conversation_typing_signal = 0;
 static void discord_mark_conv_seen(PurpleConversation *conv, PurpleConversationUpdateType type);
 static gulong conversation_updated_signal = 0;
 
+
+typedef struct {
+	DiscordAccount *da;
+	DiscordUser *user;
+} DiscordUserInviteResponseStore;
+
+static void
+discord_friends_auth_accept(
+#if PURPLE_VERSION_CHECK(3, 0, 0)
+const gchar *response, 
+#endif
+gpointer userdata)
+{
+	DiscordUserInviteResponseStore *store = userdata;
+	DiscordUser *user = store->user;
+	DiscordAccount *da = store->da;
+
+	gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/v6/users/@me/relationships/%" G_GUINT64_FORMAT, user->id);
+	discord_fetch_url_with_method(da, "PUT", url, NULL, NULL, NULL);
+	g_free(url);
+	
+	g_free(store);
+}
+
+static void
+discord_friends_auth_reject(
+#if PURPLE_VERSION_CHECK(3, 0, 0)
+const gchar *response, 
+#endif
+gpointer userdata)
+{
+	DiscordUserInviteResponseStore *store = userdata;
+	DiscordUser *user = store->user;
+	DiscordAccount *da = store->da;
+
+	gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/v6/users/@me/relationships/%" G_GUINT64_FORMAT, user->id);
+	discord_fetch_url_with_method(da, "DELETE", url, NULL, NULL, NULL);
+	g_free(url);
+	
+	g_free(store);
+}
+
 static void discord_create_relationship(DiscordAccount *da, JsonObject *json)
 {
 	DiscordUser *user = discord_upsert_user(da->new_users, json_object_get_object_member(json, "user"));
@@ -1969,6 +2011,12 @@ static void discord_create_relationship(DiscordAccount *da, JsonObject *json)
 	
 	if (type == 3) {
 		//request add
+		DiscordUserInviteResponseStore *store = g_new0(DiscordUserInviteResponseStore, 1);
+		
+		store->da = da;
+		store->user = user;
+		
+		purple_account_request_authorization(da->account, merged_username, NULL, NULL, NULL, FALSE, discord_friends_auth_accept, discord_friends_auth_reject, store);
 	} else if (type == 1) {
 		PurpleBuddy *buddy = purple_blist_find_buddy(da->account, merged_username);
 	
