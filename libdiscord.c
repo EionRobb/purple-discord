@@ -1827,6 +1827,8 @@ discord_roomlist_get_list(PurpleConnection *pc)
 	while(g_hash_table_iter_next(&iter, &key, &guild)){
 		discord_roomlist_got_list(da, guild, roomlist);
 	}
+	
+	purple_roomlist_set_in_progress(roomlist, FALSE);
 
 	return roomlist;
 }
