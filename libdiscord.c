@@ -1774,7 +1774,7 @@ discord_roomlist_got_list(DiscordAccount *da, DiscordGuild *guild, gpointer user
 		gchar *channel_id = g_strdup_printf("%" G_GUINT64_FORMAT, channel->id);
 		gchar *type_str;
 
-		room = purple_roomlist_room_new(PURPLE_ROOMLIST_ROOMTYPE_ROOM, channel_id, category);
+		room = purple_roomlist_room_new(PURPLE_ROOMLIST_ROOMTYPE_ROOM, "", category);
 
 		purple_roomlist_room_add_field(roomlist, room, channel_id);
 		purple_roomlist_room_add_field(roomlist, room, channel->name);
@@ -1792,28 +1792,10 @@ discord_roomlist_got_list(DiscordAccount *da, DiscordGuild *guild, gpointer user
 
 static gchar *
 discord_roomlist_serialize(PurpleRoomlistRoom *room) {
-	const gchar *channel_name = purple_roomlist_room_get_name(room);
-	PurpleRoomlistRoom *guild_category;
-	const gchar *guild_name;
-	GList *fields;
-	const gchar *id;
-	const gchar *name;
-
-	if (channel_name && *channel_name) {
-		return g_strdup(channel_name);
-	}
-
-	guild_category = purple_roomlist_room_get_parent(room);
-	guild_name = purple_roomlist_room_get_name(guild_category);
-	fields = purple_roomlist_room_get_fields(room);
-	id = (const gchar *) fields->data;
-	name = (const gchar *) fields->next->data;
-
-	if (name && *name) {
-		return g_strdup(discord_normalise_room_name(guild_name, name));
-	} else {
-		return g_strdup(id);
-	}
+	GList *fields = purple_roomlist_room_get_fields(room);
+	const gchar *id = (const gchar *) fields->data;
+	
+	return g_strdup(id);
 }
 
 PurpleRoomlist *
