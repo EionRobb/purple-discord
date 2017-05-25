@@ -21,10 +21,10 @@ else
 PLUGIN_VERSION ?= 0.9.$(shell date +%Y.%m.%d)
 endif
 
-CFLAGS	?= -std=c99 -O2 -g -pipe -Wall
+CFLAGS	?= -O2 -g -pipe -Wall
 LDFLAGS ?= -Wl,-z,relro 
 
-CFLAGS  += -DDISCORD_PLUGIN_VERSION='"$(PLUGIN_VERSION)"'
+CFLAGS  += -std=c99 -DDISCORD_PLUGIN_VERSION='"$(PLUGIN_VERSION)"'
 
 # Do some nasty OS and purple version detection
 ifeq ($(OS),Windows_NT)
