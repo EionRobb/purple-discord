@@ -96,6 +96,7 @@ json_object_to_string(JsonObject *obj)
 #include <http.h>
 #else
 #define purple_notify_error_org(a,b,c,d) purple_notify_error(a,b,c,d)
+#undef purple_notify_error
 #define purple_notify_error(a,b,c,d,e) purple_notify_error_org(a,b,c,d)
 #endif
 
