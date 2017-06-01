@@ -94,9 +94,9 @@ json_object_to_string(JsonObject *obj)
 #include <purple.h>
 #if PURPLE_VERSION_CHECK(3, 0, 0)
 #include <http.h>
-#define purple_notify_error_wrap(a,b,c,d) purple_notify_error(a,b,c,d,NULL)
+#define purple_notify_error_wrap(a,b,c,d,e) purple_notify_error(a,b,c,d,e)
 #else
-#define purple_notify_error_wrap(a,b,c,d) purple_notify_error(a,b,c,d)
+#define purple_notify_error_wrap(a,b,c,d,e) purple_notify_error(a,b,c,d)
 #endif
 
 #ifndef PURPLE_PLUGINS
@@ -3096,7 +3096,7 @@ discord_join_chat(PurpleConnection *pc, GHashTable *chatdata)
 	}
 
 	if(channel->type == CHANNEL_VOICE){
-		purple_notify_error_wrap(da, _("Bad channel type"), _("Cannot join a voice channel as text"), "");
+		purple_notify_error_wrap(da, _("Bad channel type"), _("Cannot join a voice channel as text"), "", NULL);
 		return;
 	}
 
