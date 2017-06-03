@@ -94,10 +94,6 @@ json_object_to_string(JsonObject *obj)
 #include <purple.h>
 #if PURPLE_VERSION_CHECK(3, 0, 0)
 #include <http.h>
-#else
-#define purple_notify_error_org(a,b,c,d) purple_notify_error(a,b,c,d)
-#undef purple_notify_error
-#define purple_notify_error(a,b,c,d,e) purple_notify_error_org(a,b,c,d)
 #endif
 
 #ifndef PURPLE_PLUGINS
@@ -258,6 +254,13 @@ purple_message_destroy(PurpleMessage *message)
 #define purple_buddy_set_name  purple_blist_rename_buddy
 #define purple_request_cpar_from_connection(a)  purple_connection_get_account(a), NULL, NULL
 #define purple_notify_user_info_add_pair_html  purple_notify_user_info_add_pair
+
+#ifdef purple_notify_error
+#undef purple_notify_error
+#endif
+#define purple_notify_error(handle, title, primary, secondary, cpar) \
+ purple_notify_message((handle), PURPLE_NOTIFY_MSG_ERROR, (title), \
+                        (primary), (secondary), NULL, NULL)
 
 #else
 // Purple3 helper functions
@@ -3097,7 +3100,7 @@ discord_join_chat(PurpleConnection *pc, GHashTable *chatdata)
 	}
 
 	if(channel->type == CHANNEL_VOICE){
-		purple_notify_error(da, _("Bad channel type"), _("Cannot join a voice channel as text"), "", NULL);
+		purple_notify_error(da, _("Bad channel type"), _("Cannot join a voice channel as text"), "", purple_request_cpar_from_connection(pc));
 		return;
 	}
 
