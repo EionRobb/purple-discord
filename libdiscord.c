@@ -1,6 +1,7 @@
 /*
  *   Discord plugin for libpurple
  *   Copyright (C) 2016  Eion Robb
+ *   Copyright (C) 2017 Alyssa Rosenzweig
  *
  *   This program is free software: you can redistribute it and/or modify
  *   it under the terms of the GNU General Public License as published by
@@ -280,6 +281,8 @@ purple_message_destroy(PurpleMessage *message)
 static GRegex *channel_mentions_regex = NULL;
 static GRegex *emoji_regex = NULL;
 static GRegex *emoji_natural_regex = NULL;
+static GRegex *action_star_regex = NULL;
+static GRegex *action_me_regex = NULL;
 
 typedef enum{
 	USER_ONLINE,
@@ -1474,6 +1477,13 @@ discord_process_message(DiscordAccount *da, JsonObject *data)
 
 	//Replace <:emoji:id> with emojis
 	tmp = g_regex_replace_eval(emoji_regex, escaped_content, -1, 0, 0, discord_replace_emoji, da, NULL);
+	if (tmp != NULL) {
+		g_free(escaped_content);
+		escaped_content = tmp;
+	}
+
+	/* translate Discord-formatted actions into /me syntax */
+	tmp = g_regex_replace(action_star_regex, escaped_content, -1, 0, "/me \\1", 0, NULL);
 	if (tmp != NULL) {
 		g_free(escaped_content);
 		escaped_content = tmp;
@@ -3311,13 +3321,20 @@ discord_conversation_send_message(DiscordAccount *da, guint64 room_id, const gch
 	gchar *postdata;
 	gchar *nonce;
 	gchar *stripped;
+	gchar *actioned;
 
 	nonce = g_strdup_printf("%" G_GUINT32_FORMAT, g_random_int());
 	g_hash_table_insert(da->sent_message_ids, nonce, nonce);
 
 	stripped = g_strstrip(purple_markup_strip_html(message));
 
-	json_object_set_string_member(data, "content", stripped);
+	/* translate Discord-formatted actions into *markdown* syntax */
+	actioned = g_regex_replace(action_me_regex, stripped, -1, 0, "_\\1_", 0, NULL);
+	if (actioned == NULL) {
+		actioned = g_strdup(stripped);
+	}
+
+	json_object_set_string_member(data, "content", actioned);
 	json_object_set_string_member(data, "nonce", nonce);
 	json_object_set_boolean_member(data, "tts", FALSE);
 
@@ -3329,6 +3346,7 @@ discord_conversation_send_message(DiscordAccount *da, guint64 room_id, const gch
 	g_free(stripped);
 	g_free(url);
 	g_free(postdata);
+	g_free(actioned);
 	json_object_unref(data);
 
 	return 1;
@@ -3849,6 +3867,8 @@ plugin_load(PurplePlugin *plugin, GError **error)
 	channel_mentions_regex = g_regex_new("&lt;#(\\d+)&gt;", G_REGEX_OPTIMIZE, 0, NULL);
 	emoji_regex = g_regex_new("&lt;:([^:]+):(\\d+)&gt;", G_REGEX_OPTIMIZE, 0, NULL);
 	emoji_natural_regex = g_regex_new(":([^:]+):", G_REGEX_OPTIMIZE, 0, NULL);
+	action_star_regex = g_regex_new("^_([^\\*]+)_$", G_REGEX_OPTIMIZE, 0, NULL);
+	action_me_regex = g_regex_new("^/me (.*)$", G_REGEX_OPTIMIZE, 0, NULL);
 
 	// purple_cmd_register("create", "s", PURPLE_CMD_P_PLUGIN, PURPLE_CMD_FLAG_CHAT | PURPLE_CMD_FLAG_IM |
 						// PURPLE_CMD_FLAG_PROTOCOL_ONLY | PURPLE_CMD_FLAG_ALLOW_WRONG_ARGS,
@@ -3916,6 +3936,8 @@ plugin_unload(PurplePlugin *plugin, GError **error)
 	g_regex_unref(channel_mentions_regex);
 	g_regex_unref(emoji_regex);
 	g_regex_unref(emoji_natural_regex);
+	g_regex_unref(action_star_regex);
+	g_regex_unref(action_me_regex);
 
 	return TRUE;
 }
