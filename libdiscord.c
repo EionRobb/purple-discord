@@ -1412,6 +1412,46 @@ discord_replace_emoji(const GMatchInfo *match, GString *result, gpointer user_da
 	return FALSE;
 }
 
+#define HTML_TOGGLE_OUT(flag, a, b) if(flag) { out = g_string_append(out, b); } else { out = g_string_append(out, a); } flag = !flag;
+
+static gchar*
+discord_convert_markdown(gchar* html) {
+	GString* out = g_string_sized_new(strlen(html) * 2);
+
+	gboolean s_bold = FALSE;
+	gboolean s_italics = FALSE;
+	gboolean s_underline = FALSE;
+	gboolean s_strikethrough = FALSE;
+
+	for(int i = 0; i < strlen(html); ++i) {
+		char c = html[i];
+
+		if(c == '\\') {
+			out = g_string_append_c(out, html[++i]);
+		} else if(c == '*') {
+			if(html[i + 1] == '*') {
+				HTML_TOGGLE_OUT(s_bold, "<b>", "</b>");
+				i += 1;
+			} else {
+				HTML_TOGGLE_OUT(s_italics, "<i>", "</i>");
+			}
+		} else if(c == '~' && html[i + 1] == '~') {
+			HTML_TOGGLE_OUT(s_strikethrough, "<s>", "</s>");
+			++i;
+		} else if(c == '_') {
+			if(html[i + 1] == '_') {
+				HTML_TOGGLE_OUT(s_underline, "<u>", "</u>");
+			} else {
+				HTML_TOGGLE_OUT(s_italics, "<i>", "</i>");
+			}
+		} else {
+			out = g_string_append_c(out, c);
+		}
+	}
+
+	return g_string_free(out, FALSE);
+}
+
 static guint64
 discord_process_message(DiscordAccount *da, JsonObject *data)
 {
@@ -1487,6 +1527,8 @@ discord_process_message(DiscordAccount *da, JsonObject *data)
 		g_free(escaped_content);
 		escaped_content = tmp;
 	}
+
+	escaped_content = discord_convert_markdown(escaped_content);
 
 	if (g_hash_table_contains(da->one_to_ones, channel_id)) {
 		//private message
