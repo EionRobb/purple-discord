@@ -1416,6 +1416,7 @@ discord_replace_emoji(const GMatchInfo *match, GString *result, gpointer user_da
 
 static gchar*
 discord_convert_markdown(gchar* html) {
+	printf("%s\n", html);
 	GString* out = g_string_sized_new(strlen(html) * 2);
 
 	gboolean s_bold = FALSE;
@@ -1427,6 +1428,11 @@ discord_convert_markdown(gchar* html) {
 
 	for(int i = 0; i < strlen(html); ++i) {
 		char c = html[i];
+
+		if((s_codeblock || s_codebit) && c != '`') {
+			out = g_string_append_c(out, html[i]);
+			continue;
+		}
 
 		if(c == '\\') {
 			out = g_string_append_c(out, html[++i]);
@@ -1449,13 +1455,13 @@ discord_convert_markdown(gchar* html) {
 		} else if(c == '`') {
 			if(html[i + 1] == '`' && html[i + 2] == '`') {
 				if(!s_codeblock) {
-					while(html[++i] != '\n' && html[i]);
+					while(html[i] != '\n' && html[i] != ' ' && html[i]) ++i;
 					out = g_string_append(out, "<span style='font-family: monospace'>");
 				} else {
 					out = g_string_append(out, "</span>");
 				}
 
-				s_codeblock = !s_codebit;
+				s_codeblock = !s_codeblock;
 			} else {
 				HTML_TOGGLE_OUT(s_codebit, "<span style='font-family: monospace'>", "</span>");
 			}
@@ -1544,6 +1550,8 @@ discord_process_message(DiscordAccount *da, JsonObject *data)
 	}
 
 	escaped_content = discord_convert_markdown(escaped_content);
+	printf("Content received\n");
+	printf("%s\n", escaped_content);
 
 	if (g_hash_table_contains(da->one_to_ones, channel_id)) {
 		//private message
