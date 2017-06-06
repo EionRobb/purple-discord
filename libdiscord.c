@@ -1455,10 +1455,10 @@ discord_convert_markdown(const gchar* html)
 				HTML_TOGGLE_OUT(s_bold, "<b>", "</b>");
 				i += 1;
 			} else {
-				if((s_italics && html[i - 1] != ' ') || (!s_italics && html[i + 1] == ' ')) {
+				if((s_italics && html[i - 1] != ' ') || (!s_italics && html[i + 1] != ' ')) {
 					HTML_TOGGLE_OUT(s_italics, "<i>", "</i>");
 				} else {
-					out = g_string_append_c(out, html[++i]);
+					out = g_string_append_c(out, html[i]);
 				}
 			}
 		} else if(c == '~' && html[i + 1] == '~') {
