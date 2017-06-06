@@ -1415,8 +1415,7 @@ discord_replace_emoji(const GMatchInfo *match, GString *result, gpointer user_da
 #define HTML_TOGGLE_OUT(f, a, b) out = g_string_append(out, f ? b : a); f = !f;
 
 static gchar*
-discord_convert_markdown(gchar* html) {
-	printf("%s\n", html);
+discord_convert_markdown(const gchar* html) {
 	GString* out = g_string_sized_new(strlen(html) * 2);
 
 	gboolean s_bold = FALSE;
@@ -1549,9 +1548,9 @@ discord_process_message(DiscordAccount *da, JsonObject *data)
 		escaped_content = tmp;
 	}
 
-	escaped_content = discord_convert_markdown(escaped_content);
-	printf("Content received\n");
-	printf("%s\n", escaped_content);
+	tmp = discord_convert_markdown(escaped_content);
+	g_free(escaped_content);
+	escaped_content = tmp;
 
 	if (g_hash_table_contains(da->one_to_ones, channel_id)) {
 		//private message
