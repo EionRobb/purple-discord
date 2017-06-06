@@ -2300,7 +2300,7 @@ discord_login(PurpleAccount *account)
 	PurpleConnectionFlags pc_flags;
 
 	pc_flags = purple_connection_get_flags(pc);
-	//pc_flags |= PURPLE_CONNECTION_FLAG_HTML;
+	pc_flags |= PURPLE_CONNECTION_FLAG_HTML;
 	pc_flags |= PURPLE_CONNECTION_FLAG_NO_FONTSIZE;
 	pc_flags |= PURPLE_CONNECTION_FLAG_NO_BGCOLOR;
 	purple_connection_set_flags(pc, pc_flags);
@@ -3312,6 +3312,29 @@ discord_replace_natural_emoji(const GMatchInfo *match, GString *result, gpointer
 	return FALSE;
 }
 
+static gchar*
+discord_helper_replace(gchar* a, gchar* b, gchar* c)
+{
+	gchar* temp = purple_strreplace(a, b, c);
+	g_free(a);
+	return temp;
+}
+
+static gchar*
+discord_html_to_markdown(gchar* html)
+{
+	html = discord_helper_replace(html, "<b>", "**");
+	html = discord_helper_replace(html, "</b>", "**");
+	html = discord_helper_replace(html, "<i>", "*");
+	html = discord_helper_replace(html, "</i>", "*");
+	html = discord_helper_replace(html, "<u>", "__");
+	html = discord_helper_replace(html, "</u>", "__");
+	html = discord_helper_replace(html, "<s>", "~~");
+	html = discord_helper_replace(html, "</s>", "~~");
+
+	return html;
+}
+
 static gint
 discord_conversation_send_message(DiscordAccount *da, guint64 room_id, const gchar *message)
 {
@@ -3319,13 +3342,15 @@ discord_conversation_send_message(DiscordAccount *da, guint64 room_id, const gch
 	gchar *url;
 	gchar *postdata;
 	gchar *nonce;
+	gchar *marked;
 	gchar *stripped;
 	gchar *final;
 
 	nonce = g_strdup_printf("%" G_GUINT32_FORMAT, g_random_int());
 	g_hash_table_insert(da->sent_message_ids, nonce, nonce);
 
-	stripped = g_strstrip(purple_markup_strip_html(message));
+	marked = discord_html_to_markdown(g_strdup(message));
+	stripped = g_strstrip(purple_markup_strip_html(marked));
 
 	/* translate Discord-formatted actions into *markdown* syntax */
 	if(purple_message_meify(stripped, -1)) {
@@ -3343,6 +3368,7 @@ discord_conversation_send_message(DiscordAccount *da, guint64 room_id, const gch
 
 	discord_fetch_url(da, url, postdata, NULL, NULL);
 
+	g_free(marked);
 	g_free(stripped);
 	g_free(url);
 	g_free(postdata);
