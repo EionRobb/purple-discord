@@ -1414,8 +1414,23 @@ discord_replace_emoji(const GMatchInfo *match, GString *result, gpointer user_da
 
 #define HTML_TOGGLE_OUT(f, a, b) out = g_string_append(out, f ? b : a); f = !f;
 
+/* workaround errata in Discord's (users') markdown implementation */
+
+static gboolean
+discord_underscore_match(const gchar* html, int i)
+{
+	while(html[i] != ' ' && html[i]) {
+		if(html[i++] == '_') {
+			return !html[i] || html[i] == ' ';
+		}
+	}
+
+	return FALSE;
+}
+
 static gchar*
-discord_convert_markdown(const gchar* html) {
+discord_convert_markdown(const gchar* html)
+{
 	GString* out = g_string_sized_new(strlen(html) * 2);
 
 	gboolean s_bold = FALSE;
@@ -1440,7 +1455,11 @@ discord_convert_markdown(const gchar* html) {
 				HTML_TOGGLE_OUT(s_bold, "<b>", "</b>");
 				i += 1;
 			} else {
-				HTML_TOGGLE_OUT(s_italics, "<i>", "</i>");
+				if((s_italics && html[i - 1] != ' ') || (!s_italics && html[i + 1] == ' ')) {
+					HTML_TOGGLE_OUT(s_italics, "<i>", "</i>");
+				} else {
+					out = g_string_append_c(out, html[++i]);
+				}
 			}
 		} else if(c == '~' && html[i + 1] == '~') {
 			HTML_TOGGLE_OUT(s_strikethrough, "<s>", "</s>");
@@ -1449,7 +1468,11 @@ discord_convert_markdown(const gchar* html) {
 			if(html[i + 1] == '_') {
 				HTML_TOGGLE_OUT(s_underline, "<u>", "</u>");
 			} else {
-				HTML_TOGGLE_OUT(s_italics, "<i>", "</i>");
+				if(s_italics || discord_underscore_match(html, i + 1)) {
+					HTML_TOGGLE_OUT(s_italics, "<i>", "</i>");
+				} else {
+					out = g_string_append_c(out, html[i]);
+				}
 			}
 		} else if(c == '`') {
 			if(html[i + 1] == '`' && html[i + 2] == '`') {
