@@ -1455,7 +1455,7 @@ discord_convert_markdown(const gchar* html) {
 			if(html[i + 1] == '`' && html[i + 2] == '`') {
 				if(!s_codeblock) {
 					while(html[i] != '\n' && html[i] != ' ' && html[i]) ++i;
-					out = g_string_append(out, "<span style='font-family: monospace'>");
+					out = g_string_append(out, "<br/><span style='font-family: monospace'>");
 				} else {
 					out = g_string_append(out, "</span>");
 				}
