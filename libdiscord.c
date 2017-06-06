@@ -1412,7 +1412,7 @@ discord_replace_emoji(const GMatchInfo *match, GString *result, gpointer user_da
 	return FALSE;
 }
 
-#define HTML_TOGGLE_OUT(flag, a, b) if(flag) { out = g_string_append(out, b); } else { out = g_string_append(out, a); } flag = !flag;
+#define HTML_TOGGLE_OUT(f, a, b) out = g_string_append(out, f ? b : a); f = !f;
 
 static gchar*
 discord_convert_markdown(gchar* html) {
