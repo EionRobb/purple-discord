@@ -3403,6 +3403,7 @@ discord_html_to_markdown(gchar* html)
 static gchar*
 discord_escape_md(gchar* markdown)
 {
+	markdown = discord_helper_replace(markdown, "\\", "\\\\");
 	markdown = discord_helper_replace(markdown, "_", "\\_");
 	markdown = discord_helper_replace(markdown, "*", "\\*");
 	markdown = discord_helper_replace(markdown, "~", "\\~");
