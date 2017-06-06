@@ -1422,6 +1422,8 @@ discord_convert_markdown(gchar* html) {
 	gboolean s_italics = FALSE;
 	gboolean s_underline = FALSE;
 	gboolean s_strikethrough = FALSE;
+	gboolean s_codeblock = FALSE;
+	gboolean s_codebit = FALSE;
 
 	for(int i = 0; i < strlen(html); ++i) {
 		char c = html[i];
@@ -1443,6 +1445,19 @@ discord_convert_markdown(gchar* html) {
 				HTML_TOGGLE_OUT(s_underline, "<u>", "</u>");
 			} else {
 				HTML_TOGGLE_OUT(s_italics, "<i>", "</i>");
+			}
+		} else if(c == '`') {
+			if(html[i + 1] == '`' && html[i + 2] == '`') {
+				if(!s_codeblock) {
+					while(html[++i] != '\n' && html[i]);
+					out = g_string_append(out, "<span style='font-family: monospace'>");
+				} else {
+					out = g_string_append(out, "</span>");
+				}
+
+				s_codeblock = !s_codebit;
+			} else {
+				HTML_TOGGLE_OUT(s_codebit, "<span style='font-family: monospace'>", "</span>");
 			}
 		} else {
 			out = g_string_append_c(out, c);
