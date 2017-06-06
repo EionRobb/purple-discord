@@ -3377,6 +3377,16 @@ discord_html_to_markdown(gchar* html)
 	return html;
 }
 
+static gchar*
+discord_escape_md(gchar* markdown)
+{
+	markdown = discord_helper_replace(markdown, "_", "\\_");
+	markdown = discord_helper_replace(markdown, "*", "\\*");
+	markdown = discord_helper_replace(markdown, "~", "\\~");
+
+	return markdown;
+}
+
 static gint
 discord_conversation_send_message(DiscordAccount *da, guint64 room_id, const gchar *message)
 {
@@ -3391,7 +3401,7 @@ discord_conversation_send_message(DiscordAccount *da, guint64 room_id, const gch
 	nonce = g_strdup_printf("%" G_GUINT32_FORMAT, g_random_int());
 	g_hash_table_insert(da->sent_message_ids, nonce, nonce);
 
-	marked = discord_html_to_markdown(g_strdup(message));
+	marked = discord_html_to_markdown(discord_escape_md(g_strdup(message)));
 	stripped = g_strstrip(purple_markup_strip_html(marked));
 
 	/* translate Discord-formatted actions into *markdown* syntax */
