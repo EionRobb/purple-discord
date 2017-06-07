@@ -1370,6 +1370,7 @@ static void discord_got_private_channels(DiscordAccount *da, JsonNode *node, gpo
 static void discord_got_presences(DiscordAccount *da, JsonNode *node, gpointer user_data);
 static void discord_got_read_states(DiscordAccount *da, JsonNode *node, gpointer user_data);
 static void discord_got_history_static(DiscordAccount *da, JsonNode *node, gpointer user_data);
+static void discord_got_history_of_room(DiscordAccount *da, JsonNode *node, gpointer user_data);
 static void discord_populate_guild(DiscordAccount *da, JsonObject *guild);
 static void discord_got_guilds(DiscordAccount *da, JsonNode *node, gpointer user_data);
 static void discord_got_avatar(DiscordAccount *da, JsonNode *node, gpointer user_data);
@@ -2308,10 +2309,10 @@ discord_got_guilds(DiscordAccount *da, JsonNode *node, gpointer user_data)
 }
 
 static void
-discord_get_history_dm(DiscordAccount *da, const gchar *channel, const gchar *last, const int mentions)
+discord_get_history(DiscordAccount *da, const gchar *channel, const gchar *last, const int count)
 {
-	gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/v6/channels/%s/messages?limit=%d&around=%s", channel, mentions, last);
-	discord_fetch_url(da, url, NULL, discord_got_history_static, NULL);
+	gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/v6/channels/%s/messages?limit=%d&around=%s", channel, count ? count : 100, last);
+	discord_fetch_url(da, url, NULL, count ? discord_got_history_static : discord_got_history_of_room, count ? NULL : discord_get_channel_global(da, channel));
 	g_free(url);
 }
 
@@ -2329,14 +2330,9 @@ discord_got_read_states(DiscordAccount *da, JsonNode *node, gpointer user_data)
 		guint mention_count = json_object_get_int_member(state, "mention_count");
 
 		if(mention_count) {
-			if(g_hash_table_contains(da->one_to_ones, channel)) {
-				gchar *username = g_hash_table_lookup(da->one_to_ones, channel);
-				discord_get_history_dm(da, channel, last_id, mention_count);
-			} else {
-				DiscordChannel *chan = discord_get_channel_global(da, channel);
-
-				printf("%d mentions in %s\n", mention_count, chan->name);
-			}
+			printf("mention\n");
+			gboolean isDM = g_hash_table_contains(da->one_to_ones, channel);
+			discord_get_history(da, channel, last_id, isDM ? mention_count * 2 : 0);
 		}
 	}
 }
