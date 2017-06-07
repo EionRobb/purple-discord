@@ -2310,7 +2310,7 @@ discord_got_guilds(DiscordAccount *da, JsonNode *node, gpointer user_data)
 static void
 discord_get_history_dm(DiscordAccount *da, const gchar *channel, const gchar *last, const int mentions)
 {
-	gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/v6/channels/%s/messages?limit=%d&around=%s", channel, mentions + 10, last);
+	gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/v6/channels/%s/messages?limit=%d&around=%s", channel, mentions, last);
 	discord_fetch_url(da, url, NULL, discord_got_history_static, NULL);
 	g_free(url);
 }
@@ -2331,8 +2331,6 @@ discord_got_read_states(DiscordAccount *da, JsonNode *node, gpointer user_data)
 		if(mention_count) {
 			if(g_hash_table_contains(da->one_to_ones, channel)) {
 				gchar *username = g_hash_table_lookup(da->one_to_ones, channel);
-
-				printf("%s sent you %d messages\n", username, mention_count);
 				discord_get_history_dm(da, channel, last_id, mention_count);
 			} else {
 				DiscordChannel *chan = discord_get_channel_global(da, channel);
