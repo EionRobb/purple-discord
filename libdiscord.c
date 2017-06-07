@@ -163,19 +163,6 @@ typedef struct {
 	gint roomlist_guild_count;
 } DiscordAccount;
 
-//just in case we optimize...
-#define g_hash_table_insert_int64(a, b, c) g_hash_table_insert((a), &(b), (c))
-#define g_hash_table_replace_int64(a, b, c) g_hash_table_replace((a), &(b), (c))
-#define g_hash_table_steal_int64(a, b) g_hash_table_steal((a), &(b))
-#define g_hash_table_lookup_int64(a, b) g_hash_table_lookup((a), &(b))
-#define g_hash_table_contains_int64(a, b) g_hash_table_contains((a), &(b))
-#define g_hash_table_lookup_extended_int64(a, b, c, d) g_hash_table_lookup_extended((a), &(b), (c), (d))
-
-static guint64 to_int(const gchar *id)
-{
-	return id ? g_ascii_strtoull(id, NULL, 10) : 0;
-}
-
 static void discord_free_guild_membership(gpointer data);
 static void discord_free_guild_role(gpointer data);
 static void discord_free_channel(gpointer data);
