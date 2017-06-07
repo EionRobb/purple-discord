@@ -2303,7 +2303,7 @@ discord_got_guilds(DiscordAccount *da, JsonNode *node, gpointer user_data)
 }
 
 static void
-discord_get_history(DiscordAccount *da, const gchar *channel, const gchar *last, const int count)
+discord_get_history(DiscordAccount *da, const gchar *channel, const gchar *last, int count)
 {
 	gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/v6/channels/%s/messages?limit=%d&around=%s", channel, count ? count : 100, last);
 	discord_fetch_url(da, url, NULL, count ? discord_got_history_static : discord_got_history_of_room, count ? NULL : discord_get_channel_global(da, channel));
@@ -2330,7 +2330,7 @@ discord_got_read_states(DiscordAccount *da, JsonNode *node, gpointer user_data)
 				discord_get_history(da, channel, last_id, mentions * 2);
 			} else {
 				/* TODO: fetch channel history */
-				printf("%d unhandled mentions in channel %s\n", mentions, discord_get_channel_global(da, channel)->name);
+				purple_debug_misc("discord", "%d unhandled mentions in channel %s\n", mentions, discord_get_channel_global(da, channel)->name);
 			}
 		}
 	}
