@@ -1412,6 +1412,90 @@ discord_replace_emoji(const GMatchInfo *match, GString *result, gpointer user_da
 	return FALSE;
 }
 
+#define HTML_TOGGLE_OUT(f, a, b) out = g_string_append(out, f ? b : a); f = !f;
+
+/* workaround errata in Discord's (users') markdown implementation */
+
+static gboolean
+discord_underscore_match(const gchar* html, int i)
+{
+	while(html[i] != ' ' && html[i]) {
+		if(html[i++] == '_') {
+			return !html[i] || html[i] == ' ';
+		}
+	}
+
+	return FALSE;
+}
+
+static gchar*
+discord_convert_markdown(const gchar* html)
+{
+	GString* out = g_string_sized_new(strlen(html) * 2);
+
+	gboolean s_bold = FALSE;
+	gboolean s_italics = FALSE;
+	gboolean s_underline = FALSE;
+	gboolean s_strikethrough = FALSE;
+	gboolean s_codeblock = FALSE;
+	gboolean s_codebit = FALSE;
+
+	for(int i = 0; i < strlen(html); ++i) {
+		char c = html[i];
+
+		if((s_codeblock || s_codebit) && c != '`') {
+			out = g_string_append_c(out, html[i]);
+			continue;
+		}
+
+		if(c == '\\') {
+			out = g_string_append_c(out, html[++i]);
+		} else if(c == '*') {
+			if(html[i + 1] == '*') {
+				HTML_TOGGLE_OUT(s_bold, "<b>", "</b>");
+				i += 1;
+			} else {
+				if((s_italics && html[i - 1] != ' ') || (!s_italics && html[i + 1] != ' ')) {
+					HTML_TOGGLE_OUT(s_italics, "<i>", "</i>");
+				} else {
+					out = g_string_append_c(out, html[i]);
+				}
+			}
+		} else if(c == '~' && html[i + 1] == '~') {
+			HTML_TOGGLE_OUT(s_strikethrough, "<s>", "</s>");
+			++i;
+		} else if(c == '_') {
+			if(html[i + 1] == '_') {
+				HTML_TOGGLE_OUT(s_underline, "<u>", "</u>");
+			} else {
+				if(s_italics || discord_underscore_match(html, i + 1)) {
+					HTML_TOGGLE_OUT(s_italics, "<i>", "</i>");
+				} else {
+					out = g_string_append_c(out, html[i]);
+				}
+			}
+		} else if(c == '`') {
+			if(html[i + 1] == '`' && html[i + 2] == '`') {
+				if(!s_codeblock) {
+					while(html[i] != '\n' && html[i] != ' ' && html[i]) ++i;
+					out = g_string_append(out, "<br/><span style='font-family: monospace; white-space: pre'>");
+				} else {
+					out = g_string_append(out, "</span>");
+				}
+
+				s_codeblock = !s_codeblock;
+				i += 2;
+			} else {
+				HTML_TOGGLE_OUT(s_codebit, "<span style='font-family: monospace; white-space: pre'>", "</span>");
+			}
+		} else {
+			out = g_string_append_c(out, c);
+		}
+	}
+
+	return g_string_free(out, FALSE);
+}
+
 static guint64
 discord_process_message(DiscordAccount *da, JsonObject *data)
 {
@@ -1487,6 +1571,10 @@ discord_process_message(DiscordAccount *da, JsonObject *data)
 		g_free(escaped_content);
 		escaped_content = tmp;
 	}
+
+	tmp = discord_convert_markdown(escaped_content);
+	g_free(escaped_content);
+	escaped_content = tmp;
 
 	if (g_hash_table_contains(da->one_to_ones, channel_id)) {
 		//private message
@@ -2300,7 +2388,7 @@ discord_login(PurpleAccount *account)
 	PurpleConnectionFlags pc_flags;
 
 	pc_flags = purple_connection_get_flags(pc);
-	//pc_flags |= PURPLE_CONNECTION_FLAG_HTML;
+	pc_flags |= PURPLE_CONNECTION_FLAG_HTML;
 	pc_flags |= PURPLE_CONNECTION_FLAG_NO_FONTSIZE;
 	pc_flags |= PURPLE_CONNECTION_FLAG_NO_BGCOLOR;
 	purple_connection_set_flags(pc, pc_flags);
@@ -3312,6 +3400,40 @@ discord_replace_natural_emoji(const GMatchInfo *match, GString *result, gpointer
 	return FALSE;
 }
 
+static gchar*
+discord_helper_replace(gchar* a, gchar* b, gchar* c)
+{
+	gchar* temp = purple_strreplace(a, b, c);
+	g_free(a);
+	return temp;
+}
+
+static gchar*
+discord_html_to_markdown(gchar* html)
+{
+	html = discord_helper_replace(html, "<b>", "**");
+	html = discord_helper_replace(html, "</b>", "**");
+	html = discord_helper_replace(html, "<i>", "*");
+	html = discord_helper_replace(html, "</i>", "*");
+	html = discord_helper_replace(html, "<u>", "__");
+	html = discord_helper_replace(html, "</u>", "__");
+	html = discord_helper_replace(html, "<s>", "~~");
+	html = discord_helper_replace(html, "</s>", "~~");
+
+	return html;
+}
+
+static gchar*
+discord_escape_md(gchar* markdown)
+{
+	markdown = discord_helper_replace(markdown, "\\", "\\\\");
+	markdown = discord_helper_replace(markdown, "_", "\\_");
+	markdown = discord_helper_replace(markdown, "*", "\\*");
+	markdown = discord_helper_replace(markdown, "~", "\\~");
+
+	return markdown;
+}
+
 static gint
 discord_conversation_send_message(DiscordAccount *da, guint64 room_id, const gchar *message)
 {
@@ -3319,13 +3441,15 @@ discord_conversation_send_message(DiscordAccount *da, guint64 room_id, const gch
 	gchar *url;
 	gchar *postdata;
 	gchar *nonce;
+	gchar *marked;
 	gchar *stripped;
 	gchar *final;
 
 	nonce = g_strdup_printf("%" G_GUINT32_FORMAT, g_random_int());
 	g_hash_table_insert(da->sent_message_ids, nonce, nonce);
 
-	stripped = g_strstrip(purple_markup_strip_html(message));
+	marked = discord_html_to_markdown(discord_escape_md(g_strdup(message)));
+	stripped = g_strstrip(purple_markup_strip_html(marked));
 
 	/* translate Discord-formatted actions into *markdown* syntax */
 	if(purple_message_meify(stripped, -1)) {
@@ -3343,6 +3467,7 @@ discord_conversation_send_message(DiscordAccount *da, guint64 room_id, const gch
 
 	discord_fetch_url(da, url, postdata, NULL, NULL);
 
+	g_free(marked);
 	g_free(stripped);
 	g_free(url);
 	g_free(postdata);
