@@ -60,7 +60,6 @@ typedef enum {
 	CHANNEL_VOICE
 } DiscordChannelType;
 
-
 typedef struct {
 	guint64 id;
 	gchar *name;
@@ -185,7 +184,6 @@ static DiscordUser *discord_new_user(JsonObject *json)
 
 	return user;
 }
-
 
 static DiscordGuild *discord_new_guild(JsonObject *json)
 {
@@ -673,7 +671,6 @@ static void discord_print_users(GHashTable *users)
 #endif
 }
 
-
 PurpleChatUserFlags
 discord_get_user_flags(DiscordAccount *da, const gchar *guild_id, const gchar *username)
 {
@@ -712,7 +709,6 @@ discord_get_user_flags(DiscordAccount *da, const gchar *guild_id, const gchar *u
 
 	return best_flag;
 }
-
 
 typedef void (*DiscordProxyCallbackFunc)(DiscordAccount *ya, JsonNode *node, gpointer user_data);
 
@@ -1006,13 +1002,11 @@ discord_fetch_url_with_method(DiscordAccount *ya, const gchar *method, const gch
 	g_free(cookies);
 }
 
-
 static void
 discord_fetch_url(DiscordAccount *da, const gchar *url, const gchar *postdata, DiscordProxyCallbackFunc callback, gpointer user_data)
 {
 	discord_fetch_url_with_method(da, (postdata ? "POST" : "GET"), url, postdata, callback, user_data);
 }
-
 
 static void discord_socket_write_json(DiscordAccount *ya, JsonObject *data);
 static GHashTable *discord_chat_info_defaults(PurpleConnection *pc, const char *chatname);
@@ -1075,7 +1069,6 @@ discord_send_heartbeat(gpointer userdata)
 	return TRUE;
 }
 
-
 void discord_handle_add_new_user(DiscordAccount *ya, JsonObject *obj);
 
 PurpleGroup* discord_get_or_create_default_group();
@@ -1093,7 +1086,6 @@ static void discord_got_avatar(DiscordAccount *da, JsonNode *node, gpointer user
 static void discord_get_avatar(DiscordAccount *da, DiscordUser *user);
 
 static const gchar *discord_normalise_room_name(const gchar *guild_name, const gchar *name);
-
 
 static gboolean
 discord_replace_channel(const GMatchInfo *match, GString *result, gpointer user_data)
@@ -1605,7 +1597,6 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		purple_debug_info("discord", "Unhandled message type '%s'\n", type);
 	}
 
-
 }
 
 PurpleGroup* discord_get_or_create_default_group()
@@ -1620,7 +1611,6 @@ PurpleGroup* discord_get_or_create_default_group()
 
 	return discord_group;
 }
-
 
 static const gchar *
 discord_normalise_room_name(const gchar *guild_name, const gchar *name)
@@ -1720,7 +1710,6 @@ discord_roomlist_get_list(PurpleConnection *pc)
 	return roomlist;
 }
 
-
 void
 discord_set_status(PurpleAccount *account, PurpleStatus *status)
 {
@@ -1753,7 +1742,6 @@ discord_set_status(PurpleAccount *account, PurpleStatus *status)
 	json_object_set_object_member(obj, "d", data);
 
 	discord_socket_write_json(ya, obj);
-
 
 	data = json_object_new();
 	json_object_set_string_member(data, "status", status_id);
@@ -1849,7 +1837,6 @@ static guint discord_conv_send_typing(PurpleConversation *conv, PurpleIMTypingSt
 static gulong chat_conversation_typing_signal = 0;
 static gulong conversation_updated_signal = 0;
 
-
 typedef struct {
 	DiscordAccount *da;
 	DiscordUser *user;
@@ -1915,7 +1902,6 @@ static void discord_create_relationship(DiscordAccount *da, JsonObject *json)
 
 		discord_get_avatar(da, user);
 	}
-
 
 	g_free(merged_username);
 }
@@ -2175,7 +2161,6 @@ discord_login(PurpleAccount *account)
 	da->pc = pc;
 	da->cookie_table = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
 
-
 	da->last_load_last_message_id = purple_account_get_int(account, "last_message_id_high", 0);
 	if (da->last_load_last_message_id != 0) {
 		da->last_load_last_message_id = (da->last_load_last_message_id << 32) | ((guint64) purple_account_get_int(account, "last_message_id_low", 0) & 0xFFFFFFFF);
@@ -2214,7 +2199,6 @@ discord_login(PurpleAccount *account)
 		json_object_unref(data);
 	}
 
-
 	if (!chat_conversation_typing_signal) {
 		chat_conversation_typing_signal = purple_signal_connect(purple_conversations_get_handle(), "chat-conversation-typing", purple_connection_get_protocol(pc), PURPLE_CALLBACK(discord_conv_send_typing), NULL);
 	}
@@ -2222,7 +2206,6 @@ discord_login(PurpleAccount *account)
 //		conversation_updated_signal = purple_signal_connect(purple_conversations_get_handle(), "conversation-updated", purple_connection_get_protocol(pc), PURPLE_CALLBACK(discord_mark_conv_seen), NULL);
 	}
 }
-
 
 static void
 discord_close(PurpleConnection *pc)
@@ -2453,7 +2436,6 @@ discord_socket_got_data(gpointer userdata, PurpleSslConnection *conn, PurpleInpu
 	guchar length_code;
 	int read_len = 0;
 	gboolean done_some_reads = FALSE;
-
 
 	if (G_UNLIKELY(!ya->websocket_header_received)) {
 		gint nlbr_count = 0;
@@ -2781,7 +2763,6 @@ discord_get_chat_name(GHashTable *data)
 	return g_strdup(temp);
 }
 
-
 static void discord_set_room_last_id(DiscordAccount *da, guint64 channel_id, guint64 last_id);
 
 static void
@@ -2887,8 +2868,6 @@ discord_set_room_last_id(DiscordAccount *da, guint64 id, guint64 last_id)
 	g_free(channel_id);
 }
 
-
-
 typedef struct {
 	DiscordAccount *da;
 	gchar *channel_id;
@@ -2896,9 +2875,7 @@ typedef struct {
 	GList *denied_roles;
 } DiscordChannelPermissionLookup;
 
-
 static void discord_join_chat(PurpleConnection *pc, GHashTable *chatdata);
-
 
 static void
 discord_got_channel_info(DiscordAccount *da, JsonNode *node, gpointer user_data)
@@ -3334,7 +3311,6 @@ discord_send_im(PurpleConnection *pc,
 	return discord_conversation_send_message(da, to_int(room_id), message);
 }
 
-
 static void
 discord_chat_set_topic(PurpleConnection *pc, int id, const char *topic)
 {
@@ -3516,7 +3492,6 @@ discord_get_info(PurpleConnection *pc, const gchar *username)
 	discord_fetch_url(da, url, NULL, discord_got_info, user);
 	g_free(url);
 }
-
 
 static const char *
 discord_list_icon(PurpleAccount *account, PurpleBuddy *buddy)
@@ -3910,7 +3885,6 @@ PURPLE_INIT_PLUGIN(discord, plugin_init, info);
 
 #else
 //Purple 3 plugin load functions
-
 
 G_MODULE_EXPORT GType discord_protocol_get_type(void);
 #define DISCORD_TYPE_PROTOCOL			(discord_protocol_get_type())
