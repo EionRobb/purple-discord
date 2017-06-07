@@ -1369,6 +1369,7 @@ static void discord_got_relationships(DiscordAccount *da, JsonNode *node, gpoint
 static void discord_got_private_channels(DiscordAccount *da, JsonNode *node, gpointer user_data);
 static void discord_got_presences(DiscordAccount *da, JsonNode *node, gpointer user_data);
 static void discord_got_read_states(DiscordAccount *da, JsonNode *node, gpointer user_data);
+static void discord_got_history_static(DiscordAccount *da, JsonNode *node, gpointer user_data);
 static void discord_populate_guild(DiscordAccount *da, JsonObject *guild);
 static void discord_got_guilds(DiscordAccount *da, JsonNode *node, gpointer user_data);
 static void discord_got_avatar(DiscordAccount *da, JsonNode *node, gpointer user_data);
@@ -2215,7 +2216,6 @@ discord_got_private_channels(DiscordAccount *da, JsonNode *node, gpointer user_d
 		JsonArray *recipients = json_object_get_array_member(channel, "recipients");
 		const gchar *room_id = json_object_get_string_member(channel, "id");
 		gint64 room_type = json_object_get_int_member(channel, "type");
-		const gchar *last_message = json_object_get_string_member(channel, "last_message_id");
 
 		if (room_type == 1) {
 			//One-to-one DM
@@ -2308,31 +2308,36 @@ discord_got_guilds(DiscordAccount *da, JsonNode *node, gpointer user_data)
 }
 
 static void
+discord_get_history_dm(DiscordAccount *da, const gchar *channel, const gchar *last, const int mentions)
+{
+	gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/v6/channels/%s/messages?limit=%d&around=%s", channel, mentions + 10, last);
+	discord_fetch_url(da, url, NULL, discord_got_history_static, NULL);
+	g_free(url);
+}
+
+static void
 discord_got_read_states(DiscordAccount *da, JsonNode *node, gpointer user_data)
 {
-	/* TODO */
 	JsonArray *states = json_node_get_array(node);
 	guint len = json_array_get_length(states);
-
-	printf("Length %d\n", len);
 
 	for(int i = len - 1; i >= 0; i--) {
 		JsonObject *state = json_array_get_object_element(states, i);
 		
 		const gchar *channel = json_object_get_string_member(state, "id");
+		const gchar *last_id = json_object_get_string_member(state, "last_message_id");
 		guint mention_count = json_object_get_int_member(state, "mention_count");
 
 		if(mention_count) {
-			DiscordChannel *chan = discord_get_channel_global(da, channel);
-
-			if(!chan) {
+			if(g_hash_table_contains(da->one_to_ones, channel)) {
 				gchar *username = g_hash_table_lookup(da->one_to_ones, channel);
 
 				printf("%s sent you %d messages\n", username, mention_count);
-			} else if(chan->name) {
-				printf("%d mentions in %s\n", mention_count, chan->name);
+				discord_get_history_dm(da, channel, last_id, mention_count);
 			} else {
-				printf("%d mentions in an unnamed channel?", mention_count);
+				DiscordChannel *chan = discord_get_channel_global(da, channel);
+
+				printf("%d mentions in %s\n", mention_count, chan->name);
 			}
 		}
 	}
@@ -3090,6 +3095,20 @@ discord_got_history_of_room(DiscordAccount *da, JsonNode *node, gpointer user_da
 	}
 }
 
+/* identical endpoint as above, but not rolling */
+
+static void
+discord_got_history_static(DiscordAccount *da, JsonNode *node, gpointer user_data)
+{
+	JsonArray *messages = json_node_get_array(node);
+	gint i, len = json_array_get_length(messages);
+
+	for (i = len - 1; i >= 0; i--) {
+		JsonObject *message = json_array_get_object_element(messages, i);
+
+		discord_process_message(da, message);
+	}
+}
 
 // libpurple can't store a 64bit int on a 32bit machine, so convert to something more usable instead (puke)
 //  also needs to work cross platform, in case the accounts.xml is being shared (double puke)
