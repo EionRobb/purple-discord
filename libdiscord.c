@@ -2302,10 +2302,15 @@ discord_got_guilds(DiscordAccount *da, JsonNode *node, gpointer user_data)
 	discord_socket_write_json(da, obj);
 }
 
+/* If count is explicitly specified, use a static request (DMs).
+ * If it is not, use a dynamic request (rooms).
+ * TODO: Possible edge case if there are over 100 incoming DMs?
+ */
+
 static void
 discord_get_history(DiscordAccount *da, const gchar *channel, const gchar *last, int count)
 {
-	gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/v6/channels/%s/messages?limit=%d&around=%s", channel, count ? count : 100, last);
+	gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/v6/channels/%s/messages?limit=%d&after=%s", channel, count ? count : 100, last);
 	discord_fetch_url(da, url, NULL, count ? discord_got_history_static : discord_got_history_of_room, count ? NULL : discord_get_channel_global(da, channel));
 	g_free(url);
 }
