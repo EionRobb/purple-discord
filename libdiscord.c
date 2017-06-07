@@ -1459,17 +1459,9 @@ discord_roomlist_got_list(DiscordAccount *da, DiscordGuild *guild, gpointer user
 
 		purple_roomlist_room_add_field(roomlist, room, channel_id);
 		purple_roomlist_room_add_field(roomlist, room, channel->name);
-		switch(channel->type) {
-		case 0:
-			type_str = "Text";
-			break;
-		case 1:
-			type_str = "Voice";
-			break;
-		default:
-			type_str = "Unknown";
-			break;
-		}
+
+		type_str = channel->type == 0 ? "Text" : channel->type == 1 ? "Voice" : "Unknown";
+
 		purple_roomlist_room_add_field(roomlist, room, type_str);
 
 		purple_roomlist_room_add(roomlist, room);
