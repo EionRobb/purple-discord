@@ -1018,28 +1018,6 @@ static void discord_socket_write_json(DiscordAccount *ya, JsonObject *data);
 static GHashTable *discord_chat_info_defaults(PurpleConnection *pc, const char *chatname);
 static void discord_mark_room_messages_read(DiscordAccount *ya, guint64 room_id);
 
-
-
-// static gint64 discord_get_room_last_timestamp(DiscordAccount *ya, const gchar *room_id);
-// static void discord_set_room_last_timestamp(DiscordAccount *ya, const gchar *room_id, gint64 last_timestamp);
-
-// static gboolean
-// discord_have_seen_message_id(DiscordAccount *ya, const gchar *message_id)
-// {
-	// guint message_hash = g_str_hash(message_id);
-	// gpointer message_hash_ptr = GINT_TO_POINTER(message_hash);
-
-	// if (g_queue_find(ya->received_message_queue, message_hash_ptr)) {
-		// return TRUE;
-	// }
-
-	// g_queue_push_head(ya->received_message_queue, message_hash_ptr);
-	// g_queue_pop_nth(ya->received_message_queue, 10);
-
-	// return FALSE;
-// }
-
-
 static void
 discord_send_auth(DiscordAccount *da)
 {
@@ -2661,27 +2639,7 @@ discord_start_socket(DiscordAccount *da)
 	da->websocket = purple_ssl_connect(da->account, DISCORD_GATEWAY_SERVER, DISCORD_GATEWAY_PORT, discord_socket_connected, discord_socket_failed, da);
 }
 
-
-
-
-
-
-static void
-discord_chat_leave_by_room_id(PurpleConnection *pc, guint64 room_id)
-{
-	/*DiscordAccount *ya = purple_connection_get_protocol_data(pc);
-	JsonObject *data = json_object_new();
-	JsonArray *params = json_array_new();
-
-	json_array_add_string_element(params, room_id);
-
-	json_object_set_string_member(data, "msg", "method");
-	json_object_set_string_member(data, "method", "leaveRoom");
-	json_object_set_array_member(data, "params", params);
-	json_object_set_string_member(data, "id", discord_get_next_id_str(ya));
-
-	discord_socket_write_json(ya, data);*/
-}
+/* TODO: Implement correctly */
 
 static void
 discord_chat_leave(PurpleConnection *pc, int id)
@@ -2694,8 +2652,6 @@ discord_chat_leave(PurpleConnection *pc, int id)
 		//todo fixme?
 		room_id = to_int(purple_conversation_get_name(PURPLE_CONVERSATION(chatconv)));
 	}
-
-	discord_chat_leave_by_room_id(pc, room_id);
 }
 
 static void
@@ -3090,25 +3046,6 @@ discord_join_chat(PurpleConnection *pc, GHashTable *chatdata)
 }
 
 static void
-discord_mark_room_messages_read(DiscordAccount *ya, guint64 room_id)
-{
-	/*JsonObject *data;
-	JsonArray *params;
-
-	data = json_object_new();
-	params = json_array_new();
-
-	json_array_add_string_element(params, room_id);
-
-	json_object_set_string_member(data, "msg", "method");
-	json_object_set_string_member(data, "method", "readMessages");
-	json_object_set_array_member(data, "params", params);
-	json_object_set_string_member(data, "id", discord_get_next_id_str(ya));
-
-	discord_socket_write_json(ya, data);*/
-}
-
-static void
 discord_mark_conv_seen(PurpleConversation *conv, PurpleConversationUpdateType type)
 {
 	PurpleConnection *pc;
@@ -3133,8 +3070,6 @@ discord_mark_conv_seen(PurpleConversation *conv, PurpleConversationUpdateType ty
 	}else{
 		room_id = to_int(g_hash_table_lookup(ya->one_to_ones_rev, purple_conversation_get_name(conv)));
 	}
-
-	discord_mark_room_messages_read(ya, room_id);
 }
 
 static guint
