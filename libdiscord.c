@@ -2327,12 +2327,17 @@ discord_got_read_states(DiscordAccount *da, JsonNode *node, gpointer user_data)
 		
 		const gchar *channel = json_object_get_string_member(state, "id");
 		const gchar *last_id = json_object_get_string_member(state, "last_message_id");
-		guint mention_count = json_object_get_int_member(state, "mention_count");
+		guint mentions = json_object_get_int_member(state, "mention_count");
 
-		if(mention_count) {
-			printf("mention\n");
+		if(mentions) {
 			gboolean isDM = g_hash_table_contains(da->one_to_ones, channel);
-			discord_get_history(da, channel, last_id, isDM ? mention_count * 2 : 0);
+
+			if(isDM) {
+				discord_get_history(da, channel, last_id, mentions * 2);
+			} else {
+				/* TODO: fetch channel history */
+				printf("%d unhandled mentions in channel %s\n", mentions, discord_get_channel_global(da, channel)->name);
+			}
 		}
 	}
 }
