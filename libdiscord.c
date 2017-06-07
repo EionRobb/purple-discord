@@ -1606,21 +1606,7 @@ discord_build_groups_from_blist(DiscordAccount *ya)
 	     node != NULL;
 	     node = purple_blist_node_next(node, TRUE)) {
 		if (PURPLE_IS_CHAT(node)) {
-			const gchar *channel_id;
-			const gchar *name;
-			PurpleChat *chat = PURPLE_CHAT(node);
-			if (purple_chat_get_account(chat) != ya->account) {
-				continue;
-			}
-
-			name = purple_chat_get_name(chat);
-			channel_id = purple_blist_node_get_string(node, "channel_id");
-			if (name == NULL || channel_id == NULL || purple_strequal(name, channel_id)) {
-				GHashTable *components = purple_chat_get_components(chat);
-				if (components != NULL && channel_id == NULL) {
-					channel_id = g_hash_table_lookup(components, "id");
-				}
-			}
+			/* TODO: do we need to do anything? */
 		} else if (PURPLE_IS_BUDDY(node)) {
 			const gchar *discord_id;
 			const gchar *name;
