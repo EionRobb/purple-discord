@@ -789,12 +789,6 @@ static DiscordChannel *discord_get_channel_global(DiscordAccount *da, const gcha
 {
 	return discord_get_channel_global_int(da, to_int(id));
 }
-
-void discord_get_channel_messages(DiscordAccount *da, const gchar* channel_id, const gchar* message_id)
-{
-	printf("%s->%s\n", channel_id, message_id);
-}
-
 //debug
 
 #define discord_print_append(L, B, R, M, D) \
@@ -2324,7 +2318,7 @@ discord_got_read_states(DiscordAccount *da, JsonNode *node, gpointer user_data)
 
 	for(int i = len - 1; i >= 0; i--) {
 		JsonObject *state = json_array_get_object_element(states, i);
-		
+
 		const gchar *channel = json_object_get_string_member(state, "id");
 		const gchar *last_id = json_object_get_string_member(state, "last_message_id");
 		guint mentions = json_object_get_int_member(state, "mention_count");
