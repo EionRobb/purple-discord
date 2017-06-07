@@ -460,16 +460,6 @@ static DiscordGuild *discord_get_guild(DiscordAccount *da, const gchar *id)
 	return discord_get_guild_int(da, to_int(id));
 }
 
-// static DiscordChannel *discord_get_channel_int(DiscordGuild *guild, guint64 id)
-// {
-// return g_hash_table_lookup_int64(guild->channels, id);
-// }
-
-// static DiscordChannel *discord_get_channel(DiscordGuild *guild, const gchar *id)
-// {
-// return discord_get_channel_int(guild, to_int(id));
-// }
-
 static DiscordGuild *discord_upsert_guild(GHashTable *guild_table, JsonObject *json)
 {
 	guint64 *key = NULL, guild_id = to_int(json_object_get_string_member(json, "id"));
@@ -1273,9 +1263,7 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		}
 		g_free(username);
 	} else if (purple_strequal(type, "MESSAGE_CREATE")/* || purple_strequal(type, "MESSAGE_UPDATE")*/) { //TODO
-
 		discord_process_message(da, data);
-
 	} else if (purple_strequal(type, "TYPING_START")) {
 		const gchar *channel_id = json_object_get_string_member(data, "channel_id");
 		const gchar *user_id = json_object_get_string_member(data, "user_id");
@@ -1917,12 +1905,6 @@ discord_got_read_states(DiscordAccount *da, JsonNode *node, gpointer user_data)
 	}
 }
 
-// static void
-// discord_get_buddies(DiscordAccount *da)
-// {
-// discord_fetch_url(da, "https://" DISCORD_API_SERVER "/api/v6/users/@me/relationships", NULL, discord_got_relationships, NULL);
-// }
-
 static void discord_login_response(DiscordAccount *da, JsonNode *node, gpointer user_data);
 
 static void
@@ -1966,7 +1948,6 @@ discord_login_response(DiscordAccount *da, JsonNode *node, gpointer user_data)
 
 		if (da->token) {
 			discord_start_socket(da);
-			//discord_get_buddies(da);
 			return;
 		}
 
@@ -2069,13 +2050,11 @@ static void
 discord_close(PurpleConnection *pc)
 {
 	DiscordAccount *da = purple_connection_get_protocol_data(pc);
-	// PurpleAccount *account;
 
 	g_return_if_fail(da != NULL);
 
 	purple_timeout_remove(da->heartbeat_timeout);
 
-	// account = purple_connection_get_account(pc);
 	if (da->websocket != NULL) {
 		purple_ssl_close(da->websocket);
 		da->websocket = NULL;
@@ -2123,8 +2102,6 @@ discord_close(PurpleConnection *pc)
 	da->self_username = NULL;
 	g_free(da);
 }
-
-//static void discord_start_polling(DiscordAccount *ya);
 
 static gboolean
 discord_process_frame(DiscordAccount *da, const gchar *frame)
@@ -2515,32 +2492,6 @@ discord_chat_leave(PurpleConnection *pc, int id)
 		//todo fixme?
 		room_id = to_int(purple_conversation_get_name(PURPLE_CONVERSATION(chatconv)));
 	}
-}
-
-static void
-discord_chat_invite(PurpleConnection *pc, int id, const char *message, const char *who)
-{
-	// DiscordAccount *ya;
-	// const gchar *room_id;
-	// PurpleChatConversation *chatconv;
-	// JsonObject *data = json_object_new();
-
-	// ya = purple_connection_get_protocol_data(pc);
-	// chatconv = purple_conversations_find_chat(pc, id);
-	// room_id = purple_conversation_get_data(PURPLE_CONVERSATION(chatconv), "id");
-	// if (room_id == NULL) {
-	// room_id = purple_conversation_get_name(PURPLE_CONVERSATION(chatconv));
-	// }
-
-	// json_object_set_string_member(data, "msg", "InviteGroupMember");
-	// json_object_set_string_member(data, "groupId", groupId);
-	// json_object_set_int_member(data, "opId", ya->opid++);
-	// json_object_set_string_member(data, "userId", who);
-	// json_object_set_string_member(data, "memberId", "00000000000FFFFF");
-	// json_object_set_string_member(data, "firstName", "");
-	// json_object_set_string_member(data, "lastName", "");
-
-	// discord_socket_write_json(ya, data);
 }
 
 static GList *
@@ -3172,6 +3123,7 @@ discord_send_im(PurpleConnection *pc,
 static void
 discord_chat_set_topic(PurpleConnection *pc, int id, const char *topic)
 {
+	/* TODO: implement */
 	//PATCH https:// DISCORD_API_SERVER /api/v6/channels/%s channel
 	//{"name":"test","position":1,"topic":"new topic","bitrate":64000,"user_limit":0}
 }
@@ -3555,31 +3507,10 @@ discord_cmd_leave(PurpleConversation *conv, const gchar *cmd, gchar **args, gcha
 static gboolean
 plugin_load(PurplePlugin *plugin, GError **error)
 {
-
 	channel_mentions_regex = g_regex_new("&lt;#(\\d+)&gt;", G_REGEX_OPTIMIZE, 0, NULL);
 	emoji_regex = g_regex_new("&lt;:([^:]+):(\\d+)&gt;", G_REGEX_OPTIMIZE, 0, NULL);
 	emoji_natural_regex = g_regex_new(":([^:]+):", G_REGEX_OPTIMIZE, 0, NULL);
 	action_star_regex = g_regex_new("^_([^\\*]+)_$", G_REGEX_OPTIMIZE, 0, NULL);
-
-	// purple_cmd_register("create", "s", PURPLE_CMD_P_PLUGIN, PURPLE_CMD_FLAG_CHAT | PURPLE_CMD_FLAG_IM |
-	// PURPLE_CMD_FLAG_PROTOCOL_ONLY | PURPLE_CMD_FLAG_ALLOW_WRONG_ARGS,
-	// DISCORD_PLUGIN_ID, discord_slash_command,
-	// _("create <name>:  Create a new channel"), NULL);
-
-	// purple_cmd_register("invite", "s", PURPLE_CMD_P_PLUGIN, PURPLE_CMD_FLAG_CHAT |
-	// PURPLE_CMD_FLAG_PROTOCOL_ONLY | PURPLE_CMD_FLAG_ALLOW_WRONG_ARGS,
-	// DISCORD_PLUGIN_ID, discord_slash_command,
-	// _("invite <username>:  Invite user to join channel"), NULL);
-
-	// purple_cmd_register("join", "s", PURPLE_CMD_P_PLUGIN, PURPLE_CMD_FLAG_CHAT | PURPLE_CMD_FLAG_IM |
-	// PURPLE_CMD_FLAG_PROTOCOL_ONLY | PURPLE_CMD_FLAG_ALLOW_WRONG_ARGS,
-	// DISCORD_PLUGIN_ID, discord_slash_command,
-	// _("join <name>:  Join a channel"), NULL);
-
-	// purple_cmd_register("kick", "s", PURPLE_CMD_P_PLUGIN, PURPLE_CMD_FLAG_CHAT |
-	// PURPLE_CMD_FLAG_PROTOCOL_ONLY | PURPLE_CMD_FLAG_ALLOW_WRONG_ARGS,
-	// DISCORD_PLUGIN_ID, discord_slash_command,
-	// _("kick <username>:  Remove someone from channel"), NULL);
 
 	purple_cmd_register("leave", "", PURPLE_CMD_P_PLUGIN, PURPLE_CMD_FLAG_CHAT |
 	                    PURPLE_CMD_FLAG_PROTOCOL_ONLY | PURPLE_CMD_FLAG_ALLOW_WRONG_ARGS,
@@ -3590,31 +3521,6 @@ plugin_load(PurplePlugin *plugin, GError **error)
 	                    PURPLE_CMD_FLAG_PROTOCOL_ONLY | PURPLE_CMD_FLAG_ALLOW_WRONG_ARGS,
 	                    DISCORD_PLUGIN_ID, discord_cmd_leave,
 	                    _("part:  Leave the channel"), NULL);
-
-	// purple_cmd_register("me", "s", PURPLE_CMD_P_PLUGIN, PURPLE_CMD_FLAG_CHAT | PURPLE_CMD_FLAG_IM |
-	// PURPLE_CMD_FLAG_PROTOCOL_ONLY | PURPLE_CMD_FLAG_ALLOW_WRONG_ARGS,
-	// DISCORD_PLUGIN_ID, discord_slash_command,
-	// _("me <action>:  Display action text"), NULL);
-
-	// purple_cmd_register("msg", "ss", PURPLE_CMD_P_PLUGIN, PURPLE_CMD_FLAG_CHAT | PURPLE_CMD_FLAG_IM |
-	// PURPLE_CMD_FLAG_PROTOCOL_ONLY | PURPLE_CMD_FLAG_ALLOW_WRONG_ARGS,
-	// DISCORD_PLUGIN_ID, discord_slash_command,
-	// _("msg <username> <message>:  Direct message someone"), NULL);
-
-	// purple_cmd_register("mute", "s", PURPLE_CMD_P_PLUGIN, PURPLE_CMD_FLAG_CHAT |
-	// PURPLE_CMD_FLAG_PROTOCOL_ONLY | PURPLE_CMD_FLAG_ALLOW_WRONG_ARGS,
-	// DISCORD_PLUGIN_ID, discord_slash_command,
-	// _("mute <username>:  Mute someone in channel"), NULL);
-
-	// purple_cmd_register("unmute", "s", PURPLE_CMD_P_PLUGIN, PURPLE_CMD_FLAG_CHAT |
-	// PURPLE_CMD_FLAG_PROTOCOL_ONLY | PURPLE_CMD_FLAG_ALLOW_WRONG_ARGS,
-	// DISCORD_PLUGIN_ID, discord_slash_command,
-	// _("unmute <username>:  Un-mute someone in channel"), NULL);
-
-	// purple_cmd_register("topic", "s", PURPLE_CMD_P_PLUGIN, PURPLE_CMD_FLAG_CHAT |
-	// PURPLE_CMD_FLAG_PROTOCOL_ONLY | PURPLE_CMD_FLAG_ALLOW_WRONG_ARGS,
-	// DISCORD_PLUGIN_ID, discord_slash_command,
-	// _("topic <description>:  Set the channel topic description"), NULL);
 
 	return TRUE;
 }
@@ -3649,11 +3555,6 @@ libpurple2_plugin_unload(PurplePlugin *plugin)
 static void
 plugin_init(PurplePlugin *plugin)
 {
-	// PurpleAccountOption *option;
-	// PurplePluginInfo *info = plugin->info;
-	// PurplePluginProtocolInfo *prpl_info = info->extra_info;
-	//purple_signal_connect(purple_get_core(), "uri-handler", plugin, PURPLE_CALLBACK(discord_uri_handler), NULL);
-
 	PurplePluginInfo *info;
 	PurplePluginProtocolInfo *prpl_info = g_new0(PurplePluginProtocolInfo, 1);
 
@@ -3695,7 +3596,7 @@ plugin_init(PurplePlugin *plugin)
 	prpl_info->send_typing = discord_send_typing;
 	prpl_info->join_chat = discord_join_chat;
 	prpl_info->get_chat_name = discord_get_chat_name;
-	prpl_info->chat_invite = discord_chat_invite;
+	//prpl_info->chat_invite = discord_chat_invite;
 	prpl_info->chat_send = discord_chat_send;
 	prpl_info->set_chat_topic = discord_chat_set_topic;
 	prpl_info->add_buddy = discord_add_buddy;
@@ -3795,7 +3696,7 @@ discord_protocol_chat_iface_init(PurpleProtocolChatIface *prpl_info)
 	prpl_info->info_defaults = discord_chat_info_defaults;
 	prpl_info->join = discord_join_chat;
 	prpl_info->get_name = discord_get_chat_name;
-	prpl_info->invite = discord_chat_invite;
+	//prpl_info->invite = discord_chat_invite;
 	prpl_info->set_topic = discord_chat_set_topic;
 }
 
