@@ -376,19 +376,6 @@ static gboolean discord_permission_is_role(JsonObject *json)
 	return purple_strequal(json_object_get_string_member(json, "type"), "role");
 }
 
-void
-discord_dump_int64_hashtable_keys(GHashTable *hash_table)
-{
-	GHashTableIter iter;
-	guint64 *key;
-	gpointer value;
-
-	g_hash_table_iter_init(&iter, hash_table);
-	while(g_hash_table_iter_next(&iter, (gpointer *) &key, &value)) {
-		purple_debug_info("discord", "%" G_GUINT64_FORMAT, *key);
-	}
-}
-
 static DiscordUser *discord_get_user_name(DiscordAccount *da, int discriminator, gchar *name)
 {
 	GHashTableIter iter;
@@ -574,30 +561,6 @@ static gchar *
 discord_combine_username(const gchar *username, const gchar *discriminator)
 {
 	return g_strconcat(username, "#", discriminator, NULL);
-}
-
-gchar *
-discord_string_get_chunk(const gchar *haystack, gsize len, const gchar *start, const gchar *end)
-{
-	const gchar *chunk_start, *chunk_end;
-	g_return_val_if_fail(haystack && start && end, NULL);
-
-	if (len > 0) {
-		chunk_start = g_strstr_len(haystack, len, start);
-	} else {
-		chunk_start = strstr(haystack, start);
-	}
-	g_return_val_if_fail(chunk_start, NULL);
-	chunk_start += strlen(start);
-
-	if (len > 0) {
-		chunk_end = g_strstr_len(chunk_start, len - (chunk_start - haystack), end);
-	} else {
-		chunk_end = strstr(chunk_start, end);
-	}
-	g_return_val_if_fail(chunk_end, NULL);
-
-	return g_strndup(chunk_start, chunk_end - chunk_start);
 }
 
 #if PURPLE_VERSION_CHECK(3, 0, 0)
@@ -945,11 +908,11 @@ discord_replace_channel(const GMatchInfo *match, GString *result, gpointer user_
 	gchar *match_string = g_match_info_fetch(match, 0);
 	gchar *channel_id = g_match_info_fetch(match, 1);
 	DiscordChannel *channel = discord_get_channel_global(da, channel_id);
-	DiscordGuild *guild;
 
 	if (channel) {
 		//TODO make this a clickable link
-		guild = discord_get_guild_int(da, channel->guild_id);
+		DiscordGuild *guild = discord_get_guild_int(da, channel->guild_id);
+
 		if (guild) {
 			g_string_append_printf(result, "%s", discord_normalise_room_name(guild->name, channel->name));
 		} else {
@@ -1654,13 +1617,8 @@ discord_build_groups_from_blist(DiscordAccount *ya)
 			channel_id = purple_blist_node_get_string(node, "channel_id");
 			if (name == NULL || channel_id == NULL || purple_strequal(name, channel_id)) {
 				GHashTable *components = purple_chat_get_components(chat);
-				if (components != NULL) {
-					if (channel_id == NULL) {
-						channel_id = g_hash_table_lookup(components, "id");
-					}
-					if (name == NULL || purple_strequal(name, channel_id)) {
-						name = g_hash_table_lookup(components, "name");
-					}
+				if (components != NULL && channel_id == NULL) {
+					channel_id = g_hash_table_lookup(components, "id");
 				}
 			}
 		} else if (PURPLE_IS_BUDDY(node)) {
@@ -2108,7 +2066,6 @@ discord_process_frame(DiscordAccount *da, const gchar *frame)
 {
 	JsonParser *parser = json_parser_new();
 	JsonNode *root;
-	JsonObject *obj;
 	gint64 opcode;
 
 	purple_debug_info("discord", "got frame data: %s\n", frame);
@@ -2121,7 +2078,7 @@ discord_process_frame(DiscordAccount *da, const gchar *frame)
 	root = json_parser_get_root(parser);
 
 	if (root != NULL) {
-		obj = json_node_get_object(root);
+		JsonObject *obj = json_node_get_object(root);
 
 		opcode = json_object_get_int_member(obj, "op");
 		switch(opcode) {
@@ -2479,19 +2436,10 @@ discord_start_socket(DiscordAccount *da)
 	da->websocket = purple_ssl_connect(da->account, DISCORD_GATEWAY_SERVER, DISCORD_GATEWAY_PORT, discord_socket_connected, discord_socket_failed, da);
 }
 
-/* TODO: Implement correctly */
-
 static void
 discord_chat_leave(PurpleConnection *pc, int id)
 {
-	PurpleChatConversation *chatconv;
-	//todo check source
-	chatconv = purple_conversations_find_chat(pc, id);
-	guint64 room_id = *(guint64 *)purple_conversation_get_data(PURPLE_CONVERSATION(chatconv), "id");
-	if (!room_id) {
-		//todo fixme?
-		room_id = to_int(purple_conversation_get_name(PURPLE_CONVERSATION(chatconv)));
-	}
+	/* TODO: Implement chat leave (if it's even possible?) */
 }
 
 static GList *
@@ -2817,9 +2765,7 @@ discord_join_chat(PurpleConnection *pc, GHashTable *chatdata)
 	gchar *name = (gchar *) g_hash_table_lookup(chatdata, "name");
 
 	if (name == NULL) {
-		if (channel != NULL) {
-			name = channel->name;
-		}
+		name = channel->name;
 	}
 
 	if (name != NULL) {
@@ -3095,17 +3041,15 @@ discord_send_im(PurpleConnection *pc,
 
 	//Create DM if there isn't one
 	if (room_id == NULL) {
-		JsonObject *data;
 #if !PURPLE_VERSION_CHECK(3, 0, 0)
 		PurpleMessage *msg = purple_message_new_outgoing(who, message, flags);
 #endif
 		DiscordUser *user = discord_get_user_fullname(da, who);
-		gchar *postdata;
 
 		if (user) {
-			data = json_object_new();
+			JsonObject *data = json_object_new();
 			json_object_set_int_member(data, "recipient_id", user->id);
-			postdata = json_object_to_string(data);
+			gchar *postdata = json_object_to_string(data);
 
 			discord_fetch_url(da, "https://" DISCORD_API_SERVER "/api/v6/users/@me/channels", postdata, discord_created_direct_message_send, msg);
 
@@ -3491,7 +3435,7 @@ static PurpleCmdRet
 discord_cmd_leave(PurpleConversation *conv, const gchar *cmd, gchar **args, gchar **error, gpointer data)
 {
 	PurpleConnection *pc = NULL;
-	int id = -1;
+	int id;
 
 	pc = purple_conversation_get_connection(conv);
 	id = purple_chat_conversation_get_id(PURPLE_CHAT_CONVERSATION(conv));
@@ -3680,6 +3624,7 @@ discord_protocol_class_init(PurpleProtocolClass *prpl_info)
 	prpl_info->status_types = discord_status_types;
 	prpl_info->list_icon = discord_list_icon;
 }
+
 
 static void
 discord_protocol_im_iface_init(PurpleProtocolIMIface *prpl_info)
