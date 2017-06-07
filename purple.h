@@ -97,7 +97,8 @@ json_object_to_string(JsonObject *obj)
 #define PURPLE_CONNECTION_FLAG_NO_BGCOLOR  PURPLE_CONNECTION_NO_BGCOLOR
 #define PURPLE_CONNECTION_FLAG_NO_FONTSIZE PURPLE_CONNECTION_NO_FONTSIZE
 #define PURPLE_CONNECTION_FLAG_NO_IMAGES   PURPLE_CONNECTION_NO_IMAGES
-#define purple_connection_set_flags(pc, f)      ((pc)->flags = (f)) #define purple_connection_get_flags(pc)         ((pc)->flags)
+#define purple_connection_set_flags(pc, f)      ((pc)->flags = (f))
+#define purple_connection_get_flags(pc)         ((pc)->flags)
 #define purple_blist_find_group        purple_find_group
 #define purple_protocol_action_get_connection(action)  ((PurpleConnection *) (action)->context)
 #define purple_protocol_action_new                     purple_plugin_action_new

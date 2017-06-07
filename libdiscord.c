@@ -1016,7 +1016,6 @@ discord_fetch_url(DiscordAccount *da, const gchar *url, const gchar *postdata, D
 
 static void discord_socket_write_json(DiscordAccount *ya, JsonObject *data);
 static GHashTable *discord_chat_info_defaults(PurpleConnection *pc, const char *chatname);
-static void discord_mark_room_messages_read(DiscordAccount *ya, guint64 room_id);
 
 static void
 discord_send_auth(DiscordAccount *da)
@@ -1837,7 +1836,6 @@ discord_build_groups_from_blist(DiscordAccount *ya)
 
 static guint discord_conv_send_typing(PurpleConversation *conv, PurpleIMTypingState state, DiscordAccount *ya);
 static gulong chat_conversation_typing_signal = 0;
-static void discord_mark_conv_seen(PurpleConversation *conv, PurpleConversationUpdateType type);
 static gulong conversation_updated_signal = 0;
 
 
@@ -2210,7 +2208,7 @@ discord_login(PurpleAccount *account)
 		chat_conversation_typing_signal = purple_signal_connect(purple_conversations_get_handle(), "chat-conversation-typing", purple_connection_get_protocol(pc), PURPLE_CALLBACK(discord_conv_send_typing), NULL);
 	}
 	if (!conversation_updated_signal) {
-		conversation_updated_signal = purple_signal_connect(purple_conversations_get_handle(), "conversation-updated", purple_connection_get_protocol(pc), PURPLE_CALLBACK(discord_mark_conv_seen), NULL);
+//		conversation_updated_signal = purple_signal_connect(purple_conversations_get_handle(), "conversation-updated", purple_connection_get_protocol(pc), PURPLE_CALLBACK(discord_mark_conv_seen), NULL);
 	}
 }
 
@@ -3042,33 +3040,6 @@ discord_join_chat(PurpleConnection *pc, GHashTable *chatdata)
 		url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/v6/channels/%" G_GUINT64_FORMAT "/messages?limit=100&after=%" G_GUINT64_FORMAT, id, last_message_id);
 		discord_fetch_url(da, url, NULL, discord_got_history_of_room, channel);
 		g_free(url);
-	}
-}
-
-static void
-discord_mark_conv_seen(PurpleConversation *conv, PurpleConversationUpdateType type)
-{
-	PurpleConnection *pc;
-	DiscordAccount *ya;
-
-	if (type != PURPLE_CONVERSATION_UPDATE_UNSEEN)
-		return;
-
-	pc = purple_conversation_get_connection(conv);
-	if (!PURPLE_CONNECTION_IS_CONNECTED(pc))
-		return;
-
-	if (g_strcmp0(purple_protocol_get_id(purple_connection_get_protocol(pc)), DISCORD_PLUGIN_ID))
-		return;
-
-	ya = purple_connection_get_protocol_data(pc);
-
-	guint64 *room_id_ptr = purple_conversation_get_data(conv, "id");
-	guint64 room_id = 0;
-	if(room_id_ptr){
-		room_id = *room_id_ptr;
-	}else{
-		room_id = to_int(g_hash_table_lookup(ya->one_to_ones_rev, purple_conversation_get_name(conv)));
 	}
 }
 
