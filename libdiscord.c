@@ -1431,7 +1431,8 @@ discord_underscore_match(const gchar* html, int i)
 static gchar*
 discord_convert_markdown(const gchar* html)
 {
-	GString* out = g_string_sized_new(strlen(html) * 2);
+	guint html_len = strlen(html);
+	GString* out = g_string_sized_new(html_len * 2);
 
 	gboolean s_bold = FALSE;
 	gboolean s_italics = FALSE;
@@ -1440,7 +1441,7 @@ discord_convert_markdown(const gchar* html)
 	gboolean s_codeblock = FALSE;
 	gboolean s_codebit = FALSE;
 
-	for(int i = 0; i < strlen(html); ++i) {
+	for(guint i = 0; i < html_len; ++i) {
 		char c = html[i];
 
 		if((s_codeblock || s_codebit) && c != '`') {
