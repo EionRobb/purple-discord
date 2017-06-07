@@ -17,7 +17,7 @@
  *   along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "purple.h"
+#include "compat.h"
 
 #define DISCORD_PLUGIN_ID "prpl-eionrobb-discord"
 #ifndef DISCORD_PLUGIN_VERSION
