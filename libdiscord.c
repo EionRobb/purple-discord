@@ -1362,6 +1362,9 @@ static void discord_create_relationship(DiscordAccount *da, JsonObject *json);
 static void discord_got_relationships(DiscordAccount *da, JsonNode *node, gpointer user_data);
 static void discord_got_private_channels(DiscordAccount *da, JsonNode *node, gpointer user_data);
 static void discord_got_presences(DiscordAccount *da, JsonNode *node, gpointer user_data);
+static void discord_got_read_states(DiscordAccount *da, JsonNode *node, gpointer user_data);
+static void discord_got_history_static(DiscordAccount *da, JsonNode *node, gpointer user_data);
+static void discord_got_history_of_room(DiscordAccount *da, JsonNode *node, gpointer user_data);
 static void discord_populate_guild(DiscordAccount *da, JsonObject *guild);
 static void discord_got_guilds(DiscordAccount *da, JsonNode *node, gpointer user_data);
 static void discord_got_avatar(DiscordAccount *da, JsonNode *node, gpointer user_data);
@@ -1793,6 +1796,7 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		discord_got_private_channels(da, json_object_get_member(data, "private_channels"), NULL);
 		discord_got_presences(da, json_object_get_member(data, "presences"), NULL);
 		discord_got_guilds(da, json_object_get_member(data, "guilds"), NULL);
+		discord_got_read_states(da, json_object_get_member(data, "read_state"), NULL);
 
 		purple_connection_set_state(da->pc, PURPLE_CONNECTION_CONNECTED);
 
@@ -2296,6 +2300,45 @@ discord_got_guilds(DiscordAccount *da, JsonNode *node, gpointer user_data)
 	json_object_set_array_member(obj, "d", guild_ids);
 
 	discord_socket_write_json(da, obj);
+}
+
+/* If count is explicitly specified, use a static request (DMs).
+ * If it is not, use a dynamic request (rooms).
+ * TODO: Possible edge case if there are over 100 incoming DMs?
+ */
+
+static void
+discord_get_history(DiscordAccount *da, const gchar *channel, const gchar *last, int count)
+{
+	gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/v6/channels/%s/messages?limit=%d&after=%s", channel, count ? count : 100, last);
+	discord_fetch_url(da, url, NULL, count ? discord_got_history_static : discord_got_history_of_room, count ? NULL : discord_get_channel_global(da, channel));
+	g_free(url);
+}
+
+static void
+discord_got_read_states(DiscordAccount *da, JsonNode *node, gpointer user_data)
+{
+	JsonArray *states = json_node_get_array(node);
+	guint len = json_array_get_length(states);
+
+	for(int i = len - 1; i >= 0; i--) {
+		JsonObject *state = json_array_get_object_element(states, i);
+
+		const gchar *channel = json_object_get_string_member(state, "id");
+		const gchar *last_id = json_object_get_string_member(state, "last_message_id");
+		guint mentions = json_object_get_int_member(state, "mention_count");
+
+		if(mentions) {
+			gboolean isDM = g_hash_table_contains(da->one_to_ones, channel);
+
+			if(isDM) {
+				discord_get_history(da, channel, last_id, mentions * 2);
+			} else {
+				/* TODO: fetch channel history */
+				purple_debug_misc("discord", "%d unhandled mentions in channel %s\n", mentions, discord_get_channel_global(da, channel)->name);
+			}
+		}
+	}
 }
 
 // static void
@@ -3050,6 +3093,20 @@ discord_got_history_of_room(DiscordAccount *da, JsonNode *node, gpointer user_da
 	}
 }
 
+/* identical endpoint as above, but not rolling */
+
+static void
+discord_got_history_static(DiscordAccount *da, JsonNode *node, gpointer user_data)
+{
+	JsonArray *messages = json_node_get_array(node);
+	gint i, len = json_array_get_length(messages);
+
+	for (i = len - 1; i >= 0; i--) {
+		JsonObject *message = json_array_get_object_element(messages, i);
+
+		discord_process_message(da, message);
+	}
+}
 
 // libpurple can't store a 64bit int on a 32bit machine, so convert to something more usable instead (puke)
 //  also needs to work cross platform, in case the accounts.xml is being shared (double puke)
