@@ -510,8 +510,7 @@ static DiscordChannel *discord_get_channel_global(DiscordAccount *da, const gcha
 	return discord_get_channel_global_int(da, to_int(id));
 }
 
-PurpleChatUserFlags
-discord_get_user_flags(DiscordAccount *da, const gchar *guild_id, const gchar *username)
+PurpleChatUserFlags discord_get_user_flags(DiscordAccount *da, const gchar *guild_id, const gchar *username)
 {
 	DiscordGuild *guild = discord_get_guild(da, guild_id);
 	DiscordUser *user = discord_get_user_fullname(da, username);
@@ -1459,8 +1458,7 @@ static gchar * discord_roomlist_serialize(PurpleRoomlistRoom *room)
 	return g_strdup(id);
 }
 
-PurpleRoomlist *
-discord_roomlist_get_list(PurpleConnection *pc)
+PurpleRoomlist * discord_roomlist_get_list(PurpleConnection *pc)
 {
 	DiscordAccount *da = purple_connection_get_protocol_data(pc);
 	PurpleRoomlist *roomlist;
@@ -3213,8 +3211,7 @@ static gchar * discord_status_text(PurpleBuddy *buddy)
 	return NULL;
 }
 
-const gchar *
-discord_list_emblem(PurpleBuddy *buddy)
+const gchar * discord_list_emblem(PurpleBuddy *buddy)
 {
 	PurpleAccount *account = purple_buddy_get_account(buddy);
 
