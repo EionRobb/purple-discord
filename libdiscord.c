@@ -557,15 +557,13 @@ typedef struct {
 	gpointer user_data;
 } DiscordProxyConnection;
 
-static gchar *
-discord_combine_username(const gchar *username, const gchar *discriminator)
+static gchar * discord_combine_username(const gchar *username, const gchar *discriminator)
 {
 	return g_strconcat(username, "#", discriminator, NULL);
 }
 
 #if PURPLE_VERSION_CHECK(3, 0, 0)
-static void
-discord_update_cookies(DiscordAccount *ya, const GList *cookie_headers)
+static void discord_update_cookies(DiscordAccount *ya, const GList *cookie_headers)
 {
 	const gchar *cookie_start;
 	const gchar *cookie_end;
@@ -592,8 +590,7 @@ discord_update_cookies(DiscordAccount *ya, const GList *cookie_headers)
 }
 
 #else
-static void
-discord_update_cookies(DiscordAccount *ya, const gchar *headers)
+static void discord_update_cookies(DiscordAccount *ya, const gchar *headers)
 {
 	const gchar *cookie_start;
 	const gchar *cookie_end;
@@ -626,14 +623,12 @@ discord_update_cookies(DiscordAccount *ya, const gchar *headers)
 }
 #endif
 
-static void
-discord_cookie_foreach_cb(gchar *cookie_name, gchar *cookie_value, GString *str)
+static void discord_cookie_foreach_cb(gchar *cookie_name, gchar *cookie_value, GString *str)
 {
 	g_string_append_printf(str, "%s=%s;", cookie_name, cookie_value);
 }
 
-static gchar *
-discord_cookies_to_string(DiscordAccount *ya)
+static gchar * discord_cookies_to_string(DiscordAccount *ya)
 {
 	GString *str;
 
@@ -644,8 +639,7 @@ discord_cookies_to_string(DiscordAccount *ya)
 	return g_string_free(str, FALSE);
 }
 
-static void
-discord_response_callback(PurpleHttpConnection *http_conn,
+static void discord_response_callback(PurpleHttpConnection *http_conn,
 #if PURPLE_VERSION_CHECK(3, 0, 0)
                           PurpleHttpResponse *response, gpointer user_data)
 {
@@ -712,8 +706,7 @@ discord_response_callback(PurpleHttpConnection *http_conn,
 	g_free(conn);
 }
 
-static void
-discord_fetch_url_with_method(DiscordAccount *ya, const gchar *method, const gchar *url, const gchar *postdata, DiscordProxyCallbackFunc callback, gpointer user_data)
+static void discord_fetch_url_with_method(DiscordAccount *ya, const gchar *method, const gchar *url, const gchar *postdata, DiscordProxyCallbackFunc callback, gpointer user_data)
 {
 	PurpleAccount *account;
 	DiscordProxyConnection *conn;
@@ -816,8 +809,7 @@ discord_fetch_url_with_method(DiscordAccount *ya, const gchar *method, const gch
 	g_free(cookies);
 }
 
-static void
-discord_fetch_url(DiscordAccount *da, const gchar *url, const gchar *postdata, DiscordProxyCallbackFunc callback, gpointer user_data)
+static void discord_fetch_url(DiscordAccount *da, const gchar *url, const gchar *postdata, DiscordProxyCallbackFunc callback, gpointer user_data)
 {
 	discord_fetch_url_with_method(da, (postdata ? "POST" : "GET"), url, postdata, callback, user_data);
 }
@@ -825,8 +817,7 @@ discord_fetch_url(DiscordAccount *da, const gchar *url, const gchar *postdata, D
 static void discord_socket_write_json(DiscordAccount *ya, JsonObject *data);
 static GHashTable *discord_chat_info_defaults(PurpleConnection *pc, const char *chatname);
 
-static void
-discord_send_auth(DiscordAccount *da)
+static void discord_send_auth(DiscordAccount *da)
 {
 	JsonObject *obj = json_object_new();
 	JsonObject *data = json_object_new();
@@ -869,8 +860,7 @@ discord_send_auth(DiscordAccount *da)
 	discord_socket_write_json(da, obj);
 }
 
-static gboolean
-discord_send_heartbeat(gpointer userdata)
+static gboolean discord_send_heartbeat(gpointer userdata)
 {
 	DiscordAccount *da = userdata;
 	JsonObject *obj = json_object_new();
@@ -901,8 +891,7 @@ static void discord_get_avatar(DiscordAccount *da, DiscordUser *user);
 
 static const gchar *discord_normalise_room_name(const gchar *guild_name, const gchar *name);
 
-static gboolean
-discord_replace_channel(const GMatchInfo *match, GString *result, gpointer user_data)
+static gboolean discord_replace_channel(const GMatchInfo *match, GString *result, gpointer user_data)
 {
 	DiscordAccount *da = user_data;
 	gchar *match_string = g_match_info_fetch(match, 0);
@@ -928,8 +917,7 @@ discord_replace_channel(const GMatchInfo *match, GString *result, gpointer user_
 	return FALSE;
 }
 
-static gboolean
-discord_replace_emoji(const GMatchInfo *match, GString *result, gpointer user_data)
+static gboolean discord_replace_emoji(const GMatchInfo *match, GString *result, gpointer user_data)
 {
 	gchar *alt_text = g_match_info_fetch(match, 1);
 	gchar *emoji_id = g_match_info_fetch(match, 2);
@@ -947,8 +935,7 @@ discord_replace_emoji(const GMatchInfo *match, GString *result, gpointer user_da
 
 /* workaround errata in Discord's (users') markdown implementation */
 
-static gboolean
-discord_underscore_match(const gchar* html, int i)
+static gboolean discord_underscore_match(const gchar* html, int i)
 {
 	while(html[i] != ' ' && html[i]) {
 		if(html[i++] == '_') {
@@ -959,8 +946,7 @@ discord_underscore_match(const gchar* html, int i)
 	return FALSE;
 }
 
-static gchar*
-discord_convert_markdown(const gchar* html)
+static gchar* discord_convert_markdown(const gchar* html)
 {
 	guint html_len = strlen(html);
 	GString* out = g_string_sized_new(html_len * 2);
@@ -1028,8 +1014,7 @@ discord_convert_markdown(const gchar* html)
 	return g_string_free(out, FALSE);
 }
 
-static guint64
-discord_process_message(DiscordAccount *da, JsonObject *data)
+static guint64 discord_process_message(DiscordAccount *da, JsonObject *data)
 {
 	DiscordUser *author = discord_upsert_user(da->new_users, json_object_get_object_member(data, "author"));
 
@@ -1189,8 +1174,7 @@ discord_process_message(DiscordAccount *da, JsonObject *data)
 	return to_int(json_object_get_string_member(data, "id"));
 }
 
-static void
-discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data)
+static void discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data)
 {
 	discord_get_or_create_default_group();
 
@@ -1423,8 +1407,7 @@ PurpleGroup* discord_get_or_create_default_group()
 	return discord_group;
 }
 
-static const gchar *
-discord_normalise_room_name(const gchar *guild_name, const gchar *name)
+static const gchar * discord_normalise_room_name(const gchar *guild_name, const gchar *name)
 {
 	gchar *channel_name = g_strconcat(guild_name, "#", name, NULL);
 	static gchar *old_name = NULL;
@@ -1437,8 +1420,7 @@ discord_normalise_room_name(const gchar *guild_name, const gchar *name)
 	return old_name;
 }
 
-static void
-discord_roomlist_got_list(DiscordAccount *da, DiscordGuild *guild, gpointer user_data)
+static void discord_roomlist_got_list(DiscordAccount *da, DiscordGuild *guild, gpointer user_data)
 {
 	PurpleRoomlist *roomlist = user_data;
 	PurpleRoomlistRoom *category = purple_roomlist_room_new(PURPLE_ROOMLIST_ROOMTYPE_CATEGORY, guild->name, NULL);
@@ -1469,8 +1451,7 @@ discord_roomlist_got_list(DiscordAccount *da, DiscordGuild *guild, gpointer user
 	}
 }
 
-static gchar *
-discord_roomlist_serialize(PurpleRoomlistRoom *room)
+static gchar * discord_roomlist_serialize(PurpleRoomlistRoom *room)
 {
 	GList *fields = purple_roomlist_room_get_fields(room);
 	const gchar *id = (const gchar *) fields->data;
@@ -1582,15 +1563,13 @@ discord_set_idle(PurpleConnection *pc, int idle_time)
 
 static void discord_start_socket(DiscordAccount *ya);
 
-static void
-discord_restart_channel(DiscordAccount *da)
+static void discord_restart_channel(DiscordAccount *da)
 {
 	purple_connection_set_state(da->pc, PURPLE_CONNECTION_CONNECTING);
 	discord_start_socket(da);
 }
 
-static void
-discord_build_groups_from_blist(DiscordAccount *ya)
+static void discord_build_groups_from_blist(DiscordAccount *ya)
 {
 	PurpleBlistNode *node;
 
@@ -1626,8 +1605,7 @@ typedef struct {
 	DiscordUser *user;
 } DiscordUserInviteResponseStore;
 
-static void
-discord_friends_auth_accept(
+static void discord_friends_auth_accept(
 #if PURPLE_VERSION_CHECK(3, 0, 0)
     const gchar *response,
 #endif
@@ -1644,8 +1622,7 @@ discord_friends_auth_accept(
 	g_free(store);
 }
 
-static void
-discord_friends_auth_reject(
+static void discord_friends_auth_reject(
 #if PURPLE_VERSION_CHECK(3, 0, 0)
     const gchar *response,
 #endif
@@ -1690,8 +1667,7 @@ static void discord_create_relationship(DiscordAccount *da, JsonObject *json)
 	g_free(merged_username);
 }
 
-static void
-discord_got_relationships(DiscordAccount *da, JsonNode *node, gpointer user_data)
+static void discord_got_relationships(DiscordAccount *da, JsonNode *node, gpointer user_data)
 {
 	JsonArray *relationships = json_node_get_array(node);
 	guint len = json_array_get_length(relationships);
@@ -1701,8 +1677,7 @@ discord_got_relationships(DiscordAccount *da, JsonNode *node, gpointer user_data
 	}
 }
 
-static void
-discord_got_private_channels(DiscordAccount *da, JsonNode *node, gpointer user_data)
+static void discord_got_private_channels(DiscordAccount *da, JsonNode *node, gpointer user_data)
 {
 	JsonArray *private_channels = json_node_get_array(node);
 	gint i;
@@ -1729,8 +1704,7 @@ discord_got_private_channels(DiscordAccount *da, JsonNode *node, gpointer user_d
 	}
 }
 
-static void
-discord_got_presences(DiscordAccount *da, JsonNode *node, gpointer user_data)
+static void discord_got_presences(DiscordAccount *da, JsonNode *node, gpointer user_data)
 {
 	JsonArray *presences = json_node_get_array(node);
 	gint i;
@@ -1754,8 +1728,7 @@ discord_got_presences(DiscordAccount *da, JsonNode *node, gpointer user_data)
 	}
 }
 
-static void
-discord_populate_guild(DiscordAccount *da, JsonObject *guild)
+static void discord_populate_guild(DiscordAccount *da, JsonObject *guild)
 {
 	DiscordGuild *g = discord_upsert_guild(da->new_guilds, guild);
 
@@ -1780,8 +1753,7 @@ discord_populate_guild(DiscordAccount *da, JsonObject *guild)
 	}
 }
 
-static void
-discord_got_guilds(DiscordAccount *da, JsonNode *node, gpointer user_data)
+static void discord_got_guilds(DiscordAccount *da, JsonNode *node, gpointer user_data)
 {
 	JsonArray *guilds = json_node_get_array(node);
 	guint len = json_array_get_length(guilds);
@@ -1807,16 +1779,14 @@ discord_got_guilds(DiscordAccount *da, JsonNode *node, gpointer user_data)
  * TODO: Possible edge case if there are over 100 incoming DMs?
  */
 
-static void
-discord_get_history(DiscordAccount *da, const gchar *channel, const gchar *last, int count)
+static void discord_get_history(DiscordAccount *da, const gchar *channel, const gchar *last, int count)
 {
 	gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/v6/channels/%s/messages?limit=%d&after=%s", channel, count ? count : 100, last);
 	discord_fetch_url(da, url, NULL, count ? discord_got_history_static : discord_got_history_of_room, count ? NULL : discord_get_channel_global(da, channel));
 	g_free(url);
 }
 
-static void
-discord_got_read_states(DiscordAccount *da, JsonNode *node, gpointer user_data)
+static void discord_got_read_states(DiscordAccount *da, JsonNode *node, gpointer user_data)
 {
 	JsonArray *states = json_node_get_array(node);
 	guint len = json_array_get_length(states);
@@ -1843,8 +1813,7 @@ discord_got_read_states(DiscordAccount *da, JsonNode *node, gpointer user_data)
 
 static void discord_login_response(DiscordAccount *da, JsonNode *node, gpointer user_data);
 
-static void
-discord_mfa_text_entry(gpointer user_data, const gchar *code)
+static void discord_mfa_text_entry(gpointer user_data, const gchar *code)
 {
 	DiscordAccount *da = user_data;
 	JsonObject *data = json_object_new();
@@ -1863,16 +1832,14 @@ discord_mfa_text_entry(gpointer user_data, const gchar *code)
 	da->mfa_ticket = NULL;
 }
 
-static void
-discord_mfa_cancel(gpointer user_data)
+static void discord_mfa_cancel(gpointer user_data)
 {
 	DiscordAccount *da = user_data;
 
 	purple_connection_error(da->pc, PURPLE_CONNECTION_ERROR_AUTHENTICATION_FAILED, "Cancelled 2FA auth");
 }
 
-static void
-discord_login_response(DiscordAccount *da, JsonNode *node, gpointer user_data)
+static void discord_login_response(DiscordAccount *da, JsonNode *node, gpointer user_data)
 {
 
 	if (node != NULL) {
@@ -1982,8 +1949,7 @@ discord_login(PurpleAccount *account)
 	}
 }
 
-static void
-discord_close(PurpleConnection *pc)
+static void discord_close(PurpleConnection *pc)
 {
 	DiscordAccount *da = purple_connection_get_protocol_data(pc);
 
@@ -2039,8 +2005,7 @@ discord_close(PurpleConnection *pc)
 	g_free(da);
 }
 
-static gboolean
-discord_process_frame(DiscordAccount *da, const gchar *frame)
+static gboolean discord_process_frame(DiscordAccount *da, const gchar *frame)
 {
 	JsonParser *parser = json_parser_new();
 	JsonNode *root;
@@ -2108,8 +2073,7 @@ discord_process_frame(DiscordAccount *da, const gchar *frame)
 	return TRUE;
 }
 
-static guchar *
-discord_websocket_mask(guchar key[4], const guchar *pload, guint64 psize)
+static guchar * discord_websocket_mask(guchar key[4], const guchar *pload, guint64 psize)
 {
 	guint64 i;
 	guchar *ret = g_new0(guchar, psize);
@@ -2121,8 +2085,7 @@ discord_websocket_mask(guchar key[4], const guchar *pload, guint64 psize)
 	return ret;
 }
 
-static void
-discord_socket_write_data(DiscordAccount *ya, guchar *data, gsize data_len, guchar type)
+static void discord_socket_write_data(DiscordAccount *ya, guchar *data, gsize data_len, guchar type)
 {
 	guchar *full_data;
 	guint len_size = 1;
@@ -2170,8 +2133,7 @@ discord_socket_write_data(DiscordAccount *ya, guchar *data, gsize data_len, guch
 }
 
 /* takes ownership of data parameter */
-static void
-discord_socket_write_json(DiscordAccount *rca, JsonObject *data)
+static void discord_socket_write_json(DiscordAccount *rca, JsonObject *data)
 {
 	JsonNode *node;
 	gchar *str;
@@ -2199,8 +2161,7 @@ discord_socket_write_json(DiscordAccount *rca, JsonObject *data)
 	g_free(str);
 }
 
-static void
-discord_socket_got_data(gpointer userdata, PurpleSslConnection *conn, PurpleInputCondition cond)
+static void discord_socket_got_data(gpointer userdata, PurpleSslConnection *conn, PurpleInputCondition cond)
 {
 	DiscordAccount *ya = userdata;
 	guchar length_code;
@@ -2351,8 +2312,7 @@ discord_socket_got_data(gpointer userdata, PurpleSslConnection *conn, PurpleInpu
 	}
 }
 
-static void
-discord_socket_connected(gpointer userdata, PurpleSslConnection *conn, PurpleInputCondition cond)
+static void discord_socket_connected(gpointer userdata, PurpleSslConnection *conn, PurpleInputCondition cond)
 {
 	DiscordAccount *da = userdata;
 	gchar *websocket_header;
@@ -2378,8 +2338,7 @@ discord_socket_connected(gpointer userdata, PurpleSslConnection *conn, PurpleInp
 	g_free(websocket_header);
 }
 
-static void
-discord_socket_failed(PurpleSslConnection *conn, PurpleSslErrorType errortype, gpointer userdata)
+static void discord_socket_failed(PurpleSslConnection *conn, PurpleSslErrorType errortype, gpointer userdata)
 {
 	DiscordAccount *da = userdata;
 
@@ -2393,8 +2352,7 @@ discord_socket_failed(PurpleSslConnection *conn, PurpleSslErrorType errortype, g
 	}
 }
 
-static void
-discord_start_socket(DiscordAccount *da)
+static void discord_start_socket(DiscordAccount *da)
 {
 	purple_timeout_remove(da->heartbeat_timeout);
 
@@ -2414,14 +2372,12 @@ discord_start_socket(DiscordAccount *da)
 	da->websocket = purple_ssl_connect(da->account, DISCORD_GATEWAY_SERVER, DISCORD_GATEWAY_PORT, discord_socket_connected, discord_socket_failed, da);
 }
 
-static void
-discord_chat_leave(PurpleConnection *pc, int id)
+static void discord_chat_leave(PurpleConnection *pc, int id)
 {
 	/* TODO: Implement chat leave (if it's even possible?) */
 }
 
-static GList *
-discord_chat_info(PurpleConnection *pc)
+static GList * discord_chat_info(PurpleConnection *pc)
 {
 	GList *m = NULL;
 	PurpleProtocolChatEntry *pce;
@@ -2451,8 +2407,7 @@ str_is_number(const gchar *str)
 	return TRUE;
 }
 
-static __attribute__((optimize("O0"))) GHashTable *
-discord_chat_info_defaults(PurpleConnection *pc, const char *chatname)
+static __attribute__((optimize("O0"))) GHashTable * discord_chat_info_defaults(PurpleConnection *pc, const char *chatname)
 {
 	DiscordAccount *da = purple_connection_get_protocol_data(pc);
 	GHashTable *defaults = g_hash_table_new_full(g_str_hash, g_str_equal, NULL, g_free);
@@ -2476,8 +2431,7 @@ discord_chat_info_defaults(PurpleConnection *pc, const char *chatname)
 	return defaults;
 }
 
-static gchar *
-discord_get_chat_name(GHashTable *data)
+static gchar * discord_get_chat_name(GHashTable *data)
 {
 	gchar *temp;
 
@@ -2500,8 +2454,7 @@ discord_get_chat_name(GHashTable *data)
 
 static void discord_set_room_last_id(DiscordAccount *da, guint64 channel_id, guint64 last_id);
 
-static void
-discord_got_history_of_room(DiscordAccount *da, JsonNode *node, gpointer user_data)
+static void discord_got_history_of_room(DiscordAccount *da, JsonNode *node, gpointer user_data)
 {
 	JsonArray *messages = json_node_get_array(node);
 	DiscordChannel *channel = user_data;
@@ -2535,8 +2488,7 @@ discord_got_history_of_room(DiscordAccount *da, JsonNode *node, gpointer user_da
 
 /* identical endpoint as above, but not rolling */
 
-static void
-discord_got_history_static(DiscordAccount *da, JsonNode *node, gpointer user_data)
+static void discord_got_history_static(DiscordAccount *da, JsonNode *node, gpointer user_data)
 {
 	JsonArray *messages = json_node_get_array(node);
 	gint i, len = json_array_get_length(messages);
@@ -2551,8 +2503,7 @@ discord_got_history_static(DiscordAccount *da, JsonNode *node, gpointer user_dat
 // libpurple can't store a 64bit int on a 32bit machine, so convert to something more usable instead (puke)
 //  also needs to work cross platform, in case the accounts.xml is being shared (double puke)
 
-static guint64
-discord_get_room_last_id(DiscordAccount *da, guint64 id)
+static guint64 discord_get_room_last_id(DiscordAccount *da, guint64 id)
 {
 	guint64 last_message_id = da->last_load_last_message_id;
 	PurpleBlistNode *blistnode = NULL;
@@ -2578,8 +2529,7 @@ discord_get_room_last_id(DiscordAccount *da, guint64 id)
 	return last_message_id;
 }
 
-static void
-discord_set_room_last_id(DiscordAccount *da, guint64 id, guint64 last_id)
+static void discord_set_room_last_id(DiscordAccount *da, guint64 id, guint64 last_id)
 {
 	PurpleBlistNode *blistnode = NULL;
 	gchar *channel_id = g_strdup_printf("%" G_GUINT64_FORMAT, id);
@@ -2612,8 +2562,7 @@ typedef struct {
 
 static void discord_join_chat(PurpleConnection *pc, GHashTable *chatdata);
 
-static void
-discord_got_channel_info(DiscordAccount *da, JsonNode *node, gpointer user_data)
+static void discord_got_channel_info(DiscordAccount *da, JsonNode *node, gpointer user_data)
 {
 	JsonObject *channel = json_node_get_object(node);
 	const gchar *id = json_object_get_string_member(channel, "id");
@@ -2721,8 +2670,7 @@ discord_got_channel_info(DiscordAccount *da, JsonNode *node, gpointer user_data)
 
 }
 
-static void
-discord_join_chat(PurpleConnection *pc, GHashTable *chatdata)
+static void discord_join_chat(PurpleConnection *pc, GHashTable *chatdata)
 {
 	DiscordAccount *da = purple_connection_get_protocol_data(pc);
 	PurpleChatConversation *chatconv = NULL;
@@ -2778,8 +2726,7 @@ discord_join_chat(PurpleConnection *pc, GHashTable *chatdata)
 	}
 }
 
-static guint
-discord_conv_send_typing(PurpleConversation *conv, PurpleIMTypingState state, DiscordAccount *ya)
+static guint discord_conv_send_typing(PurpleConversation *conv, PurpleIMTypingState state, DiscordAccount *ya)
 {
 	PurpleConnection *pc;
 	gchar *url;
@@ -2814,8 +2761,7 @@ discord_conv_send_typing(PurpleConversation *conv, PurpleIMTypingState state, Di
 	return 10;
 }
 
-static guint
-discord_send_typing(PurpleConnection *pc, const gchar *who, PurpleIMTypingState state)
+static guint discord_send_typing(PurpleConnection *pc, const gchar *who, PurpleIMTypingState state)
 {
 	PurpleConversation *conv;
 
@@ -2825,8 +2771,7 @@ discord_send_typing(PurpleConnection *pc, const gchar *who, PurpleIMTypingState 
 	return discord_conv_send_typing(conv, state, NULL);
 }
 
-static gboolean
-discord_replace_natural_emoji(const GMatchInfo *match, GString *result, gpointer user_data)
+static gboolean discord_replace_natural_emoji(const GMatchInfo *match, GString *result, gpointer user_data)
 {
 	DiscordGuild *guild = user_data;
 	gchar *emoji = g_match_info_fetch(match, 1);
@@ -2844,16 +2789,14 @@ discord_replace_natural_emoji(const GMatchInfo *match, GString *result, gpointer
 	return FALSE;
 }
 
-static gchar*
-discord_helper_replace(gchar* a, gchar* b, gchar* c)
+static gchar* discord_helper_replace(gchar* a, gchar* b, gchar* c)
 {
 	gchar* temp = purple_strreplace(a, b, c);
 	g_free(a);
 	return temp;
 }
 
-static gchar*
-discord_html_to_markdown(gchar* html)
+static gchar* discord_html_to_markdown(gchar* html)
 {
 	html = discord_helper_replace(html, "<b>", "**");
 	html = discord_helper_replace(html, "</b>", "**");
@@ -2867,8 +2810,7 @@ discord_html_to_markdown(gchar* html)
 	return html;
 }
 
-static gchar*
-discord_escape_md(gchar* markdown)
+static gchar* discord_escape_md(gchar* markdown)
 {
 	markdown = discord_helper_replace(markdown, "\\", "\\\\");
 	markdown = discord_helper_replace(markdown, "_", "\\_");
@@ -2878,8 +2820,7 @@ discord_escape_md(gchar* markdown)
 	return markdown;
 }
 
-static gint
-discord_conversation_send_message(DiscordAccount *da, guint64 room_id, const gchar *message)
+static gint discord_conversation_send_message(DiscordAccount *da, guint64 room_id, const gchar *message)
 {
 	JsonObject *data = json_object_new();
 	gchar *url;
@@ -2921,8 +2862,7 @@ discord_conversation_send_message(DiscordAccount *da, guint64 room_id, const gch
 	return 1;
 }
 
-static gint
-discord_chat_send(PurpleConnection *pc, gint id,
+static gint discord_chat_send(PurpleConnection *pc, gint id,
 #if PURPLE_VERSION_CHECK(3, 0, 0)
                   PurpleMessage *msg)
 {
@@ -2970,8 +2910,7 @@ discord_chat_send(PurpleConnection *pc, gint id,
 	return ret;
 }
 
-static void
-discord_created_direct_message_send(DiscordAccount *da, JsonNode *node, gpointer user_data)
+static void discord_created_direct_message_send(DiscordAccount *da, JsonNode *node, gpointer user_data)
 {
 	PurpleMessage *msg = user_data;
 	JsonObject *result;
@@ -3002,8 +2941,7 @@ discord_created_direct_message_send(DiscordAccount *da, JsonNode *node, gpointer
 	discord_conversation_send_message(da, to_int(room_id), message);
 }
 
-static int
-discord_send_im(PurpleConnection *pc,
+static int discord_send_im(PurpleConnection *pc,
 #if PURPLE_VERSION_CHECK(3, 0, 0)
                 PurpleMessage *msg)
 {
@@ -3042,16 +2980,14 @@ discord_send_im(PurpleConnection *pc,
 	return discord_conversation_send_message(da, to_int(room_id), message);
 }
 
-static void
-discord_chat_set_topic(PurpleConnection *pc, int id, const char *topic)
+static void discord_chat_set_topic(PurpleConnection *pc, int id, const char *topic)
 {
 	/* TODO: implement */
 	//PATCH https:// DISCORD_API_SERVER /api/v6/channels/%s channel
 	//{"name":"test","position":1,"topic":"new topic","bitrate":64000,"user_limit":0}
 }
 
-static void
-discord_got_avatar(DiscordAccount *ya, JsonNode *node, gpointer user_data)
+static void discord_got_avatar(DiscordAccount *ya, JsonNode *node, gpointer user_data)
 {
 	DiscordUser *user = user_data;
 	gchar *username = discord_create_fullname(user);
@@ -3070,8 +3006,7 @@ discord_got_avatar(DiscordAccount *ya, JsonNode *node, gpointer user_data)
 	}
 }
 
-static void
-discord_get_avatar(DiscordAccount *da, DiscordUser *user)
+static void discord_get_avatar(DiscordAccount *da, DiscordUser *user)
 {
 	if(!user) {
 		return;
@@ -3093,8 +3028,7 @@ discord_get_avatar(DiscordAccount *da, DiscordUser *user)
 	g_string_free(url, TRUE);
 }
 
-static void
-discord_add_buddy(PurpleConnection *pc, PurpleBuddy *buddy, PurpleGroup *group
+static void discord_add_buddy(PurpleConnection *pc, PurpleBuddy *buddy, PurpleGroup *group
 #if PURPLE_VERSION_CHECK(3, 0, 0)
                   , const char *message
 #endif
@@ -3125,8 +3059,7 @@ discord_add_buddy(PurpleConnection *pc, PurpleBuddy *buddy, PurpleGroup *group
 	json_object_unref(data);
 }
 
-static void
-discord_buddy_remove(PurpleConnection *pc, PurpleBuddy *buddy, PurpleGroup *group)
+static void discord_buddy_remove(PurpleConnection *pc, PurpleBuddy *buddy, PurpleGroup *group)
 {
 	DiscordAccount *da = purple_connection_get_protocol_data(pc);
 	const gchar *buddy_name = purple_buddy_get_name(buddy);
@@ -3142,21 +3075,18 @@ discord_buddy_remove(PurpleConnection *pc, PurpleBuddy *buddy, PurpleGroup *grou
 	g_free(url);
 }
 
-static void
-discord_fake_group_buddy(PurpleConnection *pc, const char *who, const char *old_group, const char *new_group)
+static void discord_fake_group_buddy(PurpleConnection *pc, const char *who, const char *old_group, const char *new_group)
 {
 	// Do nothing to stop the remove+add behaviour
 }
 
-static void
-discord_fake_group_rename(PurpleConnection *pc, const char *old_name, PurpleGroup *group, GList *moved_buddies)
+static void discord_fake_group_rename(PurpleConnection *pc, const char *old_name, PurpleGroup *group, GList *moved_buddies)
 {
 	// Do nothing to stop the remove+add behaviour
 }
 
 //todo can we optimize this out?
-static void
-discord_got_info(DiscordAccount *da, JsonNode *node, gpointer user_data)
+static void discord_got_info(DiscordAccount *da, JsonNode *node, gpointer user_data)
 {
 	DiscordUser *user = user_data;
 
@@ -3209,8 +3139,7 @@ discord_got_info(DiscordAccount *da, JsonNode *node, gpointer user_data)
 	g_string_free(buffer, TRUE);
 }
 
-static void
-discord_get_info(PurpleConnection *pc, const gchar *username)
+static void discord_get_info(PurpleConnection *pc, const gchar *username)
 {
 	DiscordAccount *da = purple_connection_get_protocol_data(pc);
 	gchar *url;
@@ -3225,14 +3154,12 @@ discord_get_info(PurpleConnection *pc, const gchar *username)
 	g_free(url);
 }
 
-static const char *
-discord_list_icon(PurpleAccount *account, PurpleBuddy *buddy)
+static const char * discord_list_icon(PurpleAccount *account, PurpleBuddy *buddy)
 {
 	return "discord";
 }
 
-static GList *
-discord_status_types(PurpleAccount *account)
+static GList * discord_status_types(PurpleAccount *account)
 {
 	GList *types = NULL;
 	PurpleStatusType *status;
@@ -3270,8 +3197,7 @@ discord_status_types(PurpleAccount *account)
 	return types;
 }
 
-static gchar *
-discord_status_text(PurpleBuddy *buddy)
+static gchar * discord_status_text(PurpleBuddy *buddy)
 {
 	PurpleAccount *account = purple_buddy_get_account(buddy);
 
@@ -3330,8 +3256,7 @@ discord_tooltip_text(PurpleBuddy *buddy, PurpleNotifyUserInfo *user_info, gboole
 	}
 }
 
-static GHashTable *
-discord_get_account_text_table(PurpleAccount *unused)
+static GHashTable * discord_get_account_text_table(PurpleAccount *unused)
 {
 	GHashTable *table;
 
@@ -3342,8 +3267,7 @@ discord_get_account_text_table(PurpleAccount *unused)
 	return table;
 }
 
-static GList *
-discord_add_account_options(GList *account_options)
+static GList * discord_add_account_options(GList *account_options)
 {
 	PurpleAccountOption *option;
 
@@ -3391,8 +3315,7 @@ discord_join_server(PurpleProtocolAction *action)
 
 }
 
-static GList *
-discord_actions(
+static GList * discord_actions(
 #if !PURPLE_VERSION_CHECK(3, 0, 0)
     PurplePlugin *plugin, gpointer context
 #else
@@ -3409,8 +3332,7 @@ discord_actions(
 	return m;
 }
 
-static PurpleCmdRet
-discord_cmd_leave(PurpleConversation *conv, const gchar *cmd, gchar **args, gchar **error, gpointer data)
+static PurpleCmdRet discord_cmd_leave(PurpleConversation *conv, const gchar *cmd, gchar **args, gchar **error, gpointer data)
 {
 	PurpleConnection *pc = NULL;
 	int id;
@@ -3583,8 +3505,7 @@ typedef struct _DiscordProtocolClass {
 	PurpleProtocolClass parent_class;
 } DiscordProtocolClass;
 
-static void
-discord_protocol_init(PurpleProtocol *prpl_info)
+static void discord_protocol_init(PurpleProtocol *prpl_info)
 {
 	PurpleProtocol *info = prpl_info;
 
@@ -3594,8 +3515,7 @@ discord_protocol_init(PurpleProtocol *prpl_info)
 	info->account_options = discord_add_account_options(info->account_options);
 }
 
-static void
-discord_protocol_class_init(PurpleProtocolClass *prpl_info)
+static void discord_protocol_class_init(PurpleProtocolClass *prpl_info)
 {
 	prpl_info->login = discord_login;
 	prpl_info->close = discord_close;
@@ -3604,15 +3524,13 @@ discord_protocol_class_init(PurpleProtocolClass *prpl_info)
 }
 
 
-static void
-discord_protocol_im_iface_init(PurpleProtocolIMIface *prpl_info)
+static void discord_protocol_im_iface_init(PurpleProtocolIMIface *prpl_info)
 {
 	prpl_info->send = discord_send_im;
 	prpl_info->send_typing = discord_send_typing;
 }
 
-static void
-discord_protocol_chat_iface_init(PurpleProtocolChatIface *prpl_info)
+static void discord_protocol_chat_iface_init(PurpleProtocolChatIface *prpl_info)
 {
 	prpl_info->send = discord_chat_send;
 	prpl_info->info = discord_chat_info;
@@ -3623,8 +3541,7 @@ discord_protocol_chat_iface_init(PurpleProtocolChatIface *prpl_info)
 	prpl_info->set_topic = discord_chat_set_topic;
 }
 
-static void
-discord_protocol_server_iface_init(PurpleProtocolServerIface *prpl_info)
+static void discord_protocol_server_iface_init(PurpleProtocolServerIface *prpl_info)
 {
 	prpl_info->add_buddy = discord_add_buddy;
 	prpl_info->remove_buddy = discord_buddy_remove;
@@ -3635,8 +3552,7 @@ discord_protocol_server_iface_init(PurpleProtocolServerIface *prpl_info)
 	prpl_info->get_info = discord_get_info;
 }
 
-static void
-discord_protocol_client_iface_init(PurpleProtocolClientIface *prpl_info)
+static void discord_protocol_client_iface_init(PurpleProtocolClientIface *prpl_info)
 {
 	prpl_info->get_account_text_table = discord_get_account_text_table;
 	prpl_info->status_text = discord_status_text;
@@ -3645,8 +3561,7 @@ discord_protocol_client_iface_init(PurpleProtocolClientIface *prpl_info)
 	prpl_info->tooltip_text = discord_tooltip_text;
 }
 
-static void
-discord_protocol_roomlist_iface_init(PurpleProtocolRoomlistIface *prpl_info)
+static void discord_protocol_roomlist_iface_init(PurpleProtocolRoomlistIface *prpl_info)
 {
 	prpl_info->get_list = discord_roomlist_get_list;
 	prpl_info->room_serialize = discord_roomlist_serialize;
