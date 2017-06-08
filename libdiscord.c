@@ -1494,8 +1494,7 @@ discord_roomlist_get_list(PurpleConnection *pc)
 	return roomlist;
 }
 
-void
-discord_set_status(PurpleAccount *account, PurpleStatus *status)
+void discord_set_status(PurpleAccount *account, PurpleStatus *status)
 {
 	PurpleConnection *pc = purple_account_get_connection(account);
 	DiscordAccount *ya = purple_connection_get_protocol_data(pc);
@@ -1538,8 +1537,7 @@ discord_set_status(PurpleAccount *account, PurpleStatus *status)
 
 }
 
-void
-discord_set_idle(PurpleConnection *pc, int idle_time)
+void discord_set_idle(PurpleConnection *pc, int idle_time)
 {
 	DiscordAccount *ya = purple_connection_get_protocol_data(pc);
 	JsonObject *obj = json_object_new();
@@ -1884,8 +1882,7 @@ static void discord_login_response(DiscordAccount *da, JsonNode *node, gpointer 
 	purple_connection_error(da->pc, PURPLE_CONNECTION_ERROR_AUTHENTICATION_FAILED, "Bad username/password");
 }
 
-void
-discord_login(PurpleAccount *account)
+void discord_login(PurpleAccount *account)
 {
 	DiscordAccount *da;
 	PurpleConnection *pc = purple_account_get_connection(account);
@@ -3238,8 +3235,7 @@ discord_list_emblem(PurpleBuddy *buddy)
 	return NULL;
 }
 
-void
-discord_tooltip_text(PurpleBuddy *buddy, PurpleNotifyUserInfo *user_info, gboolean full)
+void discord_tooltip_text(PurpleBuddy *buddy, PurpleNotifyUserInfo *user_info, gboolean full)
 {
 	PurplePresence *presence = purple_buddy_get_presence(buddy);
 	PurpleStatus *status = purple_presence_get_active_status(presence);
@@ -3277,8 +3273,7 @@ static GList * discord_add_account_options(GList *account_options)
 	return account_options;
 }
 
-void
-discord_join_server_text(gpointer user_data, const gchar *text)
+void discord_join_server_text(gpointer user_data, const gchar *text)
 {
 	DiscordAccount *da = user_data;
 	gchar *url;
@@ -3298,8 +3293,7 @@ discord_join_server_text(gpointer user_data, const gchar *text)
 	g_free(url);
 }
 
-void
-discord_join_server(PurpleProtocolAction *action)
+void discord_join_server(PurpleProtocolAction *action)
 {
 	PurpleConnection *pc = purple_protocol_action_get_connection(action);
 	DiscordAccount *da = purple_connection_get_protocol_data(pc);
@@ -3348,8 +3342,7 @@ static PurpleCmdRet discord_cmd_leave(PurpleConversation *conv, const gchar *cmd
 	return PURPLE_CMD_RET_OK;
 }
 
-static gboolean
-plugin_load(PurplePlugin *plugin, GError **error)
+static gboolean plugin_load(PurplePlugin *plugin, GError **error)
 {
 	channel_mentions_regex = g_regex_new("&lt;#(\\d+)&gt;", G_REGEX_OPTIMIZE, 0, NULL);
 	emoji_regex = g_regex_new("&lt;:([^:]+):(\\d+)&gt;", G_REGEX_OPTIMIZE, 0, NULL);
@@ -3369,8 +3362,7 @@ plugin_load(PurplePlugin *plugin, GError **error)
 	return TRUE;
 }
 
-static gboolean
-plugin_unload(PurplePlugin *plugin, GError **error)
+static gboolean plugin_unload(PurplePlugin *plugin, GError **error)
 {
 	purple_signals_disconnect_by_handle(plugin);
 
@@ -3384,20 +3376,17 @@ plugin_unload(PurplePlugin *plugin, GError **error)
 
 // Purple2 Plugin Load Functions
 #if !PURPLE_VERSION_CHECK(3, 0, 0)
-static gboolean
-libpurple2_plugin_load(PurplePlugin *plugin)
+static gboolean libpurple2_plugin_load(PurplePlugin *plugin)
 {
 	return plugin_load(plugin, NULL);
 }
 
-static gboolean
-libpurple2_plugin_unload(PurplePlugin *plugin)
+static gboolean libpurple2_plugin_unload(PurplePlugin *plugin)
 {
 	return plugin_unload(plugin, NULL);
 }
 
-static void
-plugin_init(PurplePlugin *plugin)
+static void plugin_init(PurplePlugin *plugin)
 {
 	PurplePluginInfo *info;
 	PurplePluginProtocolInfo *prpl_info = g_new0(PurplePluginProtocolInfo, 1);
@@ -3589,8 +3578,7 @@ PURPLE_DEFINE_TYPE_EXTENDED(
 
 );
 
-static gboolean
-libpurple3_plugin_load(PurplePlugin *plugin, GError **error)
+static gboolean libpurple3_plugin_load(PurplePlugin *plugin, GError **error)
 {
 	discord_protocol_register_type(plugin);
 	discord_protocol = purple_protocols_add(DISCORD_TYPE_PROTOCOL, error);
@@ -3600,8 +3588,7 @@ libpurple3_plugin_load(PurplePlugin *plugin, GError **error)
 	return plugin_load(plugin, error);
 }
 
-static gboolean
-libpurple3_plugin_unload(PurplePlugin *plugin, GError **error)
+static gboolean libpurple3_plugin_unload(PurplePlugin *plugin, GError **error)
 {
 	if (!plugin_unload(plugin, error))
 		return FALSE;
@@ -3612,8 +3599,7 @@ libpurple3_plugin_unload(PurplePlugin *plugin, GError **error)
 	return TRUE;
 }
 
-static PurplePluginInfo *
-plugin_query(GError **error)
+static PurplePluginInfo * plugin_query(GError **error)
 {
 	return purple_plugin_info_new(
 	           "id",          DISCORD_PLUGIN_ID,
