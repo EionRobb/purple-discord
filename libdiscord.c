@@ -1485,10 +1485,10 @@ discord_convert_markdown(const gchar* html)
 					out = g_string_append(out, "<br/><span style='font-family: monospace; white-space: pre'>");
 				} else {
 					out = g_string_append(out, "</span>");
+					i += 2;
 				}
 
 				s_codeblock = !s_codeblock;
-				i += 2;
 			} else {
 				HTML_TOGGLE_OUT(s_codebit, "<span style='font-family: monospace; white-space: pre'>", "</span>");
 			}
