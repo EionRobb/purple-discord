@@ -3345,22 +3345,14 @@ discord_join_chat(PurpleConnection *pc, GHashTable *chatdata)
 }
 
 static void
-discord_mark_room_messages_read(DiscordAccount *ya, guint64 room_id)
+discord_mark_room_messages_read(DiscordAccount *da, guint64 room_id)
 {
-	/*JsonObject *data;
-	JsonArray *params;
-
-	data = json_object_new();
-	params = json_array_new();
-
-	json_array_add_string_element(params, room_id);
-
-	json_object_set_string_member(data, "msg", "method");
-	json_object_set_string_member(data, "method", "readMessages");
-	json_object_set_array_member(data, "params", params);
-	json_object_set_string_member(data, "id", discord_get_next_id_str(ya));
-
-	discord_socket_write_json(ya, data);*/
+	guint64 last_message_id = discord_get_room_last_id(da, room_id);
+	gchar *url;
+	
+	url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/v6/channels/%" G_GUINT64_FORMAT "/messages/%" G_GUINT64_FORMAT "/ack", room_id, last_message_id);
+	discord_fetch_url(da, url, "{\"token\":null}", NULL, NULL);
+	g_free(url);
 }
 
 static void
