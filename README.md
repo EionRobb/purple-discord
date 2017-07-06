@@ -1,6 +1,7 @@
 # purple-discord
 A libpurple/Pidgin plugin for Discord
 
+( For free/libre software that allows you to create/manage your account with Discord, check out [Harmony](https://github.com/nickolas360/harmony) )
 
 Windows
 -------
