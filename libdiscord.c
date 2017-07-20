@@ -1193,7 +1193,11 @@ discord_fetch_url_with_method(DiscordAccount *ya, const gchar *method, const gch
 	}
 
 	if (postdata) {
-		purple_debug_info("discord", "With postdata %s\n", postdata);
+		if (strstr(url, "/login") && strstr(postdata, "password")) {
+			purple_debug_info("discord", "With postdata ###PASSWORD REMOVED###\n");
+		} else {
+			purple_debug_info("discord", "With postdata %s\n", postdata);
+		}
 
 		if (postdata[0] == '{') {
 			purple_http_request_header_set(request, "Content-Type", "application/json");
@@ -1230,7 +1234,11 @@ discord_fetch_url_with_method(DiscordAccount *ya, const gchar *method, const gch
 	}
 
 	if (postdata) {
-		purple_debug_info("discord", "With postdata %s\n", postdata);
+		if (strstr(url, "/login") && strstr(postdata, "password")) {
+			purple_debug_info("discord", "With postdata ###PASSWORD REMOVED###\n");
+		} else {
+			purple_debug_info("discord", "With postdata %s\n", postdata);
+		}
 
 		if (postdata[0] == '{') {
 			g_string_append(headers, "Content-Type: application/json\r\n");
@@ -2430,6 +2438,11 @@ discord_login(PurpleAccount *account)
 	DiscordAccount *da;
 	PurpleConnection *pc = purple_account_get_connection(account);
 	PurpleConnectionFlags pc_flags;
+	
+	if (!strchr(purple_account_get_username(account), '@')) {
+		purple_connection_error(pc, PURPLE_CONNECTION_ERROR_INVALID_USERNAME, "Username needs to be an email address");
+		return;
+	}
 
 	pc_flags = purple_connection_get_flags(pc);
 	pc_flags |= PURPLE_CONNECTION_FLAG_HTML;
