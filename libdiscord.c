@@ -1423,6 +1423,32 @@ discord_replace_emoji(const GMatchInfo *match, GString *result, gpointer user_da
 	return FALSE;
 }
 
+static gchar *
+discord_replace_mentions(DiscordUser *mention_user, gchar *escaped_content) {
+	gchar *user_id_replace = g_strdup_printf("%" G_GUINT64_FORMAT, mention_user->id);
+
+	gchar *user_id_replace_str1 = g_strconcat("&lt;@", user_id_replace, "&gt;", NULL);
+	gchar *user_id_replace_str2 = g_strconcat("&lt;@!", user_id_replace, "&gt;", NULL);
+	gchar *combined_username_replace = discord_create_fullname(mention_user);
+
+	//TODO make this a clickable link
+	gchar *tmp = g_strconcat("@", combined_username_replace, NULL);
+	g_free(combined_username_replace); combined_username_replace = tmp;
+
+	tmp = purple_strreplace(escaped_content, user_id_replace_str1, combined_username_replace);
+	g_free(escaped_content); escaped_content = tmp;
+
+	tmp = purple_strreplace(escaped_content, user_id_replace_str2, combined_username_replace);
+	g_free(escaped_content); escaped_content = tmp;
+
+	g_free(user_id_replace);
+	g_free(combined_username_replace);
+	g_free(user_id_replace_str1);
+	g_free(user_id_replace_str2);
+
+	return escaped_content;
+}
+
 #define HTML_TOGGLE_OUT(f, a, b) out = g_string_append(out, f ? b : a); f = !f;
 
 /* workaround errata in Discord's (users') markdown implementation */
@@ -1535,31 +1561,11 @@ discord_process_message(DiscordAccount *da, JsonObject *data)
 	if (mentions) {
 		for (i = json_array_get_length(mentions) - 1; i >= 0; i--) {
 			DiscordUser *mention_user = discord_upsert_user(da->new_users, json_array_get_object_element(mentions, i));
-
-			gchar *user_id_replace = g_strdup_printf("%" G_GUINT64_FORMAT, mention_user->id);
-
-			gchar *user_id_replace_str1 = g_strconcat("&lt;@", user_id_replace, "&gt;", NULL);
-			gchar *user_id_replace_str2 = g_strconcat("&lt;@!", user_id_replace, "&gt;", NULL);
-			gchar *combined_username_replace = discord_create_fullname(mention_user);
+			escaped_content = discord_replace_mentions(mention_user, escaped_content);
 
 			if (mention_user->id == da->self_user_id) {
 				flags |= PURPLE_MESSAGE_NICK;
 			}
-
-			//TODO make this a clickable link
-			tmp = g_strconcat("@", combined_username_replace, NULL);
-			g_free(combined_username_replace); combined_username_replace = tmp;
-
-			tmp = purple_strreplace(escaped_content, user_id_replace_str1, combined_username_replace);
-			g_free(escaped_content); escaped_content = tmp;
-
-			tmp = purple_strreplace(escaped_content, user_id_replace_str2, combined_username_replace);
-			g_free(escaped_content); escaped_content = tmp;
-
-			g_free(user_id_replace);
-			g_free(combined_username_replace);
-			g_free(user_id_replace_str1);
-			g_free(user_id_replace_str2);
 		}
 	}
 
