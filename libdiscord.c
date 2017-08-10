@@ -1437,6 +1437,14 @@ discord_replace_mention(const GMatchInfo *match, GString *result, gpointer user_
 	if(mention_user) {
 		//TODO make this a clickable link
 		gchar *name = discord_create_fullname(mention_user);
+
+		PurpleBuddy *buddy = purple_blist_find_buddy(da->account, name);
+
+		if (buddy && buddy->alias) {
+			g_free(name);
+			name = g_strdup(buddy->alias);
+		}
+
 		g_string_append_printf(result, "<b>@%s</b>", name);
 		g_free(name);
 	} else {
