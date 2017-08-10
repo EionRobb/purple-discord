@@ -1430,9 +1430,12 @@ discord_replace_mention(const GMatchInfo *match, GString *result, gpointer user_
 {
 	DiscordAccount *da = user_data;
 	gchar *match_string = g_match_info_fetch(match, 0);
-	gchar *snowflake = g_match_info_fetch(match, 1);
 
-	DiscordUser *mention_user = discord_get_user(da, snowflake);
+	gchar *snowflake_str = g_match_info_fetch(match, 1);
+	guint64 snowflake = to_int(snowflake_str);
+	g_free(snowflake_str);
+
+	DiscordUser *mention_user = discord_get_user_int(da, snowflake);
 
 	if(mention_user) {
 		//TODO make this a clickable link
@@ -1443,6 +1446,9 @@ discord_replace_mention(const GMatchInfo *match, GString *result, gpointer user_
 		if (buddy && buddy->alias) {
 			g_free(name);
 			name = g_strdup(buddy->alias);
+		} else if (snowflake == da->self_user_id && da->account->alias)  {
+			g_free(name);
+			name = g_strdup(da->account->alias);
 		}
 
 		g_string_append_printf(result, "<b>@%s</b>", name);
@@ -1452,7 +1458,6 @@ discord_replace_mention(const GMatchInfo *match, GString *result, gpointer user_
 	}
 
 	g_free(match_string);
-	g_free(snowflake);
 
 	return FALSE;
 }
