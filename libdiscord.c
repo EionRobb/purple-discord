@@ -282,6 +282,7 @@ static GRegex *channel_mentions_regex = NULL;
 static GRegex *emoji_regex = NULL;
 static GRegex *emoji_natural_regex = NULL;
 static GRegex *action_star_regex = NULL;
+static GRegex *natural_mention_regex = NULL;
 
 typedef enum{
 	USER_ONLINE,
@@ -1447,6 +1448,44 @@ discord_replace_mentions(DiscordUser *mention_user, gchar *escaped_content) {
 	g_free(user_id_replace_str2);
 
 	return escaped_content;
+}
+
+struct mention_data {
+	DiscordAccount *da;
+	DiscordGuild *guild;
+};
+
+static gboolean
+discord_make_mention(const GMatchInfo *match, GString *result, gpointer user_data)
+{
+	struct mention_data *m = user_data;
+	DiscordAccount *da = m->da;
+	DiscordGuild *guild = m->guild;
+
+	gchar *match_string = g_match_info_fetch(match, 0);
+	gchar *identifier = g_match_info_fetch(match, 1);
+
+	DiscordUser *user = discord_get_user_fullname(da, identifier);
+
+	if (user != NULL) {
+		g_string_append_printf(result, "<@%" G_GUINT64_FORMAT "> ", user->id);
+	} else {
+		g_string_append(result, match_string);
+	}
+
+	g_free(match_string);
+	g_free(identifier);
+
+	return FALSE;
+}
+
+static gchar *
+discord_make_mentions(DiscordAccount *da, DiscordGuild *guild, gchar *message)
+{
+	struct mention_data m = { .da = da, .guild = guild };
+	gchar *tmp = g_regex_replace_eval(natural_mention_regex, message, -1, 0, 0, discord_make_mention, &m, NULL);
+
+	return tmp != NULL ? tmp : message;
 }
 
 #define HTML_TOGGLE_OUT(f, a, b) out = g_string_append(out, f ? b : a); f = !f;
@@ -3512,6 +3551,7 @@ discord_conversation_send_message(DiscordAccount *da, guint64 room_id, const gch
 	gchar *nonce;
 	gchar *marked;
 	gchar *stripped;
+	gchar *mentioned;
 	gchar *final;
 
 	nonce = g_strdup_printf("%" G_GUINT32_FORMAT, g_random_int());
@@ -3520,11 +3560,13 @@ discord_conversation_send_message(DiscordAccount *da, guint64 room_id, const gch
 	marked = discord_html_to_markdown(discord_escape_md(g_strdup(message)));
 	stripped = g_strstrip(purple_markup_strip_html(marked));
 
+	mentioned = discord_make_mentions(da, NULL, stripped);
+
 	/* translate Discord-formatted actions into *markdown* syntax */
-	if(purple_message_meify(stripped, -1)) {
-		final = g_strdup_printf("_%s_", stripped);
+	if(purple_message_meify(mentioned, -1)) {
+		final = g_strdup_printf("_%s_", mentioned);
 	} else {
-		final = g_strdup(stripped);
+		final = g_strdup(mentioned);
 	}
 
 	json_object_set_string_member(data, "content", final);
@@ -4062,6 +4104,7 @@ plugin_load(PurplePlugin *plugin, GError **error)
 	emoji_regex = g_regex_new("&lt;:([^:]+):(\\d+)&gt;", G_REGEX_OPTIMIZE, 0, NULL);
 	emoji_natural_regex = g_regex_new(":([^:]+):", G_REGEX_OPTIMIZE, 0, NULL);
 	action_star_regex = g_regex_new("^_([^\\*]+)_$", G_REGEX_OPTIMIZE, 0, NULL);
+	natural_mention_regex = g_regex_new("^([^:]+): ", G_REGEX_OPTIMIZE, 0, NULL);
 
 	// purple_cmd_register("create", "s", PURPLE_CMD_P_PLUGIN, PURPLE_CMD_FLAG_CHAT | PURPLE_CMD_FLAG_IM |
 						// PURPLE_CMD_FLAG_PROTOCOL_ONLY | PURPLE_CMD_FLAG_ALLOW_WRONG_ARGS,
@@ -4130,6 +4173,7 @@ plugin_unload(PurplePlugin *plugin, GError **error)
 	g_regex_unref(emoji_regex);
 	g_regex_unref(emoji_natural_regex);
 	g_regex_unref(action_star_regex);
+	g_regex_unref(natural_mention_regex);
 
 	return TRUE;
 }
