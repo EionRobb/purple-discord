@@ -3712,7 +3712,7 @@ discord_escape_md(const gchar* markdown)
 	gboolean code_block = FALSE;
 	gboolean link = FALSE;
 
-	for(int i = 0; i < strlen(markdown); ++i) {
+	for(guint i = 0; i < strlen(markdown); ++i) {
 		char c = markdown[i];
 
 		if(c == '`') {
