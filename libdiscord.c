@@ -3569,14 +3569,64 @@ discord_html_to_markdown(gchar* html)
 }
 
 static gchar*
-discord_escape_md(gchar* markdown)
+discord_escape_md(const gchar* markdown)
 {
-	markdown = discord_helper_replace(markdown, "\\", "\\\\");
-	markdown = discord_helper_replace(markdown, "_", "\\_");
-	markdown = discord_helper_replace(markdown, "*", "\\*");
-	markdown = discord_helper_replace(markdown, "~", "\\~");
+	/* Worst case allocation */
+	GString *s = g_string_sized_new(strlen(markdown) * 2);
 
-	return markdown;
+	gboolean verbatim = FALSE;
+	gboolean code_block = FALSE;
+	gboolean link = FALSE;
+
+	for(int i = 0; i < strlen(markdown); ++i) {
+		char c = markdown[i];
+
+		if(c == '`') {
+			if(code_block) {
+				code_block = verbatim = FALSE;
+			} else if(!verbatim) {
+				code_block = verbatim = TRUE;
+			}
+
+			g_string_append_c(s, markdown[i]);
+
+			if(markdown[i + 1] == '`' && markdown[i + 2] == '`') {
+				i += 2;
+				g_string_append_c(s, markdown[i]);
+				g_string_append_c(s, markdown[i]);
+				continue;
+			}
+		}
+
+		if(!verbatim) {
+			if(strncmp(markdown + i, "http://", sizeof("http://") - 1) == 0 ||
+			   strncmp(markdown + i, "https://", sizeof("https://") - 1) == 0) 
+
+				link = verbatim = TRUE;
+		}
+
+		if(link && c == ' ') {
+			link = verbatim = FALSE;
+		}
+
+		if(!verbatim) {
+			if(
+				(c == '_' && (markdown[i + 1] == ' ' ||
+			 				  markdown[i + 1] == '\0' ||
+				  		      markdown[i - 1] == ' ' ||
+				  		      markdown[i - 1] == '\0')) ||
+				(c == '*') ||
+				(c == '\\' && markdown[i + 1] != '_') ||
+				(c == '~' && (markdown[i + 1] == '~')))
+			{
+				g_string_append_c(s, '\\');
+			}
+		}
+
+		g_string_append_c(s, c);
+	}
+
+	return g_string_free(s, FALSE);
 }
 
 static gint
@@ -3593,7 +3643,7 @@ discord_conversation_send_message(DiscordAccount *da, guint64 room_id, const gch
 	nonce = g_strdup_printf("%" G_GUINT32_FORMAT, g_random_int());
 	g_hash_table_insert(da->sent_message_ids, nonce, nonce);
 
-	marked = discord_html_to_markdown(discord_escape_md(g_strdup(message)));
+	marked = discord_html_to_markdown(discord_escape_md(message));
 	stripped = g_strstrip(purple_markup_strip_html(marked));
 
 	/* translate Discord-formatted actions into *markdown* syntax */
