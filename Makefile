@@ -26,6 +26,8 @@ LDFLAGS ?= -Wl,-z,relro
 
 CFLAGS  += -std=c99 -DDISCORD_PLUGIN_VERSION='"$(PLUGIN_VERSION)"'
 
+CFLAGS += -DLOCALEDIR=\"./locale\"
+
 # Do some nasty OS and purple version detection
 ifeq ($(OS),Windows_NT)
   DISCORD_TARGET = libdiscord.dll
