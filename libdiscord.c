@@ -2205,7 +2205,7 @@ discord_build_groups_from_blist(DiscordAccount *ya)
 			discord_id = purple_blist_node_get_string(node, "discord_id");
 			if (discord_id != NULL) {
 				g_hash_table_replace(ya->one_to_ones, g_strdup(discord_id), g_strdup(name));
-				g_hash_table_replace(ya->last_message_id_dm, g_strdup(discord_id), "0");
+				g_hash_table_replace(ya->last_message_id_dm, g_strdup(discord_id), g_strdup("0"));
 				g_hash_table_replace(ya->one_to_ones_rev, g_strdup(name), g_strdup(discord_id));
 			}
 		}
