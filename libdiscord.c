@@ -1381,6 +1381,7 @@ static void discord_get_avatar(DiscordAccount *da, DiscordUser *user);
 
 static const gchar *discord_normalise_room_name(const gchar *guild_name, const gchar *name);
 
+static guint64 discord_compute_permission(DiscordAccount *da, DiscordChannel *channel);
 
 static gboolean
 discord_replace_channel(const GMatchInfo *match, GString *result, gpointer user_data)
@@ -2287,6 +2288,16 @@ discord_buddy_guild(DiscordAccount *da, DiscordGuild *guild)
 	g_hash_table_iter_init(&iter, guild->channels);
 	while(g_hash_table_iter_next(&iter, &key, &value)){
 		DiscordChannel *channel = value;
+
+		/* Ensure that we actually have permissions for this channel */
+		guint64 permission = discord_compute_permission(da, channel);
+
+		printf("Permission for %s: %" G_GUINT64_FORMAT "\n", channel->name, permission);
+
+		/* READ_MESSAGES */
+		if(!(permission & 0x400)) {
+			continue;
+		}
 
 		GHashTable *components = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
 
@@ -3218,57 +3229,59 @@ discord_set_room_last_id(DiscordAccount *da, guint64 id, guint64 last_id)
 	g_free(channel_id);
 }
 
-
-
-typedef struct {
-	DiscordAccount *da;
-	gchar *channel_id;
-	GList *allowed_roles;
-	GList *denied_roles;
-} DiscordChannelPermissionLookup;
-
 /* TODO: Cache better, compute for other users, etc */
 
 static guint64
 discord_compute_permission(DiscordAccount *da, DiscordChannel *channel) {
-	guint64 uid;
+	guint64 uid = da->self_user_id;
 	guint64 permissions = 0;
+
+	DiscordUser *user = discord_get_user_int(da, uid);
 	
+	/* Check special permission overrides just for us */
+
 	DiscordPermissionOverride *uo =
 		g_hash_table_lookup_int64(channel->permission_user_overrides, uid);
 
 	if(uo) {
-		permissions = permissions | uo->allow & ~(uo->deny);
+		permissions = (permissions | uo->allow) & ~(uo->deny);
 	}
 
+	/* Check overrides for the roles we're in */
+	DiscordGuildMembership *guild_membership = NULL;
 
+	GHashTableIter guild_membership_iter;
+	gpointer key, value;
+	g_hash_table_iter_init(&guild_membership_iter, user->guild_memberships);
+	while(g_hash_table_iter_next (&guild_membership_iter, &key, &value) ){
+		DiscordGuildMembership *gm = value;
 
-	DiscordChannelPermissionLookup *lookup = g_new0(DiscordChannelPermissionLookup, 1);
-
-	// assume default permission is to view rooms
-	// look through allow and deny roles for 0x400 - READ_MESSAGES
-
-	JsonArray *permissions = json_object_get_array_member(channel, "permission_overwrites");
-	guint len = json_array_get_length(permissions);
-	PurpleChatConversation *chat = purple_conversations_find_chat(da->pc, g_int64_hash(&tmp));
-	GList *users = NULL, *flags = NULL;
-
-	for (int i = len - 1; i >= 0; i--) {
-		JsonObject *role = json_array_get_object_element(permissions, i);
-		const gchar *role_id = json_object_get_string_member(role, "id");
-		if (json_object_get_int_member(role, "allow") & 0x400) {
-			lookup->allowed_roles = g_list_prepend(lookup->allowed_roles, g_strdup(role_id));
-		}
-		if (json_object_get_int_member(role, "deny") & 0x400) {
-			lookup->denied_roles = g_list_prepend(lookup->denied_roles, g_strdup(role_id));
+		if(gm->id == channel->guild_id) {
+			guild_membership = gm;
+			break;
 		}
 	}
+
+	if(guild_membership) {
+		/* Should always exist, but just in case... */
+
+		for(guint i = 0; i < guild_membership->roles->len; i++) {
+			guint64 role = g_array_index(guild_membership->roles, guint64, i);
+
+			/* Check permission overrides for this role */
+			DiscordPermissionOverride *ro =
+				g_hash_table_lookup_int64(channel->permission_role_overrides, role);
+
+			if(ro) {
+				permissions = (permissions | ro->allow) & ~(ro->deny);
+			}
+		}
+	}
+
+	return permissions;
 }
 
-
-
 static void discord_join_chat(PurpleConnection *pc, GHashTable *chatdata);
-
 
 static void
 discord_got_channel_info(DiscordAccount *da, JsonNode *node, gpointer user_data)
@@ -3333,6 +3346,9 @@ discord_got_channel_info(DiscordAccount *da, JsonNode *node, gpointer user_data)
 		g_string_free(recipient_names, TRUE);
 	} else if (json_object_has_member(channel, "permission_overwrites")) {
 		DiscordGuild *guild = discord_get_guild(da, guild_id);
+
+		PurpleChatConversation *chat = purple_conversations_find_chat(da->pc, g_int64_hash(&tmp));
+		GList *users = NULL, *flags = NULL;
 
 		for (guint i = 0; i < guild->members->len; i++){
 			DiscordUser *user = discord_get_user_int(da, g_array_index(guild->members, guint64, i));
