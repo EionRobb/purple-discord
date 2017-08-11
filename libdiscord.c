@@ -3227,6 +3227,45 @@ typedef struct {
 	GList *denied_roles;
 } DiscordChannelPermissionLookup;
 
+/* TODO: Cache better, compute for other users, etc */
+
+static guint64
+discord_compute_permission(DiscordAccount *da, DiscordChannel *channel) {
+	guint64 uid;
+	guint64 permissions = 0;
+	
+	DiscordPermissionOverride *uo =
+		g_hash_table_lookup_int64(channel->permission_user_overrides, uid);
+
+	if(uo) {
+		permissions = permissions | uo->allow & ~(uo->deny);
+	}
+
+
+
+	DiscordChannelPermissionLookup *lookup = g_new0(DiscordChannelPermissionLookup, 1);
+
+	// assume default permission is to view rooms
+	// look through allow and deny roles for 0x400 - READ_MESSAGES
+
+	JsonArray *permissions = json_object_get_array_member(channel, "permission_overwrites");
+	guint len = json_array_get_length(permissions);
+	PurpleChatConversation *chat = purple_conversations_find_chat(da->pc, g_int64_hash(&tmp));
+	GList *users = NULL, *flags = NULL;
+
+	for (int i = len - 1; i >= 0; i--) {
+		JsonObject *role = json_array_get_object_element(permissions, i);
+		const gchar *role_id = json_object_get_string_member(role, "id");
+		if (json_object_get_int_member(role, "allow") & 0x400) {
+			lookup->allowed_roles = g_list_prepend(lookup->allowed_roles, g_strdup(role_id));
+		}
+		if (json_object_get_int_member(role, "deny") & 0x400) {
+			lookup->denied_roles = g_list_prepend(lookup->denied_roles, g_strdup(role_id));
+		}
+	}
+}
+
+
 
 static void discord_join_chat(PurpleConnection *pc, GHashTable *chatdata);
 
@@ -3293,26 +3332,6 @@ discord_got_channel_info(DiscordAccount *da, JsonNode *node, gpointer user_data)
 		purple_conversation_set_title(PURPLE_CONVERSATION(chatconv), recipient_names->str);
 		g_string_free(recipient_names, TRUE);
 	} else if (json_object_has_member(channel, "permission_overwrites")) {
-		DiscordChannelPermissionLookup *lookup = g_new0(DiscordChannelPermissionLookup, 1);
-		// assume default permission is to view rooms
-		// look through allow and deny roles for 0x400 - READ_MESSAGES
-
-		JsonArray *permissions = json_object_get_array_member(channel, "permission_overwrites");
-		guint len = json_array_get_length(permissions);
-		PurpleChatConversation *chat = purple_conversations_find_chat(da->pc, g_int64_hash(&tmp));
-		GList *users = NULL, *flags = NULL;
-
-		for (int i = len - 1; i >= 0; i--) {
-			JsonObject *role = json_array_get_object_element(permissions, i);
-			const gchar *role_id = json_object_get_string_member(role, "id");
-			if (json_object_get_int_member(role, "allow") & 0x400) {
-				lookup->allowed_roles = g_list_prepend(lookup->allowed_roles, g_strdup(role_id));
-			}
-			if (json_object_get_int_member(role, "deny") & 0x400) {
-				lookup->denied_roles = g_list_prepend(lookup->denied_roles, g_strdup(role_id));
-			}
-		}
-
 		DiscordGuild *guild = discord_get_guild(da, guild_id);
 
 		for (guint i = 0; i < guild->members->len; i++){
