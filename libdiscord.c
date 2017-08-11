@@ -1690,13 +1690,13 @@ discord_set_group_typing(void *_u)
 		purple_conversations_find_chat(ctx->da->pc, g_int64_hash(&tmp));
 
 	if (chatconv == NULL) {
-		return FALSE;
+		goto release_ctx;
 	}
 
 	PurpleChatUser *cb = purple_chat_conversation_find_user(chatconv, ctx->username);
 
 	if(!cb) {
-		return FALSE;
+		goto release_ctx;
 	}
 
 	PurpleChatUserFlags cbflags;
@@ -1711,6 +1711,7 @@ discord_set_group_typing(void *_u)
 
 	purple_chat_user_set_flags(cb, cbflags);
 
+release_ctx:
 	if(ctx->free_me) {
 		g_free(ctx->username);
 		g_free(ctx);
