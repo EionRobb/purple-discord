@@ -1466,7 +1466,13 @@ static gchar *
 discord_replace_mentions_bare(DiscordAccount *da, gchar *message)
 {
 	gchar *tmp = g_regex_replace_eval(mention_regex, message, -1, 0, 0, discord_replace_mention, da, NULL);
-	return tmp != NULL ? tmp : message;
+
+	if (tmp != NULL) {
+		g_free(message);
+		return tmp;
+	}
+
+	return message;
 }
 
 static gboolean
@@ -1517,7 +1523,13 @@ static gchar *
 discord_make_mentions(DiscordAccount *da, gchar *message)
 {
 	gchar *tmp = g_regex_replace_eval(natural_mention_regex, message, -1, 0, 0, discord_make_mention, da, NULL);
-	return tmp != NULL ? tmp : message;
+
+	if (tmp != NULL) {
+		g_free(message);
+		return tmp;
+	}
+
+	return message;
 }
 
 #define HTML_TOGGLE_OUT(f, a, b) out = g_string_append(out, f ? b : a); f = !f;
