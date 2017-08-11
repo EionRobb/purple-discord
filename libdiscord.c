@@ -1762,6 +1762,59 @@ discord_process_message(DiscordAccount *da, JsonObject *data)
 	return to_int(json_object_get_string_member(data, "id"));
 }
 
+struct discord_group_typing_data {
+	DiscordAccount *da;
+	const gchar *channel_id;
+	gchar *username;
+	gboolean set;
+	gboolean free_me;
+};
+
+static gboolean
+discord_set_group_typing(void *_u)
+{
+	if(_u == NULL) {
+		return FALSE;
+	}
+
+	struct discord_group_typing_data *ctx = _u;
+
+	guint tmp = to_int(ctx->channel_id);
+
+	PurpleChatConversation *chatconv =
+		purple_conversations_find_chat(ctx->da->pc, g_int64_hash(&tmp));
+
+	if (chatconv == NULL) {
+		goto release_ctx;
+	}
+
+	PurpleChatUser *cb = purple_chat_conversation_find_user(chatconv, ctx->username);
+
+	if(!cb) {
+		goto release_ctx;
+	}
+
+	PurpleChatUserFlags cbflags;
+
+	cbflags = purple_chat_user_get_flags(cb);
+
+	if(ctx->set) {
+		cbflags |= PURPLE_CHAT_USER_TYPING;
+	} else {
+		cbflags &= ~PURPLE_CHAT_USER_TYPING;
+	}
+
+	purple_chat_user_set_flags(cb, cbflags);
+
+release_ctx:
+	if(ctx->free_me) {
+		g_free(ctx->username);
+		g_free(ctx);
+	}
+
+	return FALSE;
+}
+
 static void
 discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data)
 {
@@ -1799,44 +1852,63 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		}
 		g_free(username);
 	} else if (purple_strequal(type, "MESSAGE_CREATE")/* || purple_strequal(type, "MESSAGE_UPDATE")*/) { //TODO
-
 		discord_process_message(da, data);
 
+		const gchar *channel_id = json_object_get_string_member(data, "channel_id");
+
+		if(!channel_id) {
+			return;
+		}
+
+		guint tmp = to_int(channel_id);
+		PurpleChatConversation *chatconv = purple_conversations_find_chat(da->pc, g_int64_hash(&tmp));
+
+		if(!chatconv) {
+			return;
+		}
+
+		JsonObject *json = json_object_get_object_member(data, "author");
+		gchar *n = discord_create_fullname_from_id(da, to_int(json_object_get_string_member(json, "id")));
+
+		struct discord_group_typing_data ctx = {
+			.da = da,
+			.channel_id = channel_id,
+			.username = n,
+			.set = FALSE,
+			.free_me = FALSE
+		};
+
+		discord_set_group_typing(&ctx);
 	} else if (purple_strequal(type, "TYPING_START")) {
 		const gchar *channel_id = json_object_get_string_member(data, "channel_id");
-		const gchar *user_id = json_object_get_string_member(data, "user_id");
-		gchar *username = discord_create_fullname_from_id(da, to_int(user_id));
+		guint64 user_id = to_int(json_object_get_string_member(data, "user_id"));
+
+		/* Don't display typing notfications from ourselves */
+		if (user_id == da->self_user_id) return;
+
+		gchar *username = discord_create_fullname_from_id(da, user_id);
 		DiscordChannel *channel = discord_get_channel_global(da, channel_id);
 
 		if (channel != NULL) {
-			// This is a group conversation
-			PurpleChatConversation *chatconv = purple_conversations_find_chat_with_account(channel->name, da->account);
-			if (chatconv == NULL) {
-				chatconv = purple_conversations_find_chat_with_account(channel_id, da->account);
-			}
-			if (chatconv != NULL) {
-				PurpleChatUser *cb = purple_chat_conversation_find_user(chatconv, username);
-				PurpleChatUserFlags cbflags;
+			struct discord_group_typing_data set = {
+				.da = da,
+				.channel_id = channel_id,
+				.username = username,
+				.set = TRUE,
+				.free_me = FALSE
+			};
 
-				if (cb == NULL) {
-					// Getting notified about a buddy we dont know about yet
-					//TODO add buddy
-					return;
-				}
-				cbflags = purple_chat_user_get_flags(cb);
+			discord_set_group_typing(&set);
 
-				//if (is_typing)
-					cbflags |= PURPLE_CHAT_USER_TYPING;
-				//else //TODO
-				//	cbflags &= ~PURPLE_CHAT_USER_TYPING;
+			struct discord_group_typing_data *clear = g_memdup(&set, sizeof(set));
+			clear->set = FALSE;
+			clear->free_me = TRUE;
 
-				purple_chat_user_set_flags(cb, cbflags);
-			}
+			purple_timeout_add_seconds(10, discord_set_group_typing, clear);
 		} else {
 			purple_serv_got_typing(da->pc, username, 10, PURPLE_IM_TYPING);
 
 		}
-		g_free(username);
 	} else if (purple_strequal(type, "CHANNEL_CREATE")) {
 		const gchar *channel_id = json_object_get_string_member(data, "id");
 		gint64 channel_type = json_object_get_int_member(data, "type");
