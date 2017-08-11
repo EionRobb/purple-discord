@@ -3579,7 +3579,6 @@ discord_escape_md(gchar* markdown)
 	gboolean link = FALSE;
 
 	for(int i = 0; i < strlen(markdown); ++i) {
-		/* TODO: Escape iff it is necessary */
 		char c = markdown[i];
 
 		if(c == '`') {
@@ -3599,8 +3598,11 @@ discord_escape_md(gchar* markdown)
 			}
 		}
 
-		if(!verbatim && strncmp(markdown + i, "http://", sizeof("http://") - 1) == 0) {
-			link = verbatim = TRUE;
+		if(!verbatim) {
+			if(strncmp(markdown + i, "http://", sizeof("http://") - 1) == 0 ||
+			   strncmp(markdown + i, "https://", sizeof("https://") - 1) == 0) 
+
+				link = verbatim = TRUE;
 		}
 
 		if(link && c == ' ') {
