@@ -3571,12 +3571,21 @@ discord_html_to_markdown(gchar* html)
 static gchar*
 discord_escape_md(gchar* markdown)
 {
-	markdown = discord_helper_replace(markdown, "\\", "\\\\");
-	markdown = discord_helper_replace(markdown, "_", "\\_");
-	markdown = discord_helper_replace(markdown, "*", "\\*");
-	markdown = discord_helper_replace(markdown, "~", "\\~");
+	/* Worst case allocation */
+	GString *s = g_string_sized_new(strlen(markdown) * 2);
 
-	return markdown;
+	gboolean verbatim = TRUE;
+
+	for(int i = 0; i < strlen(markdown); ++i) {
+		/* TODO: Escape iff it is necessary */
+		if(verbatim) {
+			g_string_append_c(s, markdown[i]);
+		}
+	}
+
+	g_free(markdown);
+
+	return g_string_free(s, FALSE);
 }
 
 static gint
