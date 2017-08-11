@@ -4142,7 +4142,7 @@ plugin_load(PurplePlugin *plugin, GError **error)
 	emoji_regex = g_regex_new("&lt;:([^:]+):(\\d+)&gt;", G_REGEX_OPTIMIZE, 0, NULL);
 	emoji_natural_regex = g_regex_new(":([^:]+):", G_REGEX_OPTIMIZE, 0, NULL);
 	action_star_regex = g_regex_new("^_([^\\*]+)_$", G_REGEX_OPTIMIZE, 0, NULL);
-	mention_regex = g_regex_new("&lt;@(\\d+)&gt;", G_REGEX_OPTIMIZE, 0, NULL);
+	mention_regex = g_regex_new("&lt;@!?(\\d+)&gt;", G_REGEX_OPTIMIZE, 0, NULL);
 	natural_mention_regex = g_regex_new("^([^:]+): ", G_REGEX_OPTIMIZE, 0, NULL);
 
 	// purple_cmd_register("create", "s", PURPLE_CMD_P_PLUGIN, PURPLE_CMD_FLAG_CHAT | PURPLE_CMD_FLAG_IM |
