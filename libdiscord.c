@@ -3616,7 +3616,7 @@ discord_escape_md(gchar* markdown)
 				  		      markdown[i - 1] == ' ' ||
 				  		      markdown[i - 1] == '\0')) ||
 				(c == '*') ||
-				(c == '\\') ||
+				(c == '\\' && markdown[i + 1] != '_') ||
 				(c == '~' && (markdown[i + 1] == '~')))
 			{
 				g_string_append_c(s, '\\');
