@@ -1477,7 +1477,29 @@ discord_make_mention(const GMatchInfo *match, GString *result, gpointer user_dat
 	gchar *match_string = g_match_info_fetch(match, 0);
 	gchar *identifier = g_match_info_fetch(match, 1);
 
+	/* Try to find user by discriminator */
 	DiscordUser *user = discord_get_user_fullname(da, identifier);
+
+	/* If that fails, find it by alias */
+	if(!user) {
+		GHashTableIter iter;
+		gpointer key, value;
+		g_hash_table_iter_init(&iter, da->new_users);
+
+		while (g_hash_table_iter_next (&iter, &key, &value)) {
+			/* Key is the user ID, value is DiscordUser */
+
+			DiscordUser *u = value;
+			gchar *username = discord_create_fullname(u);
+			PurpleBuddy *buddy = purple_blist_find_buddy(da->account, username);
+			g_free(username);
+
+			if(buddy && g_strcmp0(buddy->alias, identifier) == 0) {
+				user = u;
+				break;
+			}
+		}
+	}
 
 	if (user != NULL) {
 		g_string_append_printf(result, "&lt;@%" G_GUINT64_FORMAT "&gt; ", user->id);
