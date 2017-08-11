@@ -2495,8 +2495,8 @@ discord_login_response(DiscordAccount *da, JsonNode *node, gpointer user_data)
 							   _("Enter Discord auth code"),
 							   _("You can get this token from your two-factor authentication mobile app."),
 							   NULL, FALSE, FALSE, "",
-							   _("_Login"), G_CALLBACK(discord_mfa_text_entry),
-							   _("_Cancel"), G_CALLBACK(discord_mfa_cancel),
+							   _("Login"), G_CALLBACK(discord_mfa_text_entry),
+							   _("Cancel"), G_CALLBACK(discord_mfa_cancel),
 							   purple_request_cpar_from_connection(da->pc),
 							   da);
 			return;
@@ -4095,8 +4095,8 @@ discord_join_server(PurpleProtocolAction *action)
 					   _("Join a server"),
 					   _("Enter the join URL here"),
 					   NULL, FALSE, FALSE, "https://discord.gg/ABC123",
-					   _("_Join"), G_CALLBACK(discord_join_server_text),
-					   _("_Cancel"), NULL,
+					   _("Join"), G_CALLBACK(discord_join_server_text),
+					   _("Cancel"), NULL,
 					   purple_request_cpar_from_connection(pc),
 					   da);
 
