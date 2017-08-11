@@ -2343,6 +2343,46 @@ discord_got_presences(DiscordAccount *da, JsonNode *node, gpointer user_data)
 }
 
 static void
+discord_buddy_guild(DiscordAccount *da, DiscordGuild *guild)
+{
+	/* Create group */
+	/* TODO: What if this is not unique? */
+
+	if(purple_blist_find_group(guild->name)) {
+		/* TODO: Sync then? */
+		return;
+	}
+
+	PurpleGroup *group = purple_group_new(guild->name);
+
+	if(!group) {
+		printf("Bad group\n");
+		return;
+	}
+
+	GHashTableIter iter;
+	gpointer key;
+	gpointer value;
+
+	g_hash_table_iter_init(&iter, guild->channels);
+	while(g_hash_table_iter_next(&iter, &key, &value)){
+		DiscordChannel *channel = value;
+
+		GHashTable *components = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
+
+		g_hash_table_replace(components, "name", channel->name);
+		g_hash_table_replace(components, "channel_id", g_strdup_printf("%" G_GUINT64_FORMAT, channel->id));
+
+		PurpleChat *chat = purple_chat_new(da->account, channel->name, components);
+
+		purple_blist_add_chat(chat, group, NULL);
+	}
+
+
+	purple_blist_add_group(group, NULL);
+}
+
+static void
 discord_populate_guild(DiscordAccount *da, JsonObject *guild)
 {
 	DiscordGuild *g = discord_upsert_guild(da->new_guilds, guild);
@@ -2366,6 +2406,8 @@ discord_populate_guild(DiscordAccount *da, JsonObject *guild)
 			discord_add_permission_override(c, permission_override);
 		}
 	}
+
+	discord_buddy_guild(da, g);
 }
 
 static void
