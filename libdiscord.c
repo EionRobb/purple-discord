@@ -1717,7 +1717,8 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 			// This is a group conversation
 			PurpleChatConversation *chatconv = purple_conversations_find_chat_with_account(channel->name, da->account);
 			if (chatconv == NULL) {
-				chatconv = purple_conversations_find_chat_with_account(channel_id, da->account);
+				guint tmp = to_int(channel_id);
+				chatconv = purple_conversations_find_chat(da->pc, g_int64_hash(&tmp));
 			}
 			if (chatconv != NULL) {
 				PurpleChatUser *cb = purple_chat_conversation_find_user(chatconv, username);
