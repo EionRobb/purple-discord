@@ -3440,12 +3440,35 @@ discord_join_chat(PurpleConnection *pc, GHashTable *chatdata)
 }
 
 static void
-discord_mark_room_messages_read(DiscordAccount *da, guint64 room_id)
+discord_mark_room_messages_read(DiscordAccount *da, guint64 channel_id)
 {
-	guint64 last_message_id = discord_get_room_last_id(da, room_id);
+	printf("Channel %lu\n", channel_id);
+
+	if(!channel_id) {
+		return;
+	}
+
+	DiscordChannel *channel = discord_get_channel_global_int(da, channel_id);
+
+	if(!channel) {
+		return;
+	}
+
+	guint64 known_message_id = discord_get_room_last_id(da, channel_id);
+	guint64 last_message_id = channel->last_message_id;
+
+	if(last_message_id == known_message_id) {
+		printf("All up to date\n");
+		return;
+	}
+
+	printf("Thought it was %lu, actually %lu, syncing!\n", known_message_id, last_message_id);
+
+	discord_set_room_last_id(da, channel_id, last_message_id);
+
 	gchar *url;
 	
-	url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/v6/channels/%" G_GUINT64_FORMAT "/messages/%" G_GUINT64_FORMAT "/ack", room_id, last_message_id);
+	url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/v6/channels/%" G_GUINT64_FORMAT "/messages/%" G_GUINT64_FORMAT "/ack", channel_id, channel->last_message_id);
 	discord_fetch_url(da, url, "{\"token\":null}", NULL, NULL);
 	g_free(url);
 }
