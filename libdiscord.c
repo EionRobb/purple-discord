@@ -1438,21 +1438,20 @@ discord_replace_mention(const GMatchInfo *match, GString *result, gpointer user_
 	DiscordUser *mention_user = discord_get_user_int(da, snowflake);
 
 	if(mention_user) {
-		//TODO make this a clickable link
-		gchar *name = discord_create_fullname(mention_user);
+		gchar *real_name = discord_create_fullname(mention_user);
+		gchar *name = real_name;
 
-		PurpleBuddy *buddy = purple_blist_find_buddy(da->account, name);
+		PurpleBuddy *buddy = purple_blist_find_buddy(da->account, real_name);
 
 		if (buddy && buddy->alias) {
-			g_free(name);
-			name = g_strdup(buddy->alias);
+			name = buddy->alias;
 		} else if (snowflake == da->self_user_id && da->account->alias)  {
-			g_free(name);
-			name = g_strdup(da->account->alias);
+			name = da->account->alias;
 		}
 
-		g_string_append_printf(result, "<b>@%s</b>", name);
-		g_free(name);
+		g_string_append_printf(result, "<a href='prpl-eionrobb-discord:%s'><b>@%s</b></a>",
+							   real_name, name);
+		g_free(real_name);
 	} else {
 		g_string_append(result, match_string);
 	}
@@ -4087,6 +4086,40 @@ discord_join_server(PurpleProtocolAction *action)
 
 }
 
+static gboolean
+discord_uri_handler(const char *proto, const char *user, GHashTable *params)
+{
+	purple_debug_info("discord", "open\n");
+	char *acct_id = g_hash_table_lookup(params, "account");
+	PurpleAccount *acct;
+
+	purple_debug_info("discord", "uri\n");
+
+	if (g_ascii_strcasecmp(proto, "prpl-eionrobb-discord"))
+		return FALSE;
+
+	purple_debug_info("discord", "clear1\n");
+
+	acct = purple_accounts_find(acct_id, "discord");
+
+	if (!acct)
+		return FALSE;
+
+	purple_debug_info("discord", "blar\n");
+//	PurpleConnection *pc = purple_account_get_connection(acct);
+//	DiscordAccount *ya = purple_connection_get_protocol_data(pc);
+
+	if (user && *user) {
+		PurpleConversation *conv =
+				purple_conversation_new(PURPLE_CONV_TYPE_IM, acct, user);
+		purple_conversation_present(conv);
+	}
+
+	purple_debug_info("discord", "ba\n");
+
+	return FALSE;
+}
+
 static GList *
 discord_actions(
 #if !PURPLE_VERSION_CHECK(3, 0, 0)
@@ -4188,6 +4221,8 @@ plugin_load(PurplePlugin *plugin, GError **error)
 						// DISCORD_PLUGIN_ID, discord_slash_command,
 						// _("topic <description>:  Set the channel topic description"), NULL);
 
+	purple_signal_connect(purple_get_core(), "uri-handler", plugin, PURPLE_CALLBACK(discord_uri_handler), NULL);
+
 	return TRUE;
 }
 
@@ -4223,10 +4258,9 @@ libpurple2_plugin_unload(PurplePlugin *plugin)
 static void
 plugin_init(PurplePlugin *plugin)
 {
-	// PurpleAccountOption *option;
-	// PurplePluginInfo *info = plugin->info;
-	// PurplePluginProtocolInfo *prpl_info = info->extra_info;
-	//purple_signal_connect(purple_get_core(), "uri-handler", plugin, PURPLE_CALLBACK(discord_uri_handler), NULL);
+	//PurpleAccountOption *option;
+	//PurplePluginInfo *info = plugin->info;
+	//PurplePluginProtocolInfo *prpl_info = info->extra_info;
 
 	PurplePluginInfo *info;
 	PurplePluginProtocolInfo *prpl_info = g_new0(PurplePluginProtocolInfo, 1);
