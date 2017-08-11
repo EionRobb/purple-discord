@@ -1667,6 +1667,19 @@ discord_process_message(DiscordAccount *da, JsonObject *data)
 	return to_int(json_object_get_string_member(data, "id"));
 }
 
+static gboolean
+discord_clear_typing(void *_cb)
+{
+	PurpleChatUser *cb = _cb;
+	PurpleChatUserFlags cbflags;
+
+	cbflags = purple_chat_user_get_flags(cb);
+	cbflags &= ~PURPLE_CHAT_USER_TYPING;
+	purple_chat_user_set_flags(cb, cbflags);
+
+	return FALSE;
+}
+
 static void
 discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data)
 {
@@ -1730,13 +1743,10 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 					return;
 				}
 				cbflags = purple_chat_user_get_flags(cb);
-
-				//if (is_typing)
-					cbflags |= PURPLE_CHAT_USER_TYPING;
-				//else //TODO
-				//	cbflags &= ~PURPLE_CHAT_USER_TYPING;
-
+				cbflags |= PURPLE_CHAT_USER_TYPING;
 				purple_chat_user_set_flags(cb, cbflags);
+
+				purple_timeout_add_seconds(5, discord_clear_typing, cb);
 			}
 		} else {
 			purple_serv_got_typing(da->pc, username, 10, PURPLE_IM_TYPING);
