@@ -1726,22 +1726,30 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 
 		const gchar *channel_id = json_object_get_string_member(data, "channel_id");
 
-		if(channel_id) {
-			guint tmp = to_int(channel_id);
-			PurpleChatConversation *chatconv = purple_conversations_find_chat(da->pc, g_int64_hash(&tmp));
-
-			if(chatconv) {
-				JsonObject *json = json_object_get_object_member(data, "author");
-				gchar *n = discord_create_fullname_from_id(da, to_int(json_object_get_string_member(json, "id")));
-				PurpleChatUser *cb = purple_chat_conversation_find_user(chatconv, n);
-
-				discord_clear_typing(cb);
-			}
+		if(!channel_id) {
+			return;
 		}
+
+		guint tmp = to_int(channel_id);
+		PurpleChatConversation *chatconv = purple_conversations_find_chat(da->pc, g_int64_hash(&tmp));
+
+		if(!chatconv) {
+			return;
+		}
+
+		JsonObject *json = json_object_get_object_member(data, "author");
+		gchar *n = discord_create_fullname_from_id(da, to_int(json_object_get_string_member(json, "id")));
+		PurpleChatUser *cb = purple_chat_conversation_find_user(chatconv, n);
+
+		discord_clear_typing(cb);
 	} else if (purple_strequal(type, "TYPING_START")) {
 		const gchar *channel_id = json_object_get_string_member(data, "channel_id");
-		const gchar *user_id = json_object_get_string_member(data, "user_id");
-		gchar *username = discord_create_fullname_from_id(da, to_int(user_id));
+		guint64 user_id = to_int(json_object_get_string_member(data, "user_id"));
+
+		/* Don't display typing notfications from ourselves */
+		if (user_id == da->self_user_id) return;
+
+		gchar *username = discord_create_fullname_from_id(da, user_id);
 		DiscordChannel *channel = discord_get_channel_global(da, channel_id);
 
 		if (channel != NULL) {
