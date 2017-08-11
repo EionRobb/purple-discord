@@ -1671,6 +1671,11 @@ static gboolean
 discord_clear_typing(void *_cb)
 {
 	PurpleChatUser *cb = _cb;
+
+	if(!cb) {
+		return FALSE;
+	}
+
 	PurpleChatUserFlags cbflags;
 
 	cbflags = purple_chat_user_get_flags(cb);
@@ -1721,14 +1726,17 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 
 		const gchar *channel_id = json_object_get_string_member(data, "channel_id");
 
-		guint tmp = to_int(channel_id);
-		PurpleChatConversation *chatconv = purple_conversations_find_chat(da->pc, g_int64_hash(&tmp));
+		if(channel_id) {
+			guint tmp = to_int(channel_id);
+			PurpleChatConversation *chatconv = purple_conversations_find_chat(da->pc, g_int64_hash(&tmp));
 
-		if(chatconv) {
-			JsonObject *json = json_object_get_object_member(data, "author");
-			gchar *n = discord_create_fullname_from_id(da, to_int(json_object_get_string_member(json, "id")));
-			PurpleChatUser *cb = purple_chat_conversation_find_user(chatconv, n);
-			discord_clear_typing(cb);
+			if(chatconv) {
+				JsonObject *json = json_object_get_object_member(data, "author");
+				gchar *n = discord_create_fullname_from_id(da, to_int(json_object_get_string_member(json, "id")));
+				PurpleChatUser *cb = purple_chat_conversation_find_user(chatconv, n);
+
+				discord_clear_typing(cb);
+			}
 		}
 	} else if (purple_strequal(type, "TYPING_START")) {
 		const gchar *channel_id = json_object_get_string_member(data, "channel_id");
