@@ -1667,10 +1667,33 @@ discord_process_message(DiscordAccount *da, JsonObject *data)
 	return to_int(json_object_get_string_member(data, "id"));
 }
 
+struct discord_group_typing_data {
+	DiscordAccount *da;
+	const gchar *channel_id;
+	const gchar *username;
+	gboolean set;
+	gboolean free_me;
+};
+
 static gboolean
-discord_clear_typing(void *_cb)
+discord_set_group_typing(void *_u)
 {
-	PurpleChatUser *cb = _cb;
+	if(_u == NULL) {
+		return FALSE;
+	}
+
+	struct discord_group_typing_data *ctx = _u;
+
+	guint tmp = to_int(ctx->channel_id);
+
+	PurpleChatConversation *chatconv =
+		purple_conversations_find_chat(ctx->da->pc, g_int64_hash(&tmp));
+
+	if (chatconv == NULL) {
+		return FALSE;
+	}
+
+	PurpleChatUser *cb = purple_chat_conversation_find_user(chatconv, ctx->username);
 
 	if(!cb) {
 		return FALSE;
@@ -1679,8 +1702,18 @@ discord_clear_typing(void *_cb)
 	PurpleChatUserFlags cbflags;
 
 	cbflags = purple_chat_user_get_flags(cb);
-	cbflags &= ~PURPLE_CHAT_USER_TYPING;
+
+	if(ctx->set) {
+		cbflags |= PURPLE_CHAT_USER_TYPING;
+	} else {
+		cbflags &= ~PURPLE_CHAT_USER_TYPING;
+	}
+
 	purple_chat_user_set_flags(cb, cbflags);
+
+	if(ctx->free_me) {
+		g_free(ctx);
+	}
 
 	return FALSE;
 }
@@ -1739,9 +1772,16 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 
 		JsonObject *json = json_object_get_object_member(data, "author");
 		gchar *n = discord_create_fullname_from_id(da, to_int(json_object_get_string_member(json, "id")));
-		PurpleChatUser *cb = purple_chat_conversation_find_user(chatconv, n);
 
-		discord_clear_typing(cb);
+		struct discord_group_typing_data ctx = {
+			.da = da,
+			.channel_id = channel_id,
+			.username = n,
+			.set = FALSE,
+			.free_me = FALSE
+		};
+
+		discord_set_group_typing(&ctx);
 	} else if (purple_strequal(type, "TYPING_START")) {
 		const gchar *channel_id = json_object_get_string_member(data, "channel_id");
 		guint64 user_id = to_int(json_object_get_string_member(data, "user_id"));
@@ -1753,27 +1793,21 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		DiscordChannel *channel = discord_get_channel_global(da, channel_id);
 
 		if (channel != NULL) {
-			// This is a group conversation
-			PurpleChatConversation *chatconv = purple_conversations_find_chat_with_account(channel->name, da->account);
-			if (chatconv == NULL) {
-				guint tmp = to_int(channel_id);
-				chatconv = purple_conversations_find_chat(da->pc, g_int64_hash(&tmp));
-			}
-			if (chatconv != NULL) {
-				PurpleChatUser *cb = purple_chat_conversation_find_user(chatconv, username);
-				PurpleChatUserFlags cbflags;
+			struct discord_group_typing_data set = {
+				.da = da,
+				.channel_id = channel_id,
+				.username = username,
+				.set = TRUE,
+				.free_me = FALSE
+			};
 
-				if (cb == NULL) {
-					// Getting notified about a buddy we dont know about yet
-					//TODO add buddy
-					return;
-				}
-				cbflags = purple_chat_user_get_flags(cb);
-				cbflags |= PURPLE_CHAT_USER_TYPING;
-				purple_chat_user_set_flags(cb, cbflags);
+			discord_set_group_typing(&set);
 
-				purple_timeout_add_seconds(10, discord_clear_typing, cb);
-			}
+			struct discord_group_typing_data *clear = g_memdup(&set, sizeof(set));
+			clear->set = FALSE;
+			clear->free_me = TRUE;
+
+			purple_timeout_add_seconds(10, discord_set_group_typing, clear);
 		} else {
 			purple_serv_got_typing(da->pc, username, 10, PURPLE_IM_TYPING);
 
