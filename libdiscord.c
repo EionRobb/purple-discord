@@ -101,6 +101,7 @@ json_object_to_string(JsonObject *obj)
 #	define PURPLE_PLUGINS
 #endif
 
+#define ENABLE_NLS 1
 #ifdef ENABLE_NLS
 #	define GETTEXT_PACKAGE "purple-discord"
 #	include <glib/gi18n-lib.h>
@@ -295,18 +296,10 @@ typedef enum{
 	USER_DND
 } DiscordStatus;
 
-gchar *status_strings[4] = {
-	"Online",
-	"Idle",
-	"Offline",
-	"Do Not Disturb"
-};
-
 typedef enum{
 	CHANNEL_TEXT,
 	CHANNEL_VOICE
 } DiscordChannelType;
-
 
 typedef struct {
 	guint64 id;
@@ -3886,6 +3879,13 @@ discord_got_info(DiscordAccount *da, JsonNode *node, gpointer user_data)
 	purple_notify_user_info_add_pair_html(user_info, _("Username"), user->name);
 
 	//Display other non-profile info that we know about this buddy
+	gchar *status_strings[4] = {
+		_("Online"),
+		_("Idle"),
+		_("Offline"),
+		_("Do Not Disturb")
+	};
+
 	purple_notify_user_info_add_pair_html(user_info, _("Status"), status_strings[user->status]);
 	if (user->game != NULL) {
 		purple_notify_user_info_add_pair_html(user_info, _("In-Game"), user->game);
