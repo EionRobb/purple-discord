@@ -1772,7 +1772,7 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 				cbflags |= PURPLE_CHAT_USER_TYPING;
 				purple_chat_user_set_flags(cb, cbflags);
 
-				purple_timeout_add_seconds(5, discord_clear_typing, cb);
+				purple_timeout_add_seconds(10, discord_clear_typing, cb);
 			}
 		} else {
 			purple_serv_got_typing(da->pc, username, 10, PURPLE_IM_TYPING);
