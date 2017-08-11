@@ -3574,13 +3574,54 @@ discord_escape_md(gchar* markdown)
 	/* Worst case allocation */
 	GString *s = g_string_sized_new(strlen(markdown) * 2);
 
-	gboolean verbatim = TRUE;
+	gboolean verbatim = FALSE;
+	gboolean code_block = FALSE;
+	gboolean link = FALSE;
 
 	for(int i = 0; i < strlen(markdown); ++i) {
 		/* TODO: Escape iff it is necessary */
-		if(verbatim) {
+		char c = markdown[i];
+
+		if(c == '`') {
+			if(code_block) {
+				code_block = verbatim = FALSE;
+			} else if(!verbatim) {
+				code_block = verbatim = TRUE;
+			}
+
 			g_string_append_c(s, markdown[i]);
+
+			if(markdown[i + 1] == '`' && markdown[i + 2] == '`') {
+				i += 2;
+				g_string_append_c(s, markdown[i]);
+				g_string_append_c(s, markdown[i]);
+				continue;
+			}
 		}
+
+		if(!verbatim && strncmp(markdown + i, "http://", sizeof("http://") - 1) == 0) {
+			link = verbatim = TRUE;
+		}
+
+		if(link && c == ' ') {
+			link = verbatim = FALSE;
+		}
+
+		if(!verbatim) {
+			if(
+				(c == '_' && (markdown[i + 1] == ' ' ||
+			 				  markdown[i + 1] == '\0' ||
+				  		      markdown[i - 1] == ' ' ||
+				  		      markdown[i - 1] == '\0')) ||
+				(c == '*') ||
+				(c == '\\') ||
+				(c == '~' && (markdown[i + 1] == '~')))
+			{
+				g_string_append_c(s, '\\');
+			}
+		}
+
+		g_string_append_c(s, c);
 	}
 
 	g_free(markdown);
