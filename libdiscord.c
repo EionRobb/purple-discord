@@ -1443,12 +1443,12 @@ discord_replace_mention(const GMatchInfo *match, GString *result, gpointer user_
 
 		PurpleBuddy *buddy = purple_blist_find_buddy(da->account, name);
 
-		if (buddy && buddy->alias) {
+		if (buddy && purple_buddy_get_alias(buddy)) {
 			g_free(name);
-			name = g_strdup(buddy->alias);
-		} else if (snowflake == da->self_user_id && da->account->alias)  {
+			name = g_strdup(purple_buddy_get_alias(buddy));
+		} else if (snowflake == da->self_user_id && purple_account_get_private_alias(da->account))  {
 			g_free(name);
-			name = g_strdup(da->account->alias);
+			name = g_strdup(purple_account_get_private_alias(da->account));
 		}
 
 		g_string_append_printf(result, "<b>@%s</b>", name);
@@ -1500,7 +1500,7 @@ discord_make_mention(const GMatchInfo *match, GString *result, gpointer user_dat
 			PurpleBuddy *buddy = purple_blist_find_buddy(da->account, username);
 			g_free(username);
 
-			if(buddy && purple_strequal(buddy->alias, identifier)) {
+			if(buddy && purple_strequal(purple_buddy_get_alias(buddy), identifier)) {
 				user = u;
 				break;
 			}
