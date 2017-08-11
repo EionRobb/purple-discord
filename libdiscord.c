@@ -1972,10 +1972,10 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 PurpleGroup* discord_get_or_create_default_group() {
     PurpleGroup *discord_group = NULL;
 
-	discord_group = purple_blist_find_group(_("Discord"));
+	discord_group = purple_blist_find_group("Discord");
 	if (!discord_group)
 	{
-		discord_group = purple_group_new(_("Discord"));
+		discord_group = purple_group_new("Discord");
 		purple_blist_add_group(discord_group, NULL);
 	}
 
