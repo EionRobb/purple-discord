@@ -1119,6 +1119,7 @@ gpointer user_data, const gchar *url_text, gsize len, const gchar *error_message
 #endif
 	if (body == NULL && error_message != NULL) {
 		//connection error - unersolvable dns name, non existing server
+
 		gchar *error_msg_formatted = g_strdup_printf(_("Connection error: %s."), error_message);
 		purple_connection_error(conn->ya->pc, PURPLE_CONNECTION_ERROR_NETWORK_ERROR, error_msg_formatted);
 		g_free(error_msg_formatted);
@@ -3949,7 +3950,6 @@ discord_status_types(PurpleAccount *account)
 	PurpleStatusType *status;
 	gboolean use_status_as_game = purple_account_get_bool(account, "use-status-as-game", FALSE);
 
-	// We can only set statuses without in-game info
 	status = purple_status_type_new_full(PURPLE_STATUS_AVAILABLE, "set-online", _("Online"), TRUE, !use_status_as_game, FALSE);
 	types = g_list_append(types, status);
 
@@ -3965,7 +3965,6 @@ discord_status_types(PurpleAccount *account)
 	status = purple_status_type_new_full(PURPLE_STATUS_OFFLINE, "set-offline", _("Offline"), TRUE, TRUE, FALSE);
 	types = g_list_append(types, status);
 
-	// Other people can have an in-game display
 	status = purple_status_type_new_with_attrs(PURPLE_STATUS_AVAILABLE, "online", _("Online"), TRUE, use_status_as_game, FALSE, "message", "In-Game", purple_value_new(PURPLE_TYPE_STRING), NULL);
 	types = g_list_append(types, status);
 
