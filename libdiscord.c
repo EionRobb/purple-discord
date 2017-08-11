@@ -1642,7 +1642,20 @@ discord_process_message(DiscordAccount *da, JsonObject *data)
 
 	//Replace <@user_id> and <@!user_id> with usernames
 	if (mentions) {
+		for (i = json_array_get_length(mentions) - 1; i >= 0; i--) {
+			JsonObject *user = json_array_get_object_element(mentions, i);
+			guint64 id = to_int(json_object_get_string_member(user, "id"));
+
+			if (id == da->self_user_id) {
+				flags |= PURPLE_MESSAGE_NICK;
+			}
+		}
+
 		escaped_content = discord_replace_mentions_bare(da, escaped_content);
+	}
+
+	if(json_object_get_boolean_member(data, "mention_everyone")) {
+		flags |= PURPLE_MESSAGE_NICK;
 	}
 
 	//Replace <#channel_id> with channel names
