@@ -1670,7 +1670,7 @@ discord_process_message(DiscordAccount *da, JsonObject *data)
 struct discord_group_typing_data {
 	DiscordAccount *da;
 	const gchar *channel_id;
-	const gchar *username;
+	gchar *username;
 	gboolean set;
 	gboolean free_me;
 };
@@ -1712,6 +1712,7 @@ discord_set_group_typing(void *_u)
 	purple_chat_user_set_flags(cb, cbflags);
 
 	if(ctx->free_me) {
+		g_free(ctx->username);
 		g_free(ctx);
 	}
 
@@ -1812,7 +1813,6 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 			purple_serv_got_typing(da->pc, username, 10, PURPLE_IM_TYPING);
 
 		}
-		g_free(username);
 	} else if (purple_strequal(type, "CHANNEL_CREATE")) {
 		const gchar *channel_id = json_object_get_string_member(data, "id");
 		gint64 channel_type = json_object_get_int_member(data, "type");
