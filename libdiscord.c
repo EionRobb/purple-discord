@@ -404,7 +404,6 @@ typedef struct {
 	GSList *http_conns; /**< PurpleHttpConnection to be cancelled on logout */
 	gint frames_since_reconnect;
 	GSList *pending_writes;
-	gint roomlist_guild_count;
 } DiscordAccount;
 
 //just in case we optimize...
@@ -1999,84 +1998,6 @@ discord_normalise_room_name(const gchar *guild_name, const gchar *name)
 
 	return old_name;
 }
-
-static void
-discord_roomlist_got_list(DiscordAccount *da, DiscordGuild *guild, gpointer user_data)
-{
-	PurpleRoomlist *roomlist = user_data;
-	PurpleRoomlistRoom *category = purple_roomlist_room_new(PURPLE_ROOMLIST_ROOMTYPE_CATEGORY, guild->name, NULL);
-	purple_roomlist_room_add(roomlist, category);
-
-	GHashTableIter iter;
-	gpointer key, value;
-
-	g_hash_table_iter_init(&iter, guild->channels);
-	while(g_hash_table_iter_next(&iter, &key, &value)){
-		DiscordChannel *channel = value;
-		PurpleRoomlistRoom *room;
-
-		gchar *channel_id = g_strdup_printf("%" G_GUINT64_FORMAT, channel->id);
-		gchar *type_str;
-
-		room = purple_roomlist_room_new(PURPLE_ROOMLIST_ROOMTYPE_ROOM, "", category);
-
-		purple_roomlist_room_add_field(roomlist, room, channel_id);
-		purple_roomlist_room_add_field(roomlist, room, channel->name);
-		switch(channel->type) {
-			case 0: type_str = "Text"; break;
-			case 1: type_str = "Voice"; break;
-			default: type_str = "Unknown"; break;
-		}
-		purple_roomlist_room_add_field(roomlist, room, type_str);
-
-		purple_roomlist_room_add(roomlist, room);
-		g_free(channel_id);
-	}
-}
-
-static gchar *
-discord_roomlist_serialize(PurpleRoomlistRoom *room) {
-	GList *fields = purple_roomlist_room_get_fields(room);
-	const gchar *id = (const gchar *) fields->data;
-
-	return g_strdup(id);
-}
-
-PurpleRoomlist *
-discord_roomlist_get_list(PurpleConnection *pc)
-{
-	DiscordAccount *da = purple_connection_get_protocol_data(pc);
-	PurpleRoomlist *roomlist;
-	GList *fields = NULL;
-	PurpleRoomlistField *f;
-
-	roomlist = purple_roomlist_new(da->account);
-
-	f = purple_roomlist_field_new(PURPLE_ROOMLIST_FIELD_STRING, _("ID"), "id", TRUE);
-	fields = g_list_append(fields, f);
-
-	f = purple_roomlist_field_new(PURPLE_ROOMLIST_FIELD_STRING, _("Name"), "name", FALSE);
-	fields = g_list_append(fields, f);
-
-	f = purple_roomlist_field_new(PURPLE_ROOMLIST_FIELD_STRING, _("Room Type"), "type", FALSE);
-	fields = g_list_append(fields, f);
-
-	purple_roomlist_set_fields(roomlist, fields);
-	purple_roomlist_set_in_progress(roomlist, TRUE);
-
-	GHashTableIter iter;
-	gpointer key, guild;
-
-	g_hash_table_iter_init(&iter, da->new_guilds);
-	while(g_hash_table_iter_next(&iter, &key, &guild)){
-		discord_roomlist_got_list(da, guild, roomlist);
-	}
-
-	purple_roomlist_set_in_progress(roomlist, FALSE);
-
-	return roomlist;
-}
-
 
 void
 discord_set_status(PurpleAccount *account, PurpleStatus *status)
@@ -4331,9 +4252,6 @@ plugin_init(PurplePlugin *plugin)
 	prpl_info->group_buddy = discord_fake_group_buddy;
 	prpl_info->rename_group = discord_fake_group_rename;
 	prpl_info->get_info = discord_get_info;
-
-	prpl_info->roomlist_get_list = discord_roomlist_get_list;
-	prpl_info->roomlist_room_serialize = discord_roomlist_serialize;
 }
 
 static PurplePluginInfo info = {
@@ -4452,13 +4370,6 @@ discord_protocol_client_iface_init(PurpleProtocolClientIface *prpl_info)
 	prpl_info->tooltip_text = discord_tooltip_text;
 }
 
-static void
-discord_protocol_roomlist_iface_init(PurpleProtocolRoomlistIface *prpl_info)
-{
-	prpl_info->get_list = discord_roomlist_get_list;
-	prpl_info->room_serialize = discord_roomlist_serialize;
-}
-
 static PurpleProtocol *discord_protocol;
 
 PURPLE_DEFINE_TYPE_EXTENDED(
@@ -4475,10 +4386,6 @@ PURPLE_DEFINE_TYPE_EXTENDED(
 
 	PURPLE_IMPLEMENT_INTERFACE_STATIC(PURPLE_TYPE_PROTOCOL_CLIENT_IFACE,
 		                          discord_protocol_client_iface_init)
-
-	PURPLE_IMPLEMENT_INTERFACE_STATIC(PURPLE_TYPE_PROTOCOL_ROOMLIST_IFACE,
-		                          discord_protocol_roomlist_iface_init)
-
 );
 
 static gboolean
