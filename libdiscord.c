@@ -2277,7 +2277,6 @@ discord_buddy_guild(DiscordAccount *da, DiscordGuild *guild)
 	PurpleGroup *group = purple_group_new(guild->name);
 
 	if(!group) {
-		printf("Bad group\n");
 		return;
 	}
 
@@ -2295,10 +2294,8 @@ discord_buddy_guild(DiscordAccount *da, DiscordGuild *guild)
 		g_hash_table_replace(components, "name", channel->name);
 
 		PurpleChat *chat = purple_chat_new(da->account, channel->name, components);
-
 		purple_blist_add_chat(chat, group, NULL);
 	}
-
 
 	purple_blist_add_group(group, NULL);
 }
