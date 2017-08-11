@@ -1654,6 +1654,10 @@ discord_process_message(DiscordAccount *da, JsonObject *data)
 		escaped_content = discord_replace_mentions_bare(da, escaped_content);
 	}
 
+	if(json_object_get_boolean_member(data, "mention_everyone")) {
+		flags |= PURPLE_MESSAGE_NICK;
+	}
+
 	//Replace <#channel_id> with channel names
 	tmp = g_regex_replace_eval(channel_mentions_regex, escaped_content, -1, 0, 0, discord_replace_channel, da, NULL);
 	if (tmp != NULL) {
