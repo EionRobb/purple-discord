@@ -1378,10 +1378,11 @@ static void discord_populate_guild(DiscordAccount *da, JsonObject *guild);
 static void discord_got_guilds(DiscordAccount *da, JsonNode *node, gpointer user_data);
 static void discord_got_avatar(DiscordAccount *da, JsonNode *node, gpointer user_data);
 static void discord_get_avatar(DiscordAccount *da, DiscordUser *user);
+static void discord_buddy_guild(DiscordAccount *da, DiscordGuild *guild);
 
 static const gchar *discord_normalise_room_name(const gchar *guild_name, const gchar *name);
 
-static guint64 discord_compute_permission(DiscordAccount *da, DiscordChannel *channel);
+static guint64 discord_compute_permission(DiscordAccount *da, DiscordUser *user, DiscordChannel *channel);
 
 static gboolean
 discord_replace_channel(const GMatchInfo *match, GString *result, gpointer user_data)
@@ -1882,11 +1883,17 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 
 		g_free(da->session_id); da->session_id = g_strdup(json_object_get_string_member(data, "session_id"));
 
+		/* Ensure user is non-null */
+		g_hash_table_replace_int64(da->new_users, da->self_user_id, self_user);
+
 		discord_got_relationships(da, json_object_get_member(data, "relationships"), NULL);
 		discord_got_private_channels(da, json_object_get_member(data, "private_channels"), NULL);
 		discord_got_presences(da, json_object_get_member(data, "presences"), NULL);
 		discord_got_guilds(da, json_object_get_member(data, "guilds"), NULL);
 		discord_got_read_states(da, json_object_get_member(data, "read_state"), NULL);
+
+		/* But steal afterward, this user object is partial */
+		g_hash_table_steal(da->new_users, &da->self_user_id);
 
 		purple_connection_set_state(da->pc, PURPLE_CONNECTION_CONNECTED);
 
@@ -1922,6 +1929,8 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 				g_array_append_val(membership->roles, role);
 			}
 		}
+
+		discord_buddy_guild(da, guild);
 
 		purple_debug_info("discord", "Room has '%d' Members\n", json_array_get_length(members));
 
@@ -2272,7 +2281,7 @@ discord_buddy_guild(DiscordAccount *da, DiscordGuild *guild)
 
 	if(purple_blist_find_group(guild->name)) {
 		/* TODO: Sync then? */
-		return;
+		purple_blist_remove_group(purple_blist_find_group(guild->name));
 	}
 
 	PurpleGroup *group = purple_group_new(guild->name);
@@ -2285,12 +2294,19 @@ discord_buddy_guild(DiscordAccount *da, DiscordGuild *guild)
 	gpointer key;
 	gpointer value;
 
+	DiscordUser *user = discord_get_user_int(da, da->self_user_id);
+
+	if(!user) {
+		purple_debug_info("discord", "Null user; aborting blist population");
+		return;
+	}
+
 	g_hash_table_iter_init(&iter, guild->channels);
 	while(g_hash_table_iter_next(&iter, &key, &value)){
 		DiscordChannel *channel = value;
 
 		/* Ensure that we actually have permissions for this channel */
-		guint64 permission = discord_compute_permission(da, channel);
+		guint64 permission = discord_compute_permission(da, user, channel);
 
 		printf("Permission for %s: %" G_GUINT64_FORMAT "\n", channel->name, permission);
 
@@ -2335,8 +2351,6 @@ discord_populate_guild(DiscordAccount *da, JsonObject *guild)
 			discord_add_permission_override(c, permission_override);
 		}
 	}
-
-	discord_buddy_guild(da, g);
 }
 
 static void
@@ -2350,6 +2364,7 @@ discord_got_guilds(DiscordAccount *da, JsonNode *node, gpointer user_data)
 	for (int i = len - 1; i >= 0; i--) {
 		JsonObject *guild = json_array_get_object_element(guilds, i);
 		discord_populate_guild(da, guild);
+		discord_buddy_guild(da, discord_get_guild(da, json_object_get_string_member(guild, "id")));
 		json_array_add_string_element(guild_ids, json_object_get_string_member(guild, "id"));
 	}
 
@@ -3232,12 +3247,10 @@ discord_set_room_last_id(DiscordAccount *da, guint64 id, guint64 last_id)
 /* TODO: Cache better, compute for other users, etc */
 
 static guint64
-discord_compute_permission(DiscordAccount *da, DiscordChannel *channel) {
-	guint64 uid = da->self_user_id;
+discord_compute_permission(DiscordAccount *da, DiscordUser *user, DiscordChannel *channel) {
+	guint64 uid = user->id;
 	guint64 permissions = 0;
 
-	DiscordUser *user = discord_get_user_int(da, uid);
-	
 	/* Check special permission overrides just for us */
 
 	DiscordPermissionOverride *uo =
@@ -3245,22 +3258,13 @@ discord_compute_permission(DiscordAccount *da, DiscordChannel *channel) {
 
 	if(uo) {
 		permissions = (permissions | uo->allow) & ~(uo->deny);
+	} else {
+		printf("No user permissions...\n");
 	}
 
 	/* Check overrides for the roles we're in */
-	DiscordGuildMembership *guild_membership = NULL;
-
-	GHashTableIter guild_membership_iter;
-	gpointer key, value;
-	g_hash_table_iter_init(&guild_membership_iter, user->guild_memberships);
-	while(g_hash_table_iter_next (&guild_membership_iter, &key, &value) ){
-		DiscordGuildMembership *gm = value;
-
-		if(gm->id == channel->guild_id) {
-			guild_membership = gm;
-			break;
-		}
-	}
+	DiscordGuildMembership *guild_membership
+		= g_hash_table_lookup_int64(user->guild_memberships, channel->guild_id);
 
 	if(guild_membership) {
 		/* Should always exist, but just in case... */
@@ -3274,6 +3278,8 @@ discord_compute_permission(DiscordAccount *da, DiscordChannel *channel) {
 
 			if(ro) {
 				permissions = (permissions | ro->allow) & ~(ro->deny);
+			} else {
+				printf("This role is not\n");
 			}
 		}
 	}
