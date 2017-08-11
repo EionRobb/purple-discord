@@ -1494,7 +1494,7 @@ discord_make_mention(const GMatchInfo *match, GString *result, gpointer user_dat
 			PurpleBuddy *buddy = purple_blist_find_buddy(da->account, username);
 			g_free(username);
 
-			if(buddy && g_strcmp0(buddy->alias, identifier) == 0) {
+			if(buddy && purple_strequal(buddy->alias, identifier)) {
 				user = u;
 				break;
 			}
