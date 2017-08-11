@@ -2291,7 +2291,7 @@ discord_buddy_guild(DiscordAccount *da, DiscordGuild *guild)
 		GHashTable *components = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
 
 		g_hash_table_replace(components, "id", g_strdup_printf("%" G_GUINT64_FORMAT, channel->id));
-		g_hash_table_replace(components, "name", channel->name);
+		g_hash_table_replace(components, "name", g_strdup(channel->name));
 
 		PurpleChat *chat = purple_chat_new(da->account, channel->name, components);
 		purple_blist_add_chat(chat, group, NULL);
