@@ -3626,8 +3626,6 @@ discord_escape_md(gchar* markdown)
 		g_string_append_c(s, c);
 	}
 
-	g_free(markdown);
-
 	return g_string_free(s, FALSE);
 }
 
@@ -3645,7 +3643,7 @@ discord_conversation_send_message(DiscordAccount *da, guint64 room_id, const gch
 	nonce = g_strdup_printf("%" G_GUINT32_FORMAT, g_random_int());
 	g_hash_table_insert(da->sent_message_ids, nonce, nonce);
 
-	marked = discord_html_to_markdown(discord_escape_md(g_strdup(message)));
+	marked = discord_html_to_markdown(discord_escape_md(message));
 	stripped = g_strstrip(purple_markup_strip_html(marked));
 
 	/* translate Discord-formatted actions into *markdown* syntax */
