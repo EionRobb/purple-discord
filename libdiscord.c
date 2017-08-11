@@ -421,6 +421,11 @@ static guint64 to_int(const gchar *id)
 	return id ? g_ascii_strtoull(id, NULL, 10) : 0;
 }
 
+static gchar *from_int(guint64 id)
+{
+	return g_strdup_printf("%" G_GUINT64_FORMAT, id);
+}
+
 static void discord_free_guild_membership(gpointer data);
 static void discord_free_guild_role(gpointer data);
 static void discord_free_channel(gpointer data);
@@ -1838,7 +1843,7 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 				const gchar *discriminator = json_object_get_string_member(first_recipient, "discriminator");
 
 				g_hash_table_replace(da->one_to_ones, g_strdup(channel_id), discord_combine_username(username, discriminator));
-				g_hash_table_replace(da->last_message_id_dm, g_strdup(channel_id), to_int(last_message_id));
+				g_hash_table_replace(da->last_message_id_dm, g_strdup(channel_id), g_strdup(last_message_id));
 				g_hash_table_replace(da->one_to_ones_rev, discord_combine_username(username, discriminator), g_strdup(channel_id));
 			}
 
@@ -2200,7 +2205,7 @@ discord_build_groups_from_blist(DiscordAccount *ya)
 			discord_id = purple_blist_node_get_string(node, "discord_id");
 			if (discord_id != NULL) {
 				g_hash_table_replace(ya->one_to_ones, g_strdup(discord_id), g_strdup(name));
-				g_hash_table_replace(ya->last_message_id_dm, g_strdup(discord_id), 0);
+				g_hash_table_replace(ya->last_message_id_dm, g_strdup(discord_id), "0");
 				g_hash_table_replace(ya->one_to_ones_rev, g_strdup(name), g_strdup(discord_id));
 			}
 		}
@@ -2317,7 +2322,7 @@ discord_got_private_channels(DiscordAccount *da, JsonNode *node, gpointer user_d
 
 			g_hash_table_replace(da->one_to_ones, g_strdup(room_id), g_strdup(merged_username));
 			g_hash_table_replace(da->one_to_ones_rev, g_strdup(merged_username), g_strdup(room_id));
-			g_hash_table_replace(da->last_message_id_dm, g_strdup(room_id), to_int(last_message_id));
+			g_hash_table_replace(da->last_message_id_dm, g_strdup(room_id), g_strdup(last_message_id));
 
 			g_free(merged_username);
 		}
@@ -3461,11 +3466,17 @@ discord_mark_room_messages_read(DiscordAccount *da, guint64 channel_id)
 
 	if (channel) {
 		last_message_id = channel->last_message_id;
-	} else if (g_hash_table_contains_int64(da->last_message_id_dm, channel_id)) {
-		last_message_id = g_hash_table_lookup_int64(da->last_message_id_dm, channel_id);
 	} else {
-		purple_debug_info("discord", "Unknown acked channel %" G_GUINT64_FORMAT, channel_id);
-		return;
+		gchar *channel = from_int(channel_id);
+		gchar *msg = g_hash_table_lookup(da->last_message_id_dm, channel);
+		g_free(channel);
+
+		if(msg) {
+			last_message_id = to_int(msg);
+		} else {
+			purple_debug_info("discord", "Unknown acked channel %" G_GUINT64_FORMAT, channel_id);
+			return;
+		}
 	}
 
 	if (last_message_id == 0) {
@@ -3474,8 +3485,8 @@ discord_mark_room_messages_read(DiscordAccount *da, guint64 channel_id)
 
 	guint64 known_message_id = discord_get_room_last_id(da, channel_id);
 
-	if(last_message_id == known_message_id) {
-		printf("All up to date\n");
+	if (last_message_id == known_message_id) {
+		/* Up to date */
 		return;
 	}
 
@@ -3483,7 +3494,7 @@ discord_mark_room_messages_read(DiscordAccount *da, guint64 channel_id)
 
 	gchar *url;
 	
-	url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/v6/channels/%" G_GUINT64_FORMAT "/messages/%" G_GUINT64_FORMAT "/ack", channel_id, channel->last_message_id);
+	url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/v6/channels/%" G_GUINT64_FORMAT "/messages/%" G_GUINT64_FORMAT "/ack", channel_id, last_message_id);
 	discord_fetch_url(da, url, "{\"token\":null}", NULL, NULL);
 	g_free(url);
 }
