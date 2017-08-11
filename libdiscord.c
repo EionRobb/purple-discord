@@ -101,7 +101,10 @@ json_object_to_string(JsonObject *obj)
 #	define PURPLE_PLUGINS
 #endif
 
-#ifndef _
+#ifdef ENABLE_NLS
+#	define GETTEXT_PACKAGE "purple-discord"
+#	include <glib/gi18n-lib.h>
+#else
 #	define _(a) (a)
 #	define N_(a) (a)
 #endif
@@ -4292,6 +4295,11 @@ plugin_init(PurplePlugin *plugin)
 
 	prpl_info->roomlist_get_list = discord_roomlist_get_list;
 	prpl_info->roomlist_room_serialize = discord_roomlist_serialize;
+
+#if ENABLE_NLS
+	bindtextdomain(GETTEXT_PACKAGE, LOCALEDIR);
+	bind_textdomain_codeset(GETTEXT_PACKAGE, "UTF-8");
+#endif
 }
 
 static PurplePluginInfo info = {
