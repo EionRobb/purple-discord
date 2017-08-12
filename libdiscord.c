@@ -2487,6 +2487,8 @@ discord_got_guilds(DiscordAccount *da, JsonNode *node, gpointer user_data)
 	json_object_set_array_member(obj, "d", guild_ids);
 
 	discord_socket_write_json(da, obj);
+
+	json_object_unref(obj);
 }
 
 /* If count is explicitly specified, use a static request (DMs).
