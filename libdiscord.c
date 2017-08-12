@@ -1387,7 +1387,7 @@ static void discord_got_avatar(DiscordAccount *da, JsonNode *node, gpointer user
 static void discord_get_avatar(DiscordAccount *da, DiscordUser *user);
 
 static const gchar *discord_normalise_room_name(const gchar *guild_name, const gchar *name);
-static DiscordChannel *discord_open_chat(DiscordAccount *da, guint64 id, gchar *name);
+static DiscordChannel *discord_open_chat(DiscordAccount *da, guint64 id, gchar *name, gboolean present);
 
 static gboolean
 discord_replace_channel(const GMatchInfo *match, GString *result, gpointer user_data)
@@ -1749,7 +1749,15 @@ discord_process_message(DiscordAccount *da, JsonObject *data)
 		guint64 tmp = to_int(channel_id);
 
 		/* Open the buffer if it's not already */
-		discord_open_chat(da, tmp, NULL);
+		DiscordGuild *guild;
+		discord_get_channel_global_int_guild(da, tmp, &guild);
+		int head_count = guild->members->len;
+
+		gboolean mentioned = flags & PURPLE_MESSAGE_NICK;
+
+		if(mentioned || (head_count < purple_account_get_int(da->account, "large-channel-count", 20))) {
+			discord_open_chat(da, tmp, NULL, mentioned);
+		}
 
 		if (escaped_content && *escaped_content) {
 			purple_serv_got_chat_in(da->pc, g_int64_hash(&tmp), merged_username, flags, escaped_content, timestamp);
@@ -3483,7 +3491,7 @@ discord_got_channel_info(DiscordAccount *da, JsonNode *node, gpointer user_data)
 }
 
 static DiscordChannel *
-discord_open_chat(DiscordAccount *da, guint64 id, gchar *name)
+discord_open_chat(DiscordAccount *da, guint64 id, gchar *name, gboolean present)
 {
 	PurpleChatConversation *chatconv = NULL;
 
@@ -3516,7 +3524,10 @@ discord_open_chat(DiscordAccount *da, guint64 id, gchar *name)
 	}
 
 	if (chatconv != NULL && !purple_chat_conversation_has_left(chatconv)) {
-		purple_conversation_present(PURPLE_CONVERSATION(chatconv));
+		if(present) {
+			purple_conversation_present(PURPLE_CONVERSATION(chatconv));
+		}
+
 		return NULL;
 	}
 
@@ -3542,7 +3553,7 @@ discord_join_chat(PurpleConnection *pc, GHashTable *chatdata)
 
 	gchar *name = (gchar *) g_hash_table_lookup(chatdata, "name");
 
-	DiscordChannel *channel = discord_open_chat(da, id, name);
+	DiscordChannel *channel = discord_open_chat(da, id, name, TRUE);
 
 	if(!channel) {
 		return;
@@ -4259,6 +4270,9 @@ discord_add_account_options(GList *account_options)
 	PurpleAccountOption *option;
 
 	option = purple_account_option_bool_new(N_("Use status message as in-game info"), "use-status-as-game", FALSE);
+	account_options = g_list_append(account_options, option);
+
+	option = purple_account_option_int_new(N_("Number of users in a large channel"), "large-channel-count", 20);
 	account_options = g_list_append(account_options, option);
 
 	return account_options;
