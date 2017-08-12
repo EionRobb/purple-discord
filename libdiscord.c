@@ -1368,6 +1368,8 @@ discord_send_heartbeat(gpointer userdata)
 
 	discord_socket_write_json(da, obj);
 
+	json_object_unref(obj);
+
 	return TRUE;
 }
 
