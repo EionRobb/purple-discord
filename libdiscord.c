@@ -1995,8 +1995,6 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		guint64 gid = to_int(guild_id);
 		GList *users = NULL, *flags = NULL;
 
-		GHashTable *user_list = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, NULL);
-
 		DiscordGuild *guild = discord_get_guild(da, guild_id);
 
 		purple_debug_info("discord", "Guild id '%" G_GUINT64_FORMAT "' \n", gid);
@@ -2025,8 +2023,6 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 
 			DiscordUser *user = discord_upsert_user(da->new_users, json_object_get_object_member(presence, "user"));
 			discord_update_status(user, presence);
-
-			g_hash_table_insert(user_list, g_strdup_printf("%" G_GUINT64_FORMAT, user->id), NULL);
 
 			gchar *full_username = discord_create_fullname(user);
 			PurpleChatUserFlags cbflags = discord_get_user_flags(da, guild_id, full_username);
