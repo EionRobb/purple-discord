@@ -2387,10 +2387,11 @@ discord_buddy_guild(DiscordAccount *da, DiscordGuild *guild)
 		/* Ensure that we actually have permissions for this channel */
 		guint64 permission = discord_compute_permission(da, user, channel);
 
-		/* READ_MESSAGES */
-		if(!(permission & 0x400)) {
-			continue;
-		}
+		/* must have READ_MESSAGES */
+		if(!(permission & 0x400)) continue;
+
+		/* Drop voice channels since we don't support them anyway */
+		if(channel->type == CHANNEL_VOICE) continue;
 
 		GHashTable *components = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
 
