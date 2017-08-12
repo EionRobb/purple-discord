@@ -3276,9 +3276,8 @@ discord_permission_role_override(DiscordChannel *channel, guint64 role, guint64 
 static guint64
 discord_compute_permission(DiscordAccount *da, DiscordUser *user, DiscordChannel *channel) {
 	guint64 uid = user->id;
-	guint64 permissions = 0; /* Assume recv / send messages */
+	guint64 permissions = 0;
 
-	/* Check overrides for the roles we're in */
 	DiscordGuildMembership *guild_membership
 		= g_hash_table_lookup_int64(user->guild_memberships, channel->guild_id);
 
@@ -3287,10 +3286,15 @@ discord_compute_permission(DiscordAccount *da, DiscordUser *user, DiscordChannel
 
 		DiscordGuild *guild = discord_get_guild_int(da, channel->guild_id);
 
+		/* @everyone */
+		permissions = discord_permission_role(guild, channel->guild_id, permissions);
+
 		for(guint i = 0; i < guild_membership->roles->len; i++) {
 			guint64 r = g_array_index(guild_membership->roles, guint64, i);
 			permissions = discord_permission_role(guild, r, permissions);
 		}
+
+		permissions = discord_permission_role_override(channel, channel->guild_id, permissions);
 
 		for(guint i = 0; i < guild_membership->roles->len; i++) {
 			guint64 role = g_array_index(guild_membership->roles, guint64, i);
