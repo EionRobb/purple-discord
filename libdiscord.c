@@ -2281,7 +2281,7 @@ discord_buddy_guild(DiscordAccount *da, DiscordGuild *guild)
 
 	if(purple_blist_find_group(guild->name)) {
 		/* TODO: Sync then? */
-		purple_blist_remove_group(purple_blist_find_group(guild->name));
+		return;
 	}
 
 	PurpleGroup *group = purple_group_new(guild->name);
@@ -2364,7 +2364,7 @@ discord_got_guilds(DiscordAccount *da, JsonNode *node, gpointer user_data)
 	for (int i = len - 1; i >= 0; i--) {
 		JsonObject *guild = json_array_get_object_element(guilds, i);
 		discord_populate_guild(da, guild);
-		discord_buddy_guild(da, discord_get_guild(da, json_object_get_string_member(guild, "id")));
+//		discord_buddy_guild(da, discord_get_guild(da, json_object_get_string_member(guild, "id")));
 		json_array_add_string_element(guild_ids, json_object_get_string_member(guild, "id"));
 	}
 
@@ -3244,12 +3244,12 @@ discord_set_room_last_id(DiscordAccount *da, guint64 id, guint64 last_id)
 	g_free(channel_id);
 }
 
-/* TODO: Cache better, compute for other users, etc */
+/* TODO: Cache better, sane defaults */
 
 static guint64
 discord_compute_permission(DiscordAccount *da, DiscordUser *user, DiscordChannel *channel) {
 	guint64 uid = user->id;
-	guint64 permissions = 0;
+	guint64 permissions = 0x400 | 0x800; /* Assume recv / send messages */
 
 	/* Check special permission overrides just for us */
 
@@ -3258,11 +3258,10 @@ discord_compute_permission(DiscordAccount *da, DiscordUser *user, DiscordChannel
 
 	if(uo) {
 		permissions = (permissions | uo->allow) & ~(uo->deny);
-	} else {
-		printf("No user permissions...\n");
 	}
 
 	/* Check overrides for the roles we're in */
+	printf("Searching %p for %lu\n", user->guild_memberships, channel->guild_id);
 	DiscordGuildMembership *guild_membership
 		= g_hash_table_lookup_int64(user->guild_memberships, channel->guild_id);
 
@@ -3278,8 +3277,6 @@ discord_compute_permission(DiscordAccount *da, DiscordUser *user, DiscordChannel
 
 			if(ro) {
 				permissions = (permissions | ro->allow) & ~(ro->deny);
-			} else {
-				printf("This role is not\n");
 			}
 		}
 	}
