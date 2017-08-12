@@ -3260,6 +3260,15 @@ discord_compute_permission(DiscordAccount *da, DiscordUser *user, DiscordChannel
 	if(guild_membership) {
 		/* Should always exist, but just in case... */
 
+		DiscordGuild *guild = discord_get_guild_int(da, channel->guild_id);
+
+		for(guint i = 0; i < guild_membership->roles->len; i++) {
+			guint64 r = g_array_index(guild_membership->roles, guint64, i);
+
+			DiscordGuildRole *role = g_hash_table_lookup_int64(guild->roles, r);
+			permissions |= role->permissions;
+		}
+
 		for(guint i = 0; i < guild_membership->roles->len; i++) {
 			guint64 role = g_array_index(guild_membership->roles, guint64, i);
 
@@ -3271,7 +3280,7 @@ discord_compute_permission(DiscordAccount *da, DiscordUser *user, DiscordChannel
 				printf("There is a permission override for role %d:\n", i);
 				printf("Allow %lu, deny %lu\n", ro->allow, ro->deny);
 				printf("%lu", permissions);
-				permissions = (permissions & ~ro->deny) | ro_allow;
+				permissions = (permissions & ~(ro->deny)) | ro->allow;
 				printf("->%lu\n", permissions);
 			}
 		}
@@ -3283,7 +3292,7 @@ discord_compute_permission(DiscordAccount *da, DiscordUser *user, DiscordChannel
 		g_hash_table_lookup_int64(channel->permission_user_overrides, uid);
 
 	if(uo) {
-		permissions = (permissions & ~uo->deny) | uo_allow;
+		permissions = (permissions & ~(uo->deny)) | uo->allow;
 	}
 
 	return permissions;
