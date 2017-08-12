@@ -1353,6 +1353,8 @@ discord_send_auth(DiscordAccount *da)
 	json_object_set_object_member(obj, "d", data);
 
 	discord_socket_write_json(da, obj);
+
+	json_object_unref(obj);
 }
 
 static gboolean
