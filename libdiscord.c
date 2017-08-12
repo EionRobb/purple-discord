@@ -2387,8 +2387,6 @@ discord_buddy_guild(DiscordAccount *da, DiscordGuild *guild)
 		/* Ensure that we actually have permissions for this channel */
 		guint64 permission = discord_compute_permission(da, user, channel);
 
-		printf("Permission for %s: %" G_GUINT64_FORMAT "\n", channel->name, permission);
-
 		/* READ_MESSAGES */
 		if(!(permission & 0x400)) {
 			continue;
@@ -3331,11 +3329,7 @@ static guint64
 discord_permission_role(DiscordGuild *guild, guint64 r, guint64 permission)
 {
 	DiscordGuildRole *role = g_hash_table_lookup_int64(guild->roles, r);
-
-	if(role)
-		return permission | role->permissions;
-
-	return permission;
+	return role ? (permission | role->permissions) : permission;
 }
 
 static guint64
@@ -3344,12 +3338,7 @@ discord_permission_role_override(DiscordChannel *channel, guint64 role, guint64 
 	DiscordPermissionOverride *ro =
 		g_hash_table_lookup_int64(channel->permission_role_overrides, role);
 
-	if(ro) {
-		printf("Allow %lu, deny %lu\n", ro->allow, ro->deny);
-		return (permission & ~(ro->deny)) | ro->allow;
-	}
-
-	return permission;
+	return ro ? ((permission & ~(ro->deny)) | ro->allow) : permission;
 }
 
 static guint64
