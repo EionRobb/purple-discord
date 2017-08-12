@@ -3249,6 +3249,31 @@ discord_set_room_last_id(DiscordAccount *da, guint64 id, guint64 last_id)
 // https://support.discordapp.com/hc/en-us/articles/206141927-How-is-the-permission-hierarchy-structured-
 
 static guint64
+discord_permission_role(DiscordGuild *guild, guint64 r, guint64 permission)
+{
+	DiscordGuildRole *role = g_hash_table_lookup_int64(guild->roles, r);
+
+	if(role)
+		return permission | role->permissions;
+
+	return permission;
+}
+
+static guint64
+discord_permission_role_override(DiscordChannel *channel, guint64 role, guint64 permission)
+{
+	DiscordPermissionOverride *ro =
+		g_hash_table_lookup_int64(channel->permission_role_overrides, role);
+
+	if(ro) {
+		printf("Allow %lu, deny %lu\n", ro->allow, ro->deny);
+		return (permission & ~(ro->deny)) | ro->allow;
+	}
+
+	return permission;
+}
+
+static guint64
 discord_compute_permission(DiscordAccount *da, DiscordUser *user, DiscordChannel *channel) {
 	guint64 uid = user->id;
 	guint64 permissions = 0; /* Assume recv / send messages */
@@ -3264,25 +3289,12 @@ discord_compute_permission(DiscordAccount *da, DiscordUser *user, DiscordChannel
 
 		for(guint i = 0; i < guild_membership->roles->len; i++) {
 			guint64 r = g_array_index(guild_membership->roles, guint64, i);
-
-			DiscordGuildRole *role = g_hash_table_lookup_int64(guild->roles, r);
-			permissions |= role->permissions;
+			permissions = discord_permission_role(guild, r, permissions);
 		}
 
 		for(guint i = 0; i < guild_membership->roles->len; i++) {
 			guint64 role = g_array_index(guild_membership->roles, guint64, i);
-
-			/* Check permission overrides for this role */
-			DiscordPermissionOverride *ro =
-				g_hash_table_lookup_int64(channel->permission_role_overrides, role);
-
-			if(ro) {
-				printf("There is a permission override for role %d:\n", i);
-				printf("Allow %lu, deny %lu\n", ro->allow, ro->deny);
-				printf("%lu", permissions);
-				permissions = (permissions & ~(ro->deny)) | ro->allow;
-				printf("->%lu\n", permissions);
-			}
+			permissions = discord_permission_role_override(channel, role, permissions);
 		}
 	}
 
