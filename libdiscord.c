@@ -1887,6 +1887,8 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		};
 
 		discord_set_group_typing(&ctx);
+
+		g_free(n);
 	} else if (purple_strequal(type, "TYPING_START")) {
 		const gchar *channel_id = json_object_get_string_member(data, "channel_id");
 		guint64 user_id = to_int(json_object_get_string_member(data, "user_id"));
