@@ -3246,22 +3246,14 @@ discord_set_room_last_id(DiscordAccount *da, guint64 id, guint64 last_id)
 
 /* TODO: Cache better, sane defaults */
 
+// https://support.discordapp.com/hc/en-us/articles/206141927-How-is-the-permission-hierarchy-structured-
+
 static guint64
 discord_compute_permission(DiscordAccount *da, DiscordUser *user, DiscordChannel *channel) {
 	guint64 uid = user->id;
-	guint64 permissions = 0x400 | 0x800; /* Assume recv / send messages */
-
-	/* Check special permission overrides just for us */
-
-	DiscordPermissionOverride *uo =
-		g_hash_table_lookup_int64(channel->permission_user_overrides, uid);
-
-	if(uo) {
-		permissions = (permissions | uo->allow) & ~(uo->deny);
-	}
+	guint64 permissions = 0; /* Assume recv / send messages */
 
 	/* Check overrides for the roles we're in */
-	printf("Searching %p for %lu\n", user->guild_memberships, channel->guild_id);
 	DiscordGuildMembership *guild_membership
 		= g_hash_table_lookup_int64(user->guild_memberships, channel->guild_id);
 
@@ -3276,9 +3268,22 @@ discord_compute_permission(DiscordAccount *da, DiscordUser *user, DiscordChannel
 				g_hash_table_lookup_int64(channel->permission_role_overrides, role);
 
 			if(ro) {
-				permissions = (permissions | ro->allow) & ~(ro->deny);
+				printf("There is a permission override for role %d:\n", i);
+				printf("Allow %lu, deny %lu\n", ro->allow, ro->deny);
+				printf("%lu", permissions);
+				permissions = (permissions & ~ro->deny) | ro_allow;
+				printf("->%lu\n", permissions);
 			}
 		}
+	}
+
+	/* Check special permission overrides just for us */
+
+	DiscordPermissionOverride *uo =
+		g_hash_table_lookup_int64(channel->permission_user_overrides, uid);
+
+	if(uo) {
+		permissions = (permissions & ~uo->deny) | uo_allow;
 	}
 
 	return permissions;
