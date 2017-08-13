@@ -105,8 +105,8 @@ typedef struct {
 
 	GHashTable *roles;
 	GArray *members;	   //list of member ids
-	GHashTable *nicknames;     // id->nick?
-	GHashTable *nicknames_rev; // reverse
+	GHashTable *nicknames;     /* id->nick? */
+	GHashTable *nicknames_rev; /* reverse */
 
 	GHashTable *channels;
 	int afk_timeout;
@@ -161,12 +161,12 @@ typedef struct {
 	gint64 seq; //incrementing counter
 	guint heartbeat_timeout;
 
-	GHashTable *one_to_ones;	// A store of known room_id's -> username's
-	GHashTable *one_to_ones_rev;    // A store of known usernames's -> room_id's
-	GHashTable *last_message_id_dm; // A store of known room_id's -> last_message_id's
-	GHashTable *sent_message_ids;   // A store of message id's that we generated from this instance
-	GHashTable *result_callbacks;   // Result ID -> Callback function
-	GQueue *received_message_queue; // A store of the last 10 received message id's for de-dup
+	GHashTable *one_to_ones;	/* A store of known room_id's -> username's */
+	GHashTable *one_to_ones_rev;    /* A store of known usernames's -> room_id's */
+	GHashTable *last_message_id_dm; /* A store of known room_id's -> last_message_id's */
+	GHashTable *sent_message_ids;   /* A store of message id's that we generated from this instance */
+	GHashTable *result_callbacks;   /* Result ID -> Callback function */
+	GQueue *received_message_queue; /* A store of the last 10 received message id's for de-dup */
 
 	GHashTable *new_users;
 	GHashTable *new_guilds;
@@ -822,7 +822,7 @@ discord_get_user_flags(DiscordAccount *da, const gchar *guild_id, const gchar *u
 		if (role != NULL) {
 			if (role->permissions & 0x8) { //Admin
 				this_flag = PURPLE_CHAT_USER_OP;
-			} else if (role->permissions & (0x2 | 0x4)) { // Ban/kick
+			} else if (role->permissions & (0x2 | 0x4)) { /* Ban/kick */
 				this_flag = PURPLE_CHAT_USER_HALFOP;
 			}
 		}
@@ -2033,7 +2033,7 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 
 		purple_debug_info("discord", "Room has '%d' Members\n", json_array_get_length(members));
 
-		// Presence only contains online users
+		/* Presence only contains online users */
 		for (int j = json_array_get_length(presences) - 1; j >= 0; j--) {
 			JsonObject *presence = json_array_get_object_element(presences, j);
 
@@ -2048,7 +2048,7 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 			flags = g_list_prepend(flags, GINT_TO_POINTER(cbflags));
 		}
 
-		// Add all online people to any open chats
+		/* Add all online people to any open chats */
 		GHashTableIter iter;
 		gpointer key, value;
 
@@ -2582,7 +2582,7 @@ discord_got_guilds(DiscordAccount *da, JsonNode *node, gpointer user_data)
 
 	discord_print_guilds(da->new_guilds);
 
-	// Request more info about guilds (online/offline buddy status)
+	/* Request more info about guilds (online/offline buddy status) */
 	obj = json_object_new();
 	json_object_set_int_member(obj, "op", 12);
 	json_object_set_array_member(obj, "d", guild_ids);
@@ -2694,13 +2694,13 @@ discord_login_response(DiscordAccount *da, JsonNode *node, gpointer user_data)
 		}
 
 		if (json_object_has_member(response, "email")) {
-			// Probably an error about new location
+			/* Probably an error about new location */
 			purple_connection_error(da->pc, PURPLE_CONNECTION_ERROR_AUTHENTICATION_FAILED, json_object_get_string_member(response, "email"));
 			return;
 		}
 
 		if (json_object_has_member(response, "password")) {
-			// Probably an error about bad password
+			/* Probably an error about bad password */
 			purple_connection_error(da->pc, PURPLE_CONNECTION_ERROR_AUTHENTICATION_FAILED, json_object_get_string_member(response, "password"));
 			return;
 		}
@@ -3073,12 +3073,12 @@ discord_socket_got_data(gpointer userdata, PurpleSslConnection *conn, PurpleInpu
 						}
 					}
 
-					// Try reconnect
+					/* Try reconnect */
 					discord_start_socket(ya);
 
 					return;
 				} else if (ya->packet_code == 137) {
-					// Ping
+					/* Ping */
 					gint ping_frame_len = 0;
 					length_code = 0;
 					purple_ssl_read(conn, &length_code, 1);
@@ -3106,8 +3106,7 @@ discord_socket_got_data(gpointer userdata, PurpleSslConnection *conn, PurpleInpu
 
 					return;
 				} else if (ya->packet_code == 138) {
-					// Pong
-					//who cares
+					/* Ignore pong */
 					return;
 				}
 
@@ -3170,7 +3169,7 @@ discord_socket_got_data(gpointer userdata, PurpleSslConnection *conn, PurpleInpu
 		if (ya->frames_since_reconnect < 2) {
 			purple_connection_error(ya->pc, PURPLE_CONNECTION_ERROR_NETWORK_ERROR, "Lost connection to server");
 		} else {
-			// Try reconnect
+			/* Try reconnect */
 			discord_start_socket(ya);
 		}
 	}
@@ -3440,8 +3439,10 @@ discord_got_history_static(DiscordAccount *da, JsonNode *node, gpointer user_dat
 	}
 }
 
-// libpurple can't store a 64bit int on a 32bit machine, so convert to something more usable instead (puke)
-//  also needs to work cross platform, in case the accounts.xml is being shared (double puke)
+/* libpurple can't store a 64bit int on a 32bit machine, so convert to
+ * something more usable instead (puke). also needs to work cross platform, in
+ * case the accounts.xml is being shared (double puke)
+ */
 
 static guint64
 discord_get_room_last_id(DiscordAccount *da, guint64 id)
@@ -3500,7 +3501,7 @@ discord_set_room_last_id(DiscordAccount *da, guint64 id, guint64 last_id)
 
 /* TODO: Cache better, sane defaults */
 
-// https://support.discordapp.com/hc/en-us/articles/206141927-How-is-the-permission-hierarchy-structured-
+/* https://support.discordapp.com/hc/en-us/articles/206141927-How-is-the-permission-hierarchy-structured- */
 
 static guint64
 discord_permission_role(DiscordGuild *guild, guint64 r, guint64 permission)
@@ -3572,7 +3573,7 @@ discord_got_channel_info(DiscordAccount *da, JsonNode *node, gpointer user_data)
 	PurpleChatConversation *chatconv;
 
 	if (id == NULL) {
-		// No permissions?  Should be an error message in json_object_get_string_member(channel, "message")
+		/* No permissions?  Should be an error message in json_object_get_string_member(channel, "message") */
 		return;
 	}
 
@@ -3701,7 +3702,7 @@ discord_open_chat(DiscordAccount *da, guint64 id, gchar *name, gboolean present)
 
 	purple_conversation_present(PURPLE_CONVERSATION(chatconv));
 
-	// Get info about the channel
+	/* Get info about the channel */
 	gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/v6/channels/%" G_GUINT64_FORMAT, id);
 	discord_fetch_url(da, url, NULL, discord_got_channel_info, channel);
 	g_free(url);
@@ -3724,7 +3725,7 @@ discord_join_chat(PurpleConnection *pc, GHashTable *chatdata)
 		return;
 	}
 
-	// Get any missing messages
+	/* Get any missing messages */
 	guint64 last_message_id = discord_get_room_last_id(da, id);
 
 	if (last_message_id != 0 && channel->last_message_id > last_message_id) {
@@ -4147,8 +4148,8 @@ discord_send_im(PurpleConnection *pc,
 static void
 discord_chat_set_topic(PurpleConnection *pc, int id, const char *topic)
 {
-	//PATCH https:// DISCORD_API_SERVER /api/v6/channels/%s channel
-	//{"name":"test","position":1,"topic":"new topic","bitrate":64000,"user_limit":0}
+	/* PATCH https:/* DISCORD_API_SERVER /api/v6/channels/%s channel */
+	 * {"name":"test","position":1,"topic":"new topic","bitrate":64000,"user_limit":0} */
 }
 
 static void
@@ -4249,13 +4250,13 @@ discord_buddy_remove(PurpleConnection *pc, PurpleBuddy *buddy, PurpleGroup *grou
 static void
 discord_fake_group_buddy(PurpleConnection *pc, const char *who, const char *old_group, const char *new_group)
 {
-	// Do nothing to stop the remove+add behaviour
+	/* Do nothing to stop the remove+add behaviour */
 }
 
 static void
 discord_fake_group_rename(PurpleConnection *pc, const char *old_name, PurpleGroup *group, GList *moved_buddies)
 {
-	// Do nothing to stop the remove+add behaviour
+	/* Do nothing to stop the remove+add behaviour */
 }
 
 //todo can we optimize this out?
@@ -4344,7 +4345,7 @@ discord_status_types(PurpleAccount *account)
 	PurpleStatusType *status;
 	gboolean use_status_as_game = purple_account_get_bool(account, "use-status-as-game", FALSE);
 
-	// We can only set statuses without in-game info
+	/* We can only set statuses without in-game info */
 	status = purple_status_type_new_full(PURPLE_STATUS_AVAILABLE, "set-online", _("Online"), TRUE, !use_status_as_game, FALSE);
 	types = g_list_append(types, status);
 
@@ -4360,7 +4361,7 @@ discord_status_types(PurpleAccount *account)
 	status = purple_status_type_new_full(PURPLE_STATUS_OFFLINE, "set-offline", _("Offline"), TRUE, TRUE, FALSE);
 	types = g_list_append(types, status);
 
-	// Other people can have an in-game display
+	/* Other people can have an in-game display */
 	status = purple_status_type_new_with_attrs(PURPLE_STATUS_AVAILABLE, "online", _("Online"), TRUE, use_status_as_game, FALSE, "message", "In-Game", purple_value_new(PURPLE_TYPE_STRING), NULL);
 	types = g_list_append(types, status);
 
@@ -4573,10 +4574,12 @@ plugin_load(PurplePlugin *plugin, GError **error)
 			    DISCORD_PLUGIN_ID, discord_cmd_nick,
 			    _("nick <new nickname>:  Changes nickname on a server"), NULL);
 
-	// purple_cmd_register("kick", "s", PURPLE_CMD_P_PLUGIN, PURPLE_CMD_FLAG_CHAT |
-	// PURPLE_CMD_FLAG_PROTOCOL_ONLY | PURPLE_CMD_FLAG_ALLOW_WRONG_ARGS,
-	// DISCORD_PLUGIN_ID, discord_slash_command,
-	// _("kick <username>:  Remove someone from channel"), NULL);
+#if 0
+	purple_cmd_register("kick", "s", PURPLE_CMD_P_PLUGIN, PURPLE_CMD_FLAG_CHAT |
+	PURPLE_CMD_FLAG_PROTOCOL_ONLY | PURPLE_CMD_FLAG_ALLOW_WRONG_ARGS,
+	DISCORD_PLUGIN_ID, discord_slash_command,
+	_("kick <username>:  Remove someone from channel"), NULL);
+#endif
 
 	purple_cmd_register("leave", "", PURPLE_CMD_P_PLUGIN, PURPLE_CMD_FLAG_CHAT |
 								PURPLE_CMD_FLAG_PROTOCOL_ONLY | PURPLE_CMD_FLAG_ALLOW_WRONG_ARGS,
@@ -4588,20 +4591,22 @@ plugin_load(PurplePlugin *plugin, GError **error)
 			    DISCORD_PLUGIN_ID, discord_cmd_leave,
 			    _("part:  Leave the channel"), NULL);
 
-	// purple_cmd_register("mute", "s", PURPLE_CMD_P_PLUGIN, PURPLE_CMD_FLAG_CHAT |
-	// PURPLE_CMD_FLAG_PROTOCOL_ONLY | PURPLE_CMD_FLAG_ALLOW_WRONG_ARGS,
-	// DISCORD_PLUGIN_ID, discord_slash_command,
-	// _("mute <username>:  Mute someone in channel"), NULL);
+#if 0
+	purple_cmd_register("mute", "s", PURPLE_CMD_P_PLUGIN, PURPLE_CMD_FLAG_CHAT |
+	PURPLE_CMD_FLAG_PROTOCOL_ONLY | PURPLE_CMD_FLAG_ALLOW_WRONG_ARGS,
+	DISCORD_PLUGIN_ID, discord_slash_command,
+	_("mute <username>:  Mute someone in channel"), NULL);
 
-	// purple_cmd_register("unmute", "s", PURPLE_CMD_P_PLUGIN, PURPLE_CMD_FLAG_CHAT |
-	// PURPLE_CMD_FLAG_PROTOCOL_ONLY | PURPLE_CMD_FLAG_ALLOW_WRONG_ARGS,
-	// DISCORD_PLUGIN_ID, discord_slash_command,
-	// _("unmute <username>:  Un-mute someone in channel"), NULL);
+	purple_cmd_register("unmute", "s", PURPLE_CMD_P_PLUGIN, PURPLE_CMD_FLAG_CHAT |
+	PURPLE_CMD_FLAG_PROTOCOL_ONLY | PURPLE_CMD_FLAG_ALLOW_WRONG_ARGS,
+	DISCORD_PLUGIN_ID, discord_slash_command,
+	_("unmute <username>:  Un-mute someone in channel"), NULL);
 
-	// purple_cmd_register("topic", "s", PURPLE_CMD_P_PLUGIN, PURPLE_CMD_FLAG_CHAT |
-	// PURPLE_CMD_FLAG_PROTOCOL_ONLY | PURPLE_CMD_FLAG_ALLOW_WRONG_ARGS,
-	// DISCORD_PLUGIN_ID, discord_slash_command,
-	// _("topic <description>:  Set the channel topic description"), NULL);
+	purple_cmd_register("topic", "s", PURPLE_CMD_P_PLUGIN, PURPLE_CMD_FLAG_CHAT |
+	PURPLE_CMD_FLAG_PROTOCOL_ONLY | PURPLE_CMD_FLAG_ALLOW_WRONG_ARGS,
+	DISCORD_PLUGIN_ID, discord_slash_command,
+	_("topic <description>:  Set the channel topic description"), NULL);
+#endif
 
 	return TRUE;
 }
@@ -4621,7 +4626,7 @@ plugin_unload(PurplePlugin *plugin, GError **error)
 	return TRUE;
 }
 
-// Purple2 Plugin Load Functions
+/* Purple2 Plugin Load Functions */
 #if !PURPLE_VERSION_CHECK(3, 0, 0)
 static gboolean
 libpurple2_plugin_load(PurplePlugin *plugin)
@@ -4701,26 +4706,26 @@ static PurplePluginInfo info = {
 		PURPLE_MINOR_VERSION,
 	*/
 	2, 1,
-	PURPLE_PLUGIN_PROTOCOL,		// type
-	NULL,				// ui_requirement
-	0,				// flags
-	NULL,				// dependencies
-	PURPLE_PRIORITY_DEFAULT,	// priority
-	DISCORD_PLUGIN_ID,		// id
-	"Discord",			// name
-	DISCORD_PLUGIN_VERSION,		// version
-	"",				// summary
-	"",				// description
-	"Eion Robb <eion@robbmob.com>", // author
-	DISCORD_PLUGIN_WEBSITE,		// homepage
-	libpurple2_plugin_load,		// load
-	libpurple2_plugin_unload,       // unload
-	NULL,				// destroy
-	NULL,				// ui_info
-	NULL,				// extra_info
-	NULL,				// prefs_info
-	discord_actions,		// actions
-	NULL,				// padding
+	PURPLE_PLUGIN_PROTOCOL,		/* type */
+	NULL,				/* ui_requirement */
+	0,				/* flags */
+	NULL,				/* dependencies */
+	PURPLE_PRIORITY_DEFAULT,	/* priority */
+	DISCORD_PLUGIN_ID,		/* id */
+	"Discord",			/* name */
+	DISCORD_PLUGIN_VERSION,		/* version */
+	"",				/* summary */
+	"",				/* description */
+	"Eion Robb <eion@robbmob.com>", /* author */
+	DISCORD_PLUGIN_WEBSITE,		/* homepage */
+	libpurple2_plugin_load,		/* load */
+	libpurple2_plugin_unload,       /* unload */
+	NULL,				/* destroy */
+	NULL,				/* ui_info */
+	NULL,				/* extra_info */
+	NULL,				/* prefs_info */
+	discord_actions,		/* actions */
+	NULL,				/* padding */
 	NULL,
 	NULL,
 	NULL
