@@ -2128,7 +2128,7 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 			gchar *full_username = discord_create_fullname(user);
 			PurpleChatUserFlags cbflags = discord_get_user_flags(da, guild_id, full_username);
 
-			users = g_list_prepend(users, full_username);
+			users = g_list_prepend(users, discord_create_nickname(user, guild));
 			flags = g_list_prepend(flags, GINT_TO_POINTER(cbflags));
 		}
 
