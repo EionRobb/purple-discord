@@ -725,16 +725,10 @@ static gchar *discord_create_fullname(DiscordUser *user)
 
 static gchar * discord_create_nickname(DiscordUser *author, DiscordGuild *guild);
 
-static gchar *
+static const gchar *
 discord_alloc_nickname(DiscordUser *user, DiscordGuild *guild, const gchar *suggested_nick)
 {
-	gchar *nick;
-
-	if(suggested_nick)  {
-		nick = suggested_nick;
-	} else {
-		nick = user->name;
-	}
+	const gchar *nick = suggested_nick ? suggested_nick : user->name;
 
 	/* TODO: Disambiguate if necessary */
 
@@ -1960,7 +1954,7 @@ discord_got_nick_change(DiscordAccount *da, DiscordUser *user, DiscordGuild *gui
 	}
 
 	/* Nick change */
-	gchar *nick = discord_alloc_nickname(user, guild, new);
+	const gchar *nick = discord_alloc_nickname(user, guild, new);
 
 	/* Propagate through the guild, see e.g. irc_msg_nick */
 	GHashTableIter channel_iter;
