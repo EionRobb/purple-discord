@@ -1391,7 +1391,7 @@ static void discord_got_avatar(DiscordAccount *da, JsonNode *node, gpointer user
 static void discord_get_avatar(DiscordAccount *da, DiscordUser *user);
 
 static const gchar *discord_normalise_room_name(const gchar *guild_name, const gchar *name);
-
+static DiscordChannel *discord_open_chat(DiscordAccount *da, guint64 id, gchar *name, gboolean present);
 
 static gboolean
 discord_replace_channel(const GMatchInfo *match, GString *result, gpointer user_data)
@@ -1750,7 +1750,18 @@ discord_process_message(DiscordAccount *da, JsonObject *data)
 
 	} else if (!nonce || !g_hash_table_remove(da->sent_message_ids, nonce)) {
 		gchar *merged_username = discord_create_fullname(author);
-		guint tmp = to_int(channel_id);
+		guint64 tmp = to_int(channel_id);
+
+		/* Open the buffer if it's not already */
+		DiscordGuild *guild;
+		discord_get_channel_global_int_guild(da, tmp, &guild);
+		int head_count = guild->members->len;
+
+		gboolean mentioned = flags & PURPLE_MESSAGE_NICK;
+
+		if(mentioned || (head_count < purple_account_get_int(da->account, "large-channel-count", 20))) {
+			discord_open_chat(da, tmp, NULL, mentioned);
+		}
 
 		if (escaped_content && *escaped_content) {
 			purple_serv_got_chat_in(da->pc, g_int64_hash(&tmp), merged_username, flags, escaped_content, timestamp);
@@ -3483,26 +3494,16 @@ discord_got_channel_info(DiscordAccount *da, JsonNode *node, gpointer user_data)
 
 }
 
-static void
-discord_join_chat(PurpleConnection *pc, GHashTable *chatdata)
+static DiscordChannel *
+discord_open_chat(DiscordAccount *da, guint64 id, gchar *name, gboolean present)
 {
-	DiscordAccount *da = purple_connection_get_protocol_data(pc);
 	PurpleChatConversation *chatconv = NULL;
-	gchar *url;
 
-	guint64 id = to_int(g_hash_table_lookup(chatdata, "id"));
 	DiscordChannel *channel = discord_get_channel_global_int(da, id);
 
 	if (channel == NULL) {
-		return;
+		return NULL;
 	}
-
-	if(channel->type == CHANNEL_VOICE){
-		purple_notify_error(da, _("Bad channel type"), _("Cannot join a voice channel as text"), "", purple_request_cpar_from_connection(pc));
-		return;
-	}
-
-	gchar *name = (gchar *) g_hash_table_lookup(chatdata, "name");
 
 	if (name == NULL) {
 		if (channel != NULL) {
@@ -3510,33 +3511,62 @@ discord_join_chat(PurpleConnection *pc, GHashTable *chatdata)
 		}
 	}
 
+	if (channel->type == CHANNEL_VOICE) {
+		purple_notify_error(da, _("Bad channel type"), _("Cannot join a voice channel as text"), "", purple_request_cpar_from_connection(pc));
+		return NULL;
+	}
+
 	if (name != NULL) {
 		chatconv = purple_conversations_find_chat_with_account(name, da->account);
 	}
+
 	if (chatconv == NULL) {
 		//todo fixme
 		gchar *chat_name = g_strdup_printf("%" G_GUINT64_FORMAT, id);
 		chatconv = purple_conversations_find_chat_with_account(chat_name, da->account);
 		g_free(chat_name);
 	}
+
 	if (chatconv != NULL && !purple_chat_conversation_has_left(chatconv)) {
-		purple_conversation_present(PURPLE_CONVERSATION(chatconv));
-		return;
+		if(present) {
+			purple_conversation_present(PURPLE_CONVERSATION(chatconv));
+		}
+
+		return NULL;
 	}
-	chatconv = purple_serv_got_joined_chat(pc, g_int64_hash(&id), name ? name : g_strdup_printf("%" G_GUINT64_FORMAT, id));
+
+	chatconv = purple_serv_got_joined_chat(da->pc, g_int64_hash(&id), name ? name : g_strdup_printf("%" G_GUINT64_FORMAT, id));
 	purple_conversation_set_data(PURPLE_CONVERSATION(chatconv), "id", g_memdup(&(id), sizeof(gint64)));
 
 	purple_conversation_present(PURPLE_CONVERSATION(chatconv));
 
 	// Get info about the channel
-	url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/v6/channels/%" G_GUINT64_FORMAT, id);
+	gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/v6/channels/%" G_GUINT64_FORMAT, id);
 	discord_fetch_url(da, url, NULL, discord_got_channel_info, channel);
 	g_free(url);
+
+	return channel;
+}
+
+static void
+discord_join_chat(PurpleConnection *pc, GHashTable *chatdata)
+{
+	DiscordAccount *da = purple_connection_get_protocol_data(pc);
+
+	guint64 id = to_int(g_hash_table_lookup(chatdata, "id"));
+
+	gchar *name = (gchar *) g_hash_table_lookup(chatdata, "name");
+
+	DiscordChannel *channel = discord_open_chat(da, id, name, TRUE);
+
+	if(!channel) {
+		return;
+	}
 
 	// Get any missing messages
 	guint64 last_message_id = discord_get_room_last_id(da, id);
 	if (last_message_id != 0 && channel->last_message_id > last_message_id) {
-		url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/v6/channels/%" G_GUINT64_FORMAT "/messages?limit=100&after=%" G_GUINT64_FORMAT, id, last_message_id);
+		gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/v6/channels/%" G_GUINT64_FORMAT "/messages?limit=100&after=%" G_GUINT64_FORMAT, id, last_message_id);
 		discord_fetch_url(da, url, NULL, discord_got_history_of_room, channel);
 		g_free(url);
 	}
@@ -4244,6 +4274,9 @@ discord_add_account_options(GList *account_options)
 	PurpleAccountOption *option;
 
 	option = purple_account_option_bool_new(N_("Use status message as in-game info"), "use-status-as-game", FALSE);
+	account_options = g_list_append(account_options, option);
+
+	option = purple_account_option_int_new(N_("Number of users in a large channel"), "large-channel-count", 20);
 	account_options = g_list_append(account_options, option);
 
 	return account_options;
