@@ -2181,8 +2181,19 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 			/* Nick change */
 			gchar *nick = discord_alloc_nickname(user, guild, new_nick);
 
-			/* TODO: Propagate */
-			printf("TODO: Propagate nick change from %s -> %s\n", old_nick, nick);
+			/* Propagate through the guild, see e.g. irc_msg_nick */
+			GHashTableIter channel_iter;
+			gpointer key, value;
+
+			g_hash_table_iter_init(&channel_iter, guild->channels);
+			while(g_hash_table_iter_next(&channel_iter, &key, &value)){
+				DiscordChannel *channel = value;
+				PurpleChatConversation *chat = purple_conversations_find_chat(da->pc, g_int64_hash(&channel->id));
+
+				if (purple_chat_conversation_has_user(chat, old_nick)) {
+					purple_chat_conversation_rename_user(chat, old_nick, nick);
+				}
+			}
 
 			if(old_nick) {
 				g_hash_table_remove(guild->nicknames_rev, old_nick);
