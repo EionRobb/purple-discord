@@ -2175,19 +2175,18 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		DiscordGuild *guild = discord_get_guild_int(da, to_int(json_object_get_string_member(data, "guild_id")));
 
 		const gchar *new_nick = json_object_get_string_member(data, "nick");
-		gchar *old_nick = g_hash_table_lookup_int64(guild->nicknames, user->id);
+		const gchar *old_nick = g_hash_table_lookup_int64(guild->nicknames, user->id);
 
 		if (!purple_strequal(new_nick, old_nick)) {
 			/* Nick change */
-
-			if(old_nick) {
-				g_hash_table_remove(guild->nicknames_rev, old_nick);
-			}
-
 			gchar *nick = discord_alloc_nickname(user, guild, new_nick);
 
 			/* TODO: Propagate */
 			printf("TODO: Propagate nick change from %s -> %s\n", old_nick, nick);
+
+			if(old_nick) {
+				g_hash_table_remove(guild->nicknames_rev, old_nick);
+			}
 		}
 
 		/* TODO: Track role changes */
