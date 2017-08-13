@@ -1917,20 +1917,24 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		const gchar *guild_id = json_object_get_string_member(data, "guild_id");
 		gint64 idle_since = json_object_get_int_member(data, "idle_since");
 
+
 		if(guild_id){
 			GHashTableIter iter;
 			gpointer key, value;
 
-			g_hash_table_iter_init(&iter, discord_get_guild(da, guild_id)->channels);
+			DiscordGuild *guild = discord_get_guild_int(da, to_int(guild_id));
+			gchar *nickname = discord_create_nickname(user, guild);
+
+			g_hash_table_iter_init(&iter, guild->channels);
 			while(g_hash_table_iter_next(&iter, &key, &value)){
 				DiscordChannel *channel = value;
 				PurpleChatConversation *chat = purple_conversations_find_chat(da->pc, g_int64_hash(&channel->id));
 				if(chat != NULL){
 					if (user->status == USER_OFFLINE) {
-						purple_chat_conversation_remove_user(chat, username, NULL);
-					} else if (!purple_chat_conversation_has_user(chat, username)) {
-						PurpleChatUserFlags flags = discord_get_user_flags(da, guild_id, username);
-						purple_chat_conversation_add_user(chat, username, NULL, flags, FALSE);
+						purple_chat_conversation_remove_user(chat, nickname, NULL);
+					} else if (!purple_chat_conversation_has_user(chat, nickname)) {
+						PurpleChatUserFlags flags = discord_get_user_flags(da, guild_id, nickname);
+						purple_chat_conversation_add_user(chat, nickname, NULL, flags, FALSE);
 					}
 				}
 			}
