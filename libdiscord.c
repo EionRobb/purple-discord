@@ -1953,8 +1953,13 @@ release_ctx:
 static void
 discord_got_nick_change(DiscordAccount *da, DiscordUser *user, DiscordGuild *guild, const gchar *new, const gchar *old, gboolean self)
 {
-	/* Nick change */
 	gchar *old_safe = g_strdup(old);
+
+	if(old) {
+		g_hash_table_remove(guild->nicknames_rev, old);
+	}
+
+	/* Nick change */
 	gchar *nick = discord_alloc_nickname(user, guild, new);
 
 	/* Propagate through the guild, see e.g. irc_msg_nick */
@@ -1971,9 +1976,6 @@ discord_got_nick_change(DiscordAccount *da, DiscordUser *user, DiscordGuild *gui
 		}
 	}
 
-	if(old) {
-		g_hash_table_remove(guild->nicknames_rev, old);
-	}
 }
 
 
