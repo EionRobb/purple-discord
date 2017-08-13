@@ -16,8 +16,6 @@
  *   along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-
-
 #include <purple.h>
 #if PURPLE_VERSION_CHECK(3, 0, 0)
 #include <http.h>
@@ -186,5 +184,4 @@ purple_message_destroy(PurpleMessage *message)
 //TODO remove this when dx adds this to the PurpleMessageFlags enum
 #define PURPLE_MESSAGE_REMOTE_SEND  0x10000
 #endif
-
 
