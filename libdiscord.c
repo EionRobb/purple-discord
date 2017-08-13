@@ -791,7 +791,13 @@ static DiscordChannel *discord_get_channel_global_int_guild(DiscordAccount *da, 
 	g_hash_table_iter_init(&iter, da->new_guilds);
 	while(g_hash_table_iter_next(&iter, &key, &value)){
 		DiscordGuild *guild = value;
+		
+		if(!guild) {
+			continue;
+		}
+
 		DiscordChannel *channel = g_hash_table_lookup_int64(guild->channels, id);
+
 		if(channel){
 			if(o_guild) {
 				*o_guild = guild;
@@ -800,6 +806,7 @@ static DiscordChannel *discord_get_channel_global_int_guild(DiscordAccount *da, 
 			return channel;
 		}
 	}
+
 	return NULL;
 }
 
@@ -2053,11 +2060,16 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		/* Don't display typing notfications from ourselves */
 		if (user_id == da->self_user_id) return;
 
+		if (!channel_id) {
+			return;
+		}
+
 		DiscordChannel *channel = discord_get_channel_global(da, channel_id);
-		DiscordGuild *guild = discord_get_guild_int(da, channel->guild_id);
-		gchar *username = discord_create_nickname_from_id(da, guild, user_id);
 
 		if (channel != NULL) {
+			DiscordGuild *guild = discord_get_guild_int(da, channel->guild_id);
+			gchar *username = discord_create_nickname_from_id(da, guild, user_id);
+
 			struct discord_group_typing_data set = {
 				.da = da,
 				.channel_id = channel_id,
@@ -2074,8 +2086,8 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 
 			purple_timeout_add_seconds(10, discord_set_group_typing, clear);
 		} else {
-			purple_serv_got_typing(da->pc, username, 10, PURPLE_IM_TYPING);
-
+			DiscordUser *user = discord_get_user_int(da, user_id);
+			purple_serv_got_typing(da->pc, user->name, 10, PURPLE_IM_TYPING);
 		}
 	} else if (purple_strequal(type, "CHANNEL_CREATE")) {
 		const gchar *channel_id = json_object_get_string_member(data, "id");
