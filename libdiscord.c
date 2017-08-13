@@ -704,7 +704,6 @@ static void discord_print_guilds(GHashTable *guilds)
 
 			discord_print_permission_override(buffer, channel->permission_role_overrides, "Role");
 			discord_print_permission_override(buffer, channel->permission_user_overrides, "User");
-
 		}
 	}
 
@@ -750,7 +749,6 @@ static void discord_print_users(GHashTable *users)
 				guint64 role_id = g_array_index(guild_membership->roles, guint64, i);
 				discord_print_append(3, buffer, row_buffer, "Role id: %" G_GUINT64_FORMAT, role_id);
 			}
-
 		}
 	}
 
@@ -1651,7 +1649,6 @@ discord_process_message(DiscordAccount *da, JsonObject *data)
 
 			g_free(merged_username);
 		}
-
 	} else if (!nonce || !g_hash_table_remove(da->sent_message_ids, nonce)) {
 		/* Open the buffer if it's not already */
 		int head_count = guild->members->len;
@@ -1898,7 +1895,6 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 				g_hash_table_replace(da->last_message_id_dm, g_strdup(channel_id), g_strdup(last_message_id));
 				g_hash_table_replace(da->one_to_ones_rev, discord_combine_username(username, discriminator), g_strdup(channel_id));
 			}
-
 		}
 	} else if (purple_strequal(type, "CHANNEL_UPDATE")) {
 		guint64 channel_id = to_int(json_object_get_string_member(data, "id"));
@@ -1928,11 +1924,9 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 
 			g_free(username);
 		}
-
 	} else if (purple_strequal(type, "RESUMED")) {
 
 		purple_connection_set_state(da->pc, PURPLE_CONNECTION_CONNECTED);
-
 	} else if (purple_strequal(type, "READY")) {
 		JsonObject *self_user = json_object_get_object_member(data, "user");
 		da->self_user_id = to_int(json_object_get_string_member(self_user, "id"));
@@ -1961,7 +1955,6 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		g_hash_table_steal(da->new_users, &da->self_user_id);
 
 		purple_connection_set_state(da->pc, PURPLE_CONNECTION_CONNECTED);
-
 	}  else if (purple_strequal(type, "GUILD_SYNC") || purple_strequal(type, "GUILD_CREATE")) {
 		if(purple_strequal(type, "GUILD_CREATE")) {
 			discord_populate_guild(da, data);
@@ -2043,7 +2036,6 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		g_list_free(users);
 		g_list_free(flags);
 		discord_print_users(da->new_users);
-
 	} else if (purple_strequal(type, "GUILD_MEMBER_UPDATE")) {
 		DiscordUser *user = discord_upsert_user(da->new_users, json_object_get_object_member(data, "user"));
 		DiscordGuild *guild = discord_get_guild_int(da, to_int(json_object_get_string_member(data, "guild_id")));
@@ -2059,7 +2051,6 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 	} else {
 		purple_debug_info("discord", "Unhandled message type '%s'\n", type);
 	}
-
 }
 
 PurpleGroup* discord_get_or_create_default_group()
@@ -2223,7 +2214,6 @@ discord_set_status(PurpleAccount *account, PurpleStatus *status)
 
 	g_free(postdata);
 	json_object_unref(data);
-
 }
 
 void
@@ -3626,7 +3616,6 @@ discord_got_channel_info(DiscordAccount *da, JsonNode *node, gpointer user_data)
 		g_list_free(users);
 		g_list_free(flags);
 	}
-
 }
 
 static DiscordChannel *
@@ -4474,7 +4463,6 @@ discord_join_server(PurpleProtocolAction *action)
 	                     _("_Cancel"), NULL,
 	                     purple_request_cpar_from_connection(pc),
 	                     da);
-
 }
 
 static GList *
