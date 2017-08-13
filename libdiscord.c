@@ -1954,6 +1954,7 @@ static void
 discord_got_nick_change(DiscordAccount *da, DiscordUser *user, DiscordGuild *guild, const gchar *new, const gchar *old, gboolean self)
 {
 	/* Nick change */
+	gchar *old_safe = g_strdup(old);
 	gchar *nick = discord_alloc_nickname(user, guild, new);
 
 	/* Propagate through the guild, see e.g. irc_msg_nick */
@@ -1965,8 +1966,8 @@ discord_got_nick_change(DiscordAccount *da, DiscordUser *user, DiscordGuild *gui
 		DiscordChannel *channel = value;
 		PurpleChatConversation *chat = purple_conversations_find_chat(da->pc, g_int64_hash(&channel->id));
 
-		if (purple_chat_conversation_has_user(chat, old) || self) {
-			purple_chat_conversation_rename_user(chat, old, nick);
+		if (purple_chat_conversation_has_user(chat, old_safe)) {
+			purple_chat_conversation_rename_user(chat, old_safe, nick);
 		}
 	}
 
