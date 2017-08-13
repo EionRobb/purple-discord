@@ -104,8 +104,8 @@ typedef struct {
 	guint64 owner;
 
 	GHashTable *roles;
-	GArray *members;	   //list of member ids
-	GHashTable *nicknames;     /* id->nick? */
+	GArray *members;		   //list of member ids
+	GHashTable *nicknames;	 /* id->nick? */
 	GHashTable *nicknames_rev; /* reverse */
 
 	GHashTable *channels;
@@ -161,8 +161,8 @@ typedef struct {
 	gint64 seq; //incrementing counter
 	guint heartbeat_timeout;
 
-	GHashTable *one_to_ones;	/* A store of known room_id's -> username's */
-	GHashTable *one_to_ones_rev;    /* A store of known usernames's -> room_id's */
+	GHashTable *one_to_ones;		/* A store of known room_id's -> username's */
+	GHashTable *one_to_ones_rev;	/* A store of known usernames's -> room_id's */
 	GHashTable *last_message_id_dm; /* A store of known room_id's -> last_message_id's */
 	GHashTable *sent_message_ids;   /* A store of message id's that we generated from this instance */
 	GHashTable *result_callbacks;   /* Result ID -> Callback function */
@@ -650,7 +650,7 @@ discord_get_channel_global(DiscordAccount *da, const gchar *id)
 //debug
 
 #define discord_print_append(L, B, R, M, D) \
-	g_string_printf((R), (M), (D));     \
+	g_string_printf((R), (M), (D));         \
 	discord_print_append_row((L), (B), (R));
 
 #ifndef IGNORE_PRINTS
@@ -964,13 +964,13 @@ discord_cookies_to_string(DiscordAccount *ya)
 static void
 discord_response_callback(PurpleHttpConnection *http_conn,
 #if PURPLE_VERSION_CHECK(3, 0, 0)
-			  PurpleHttpResponse *response, gpointer user_data)
+						  PurpleHttpResponse *response, gpointer user_data)
 {
 	gsize len;
 	const gchar *url_text = purple_http_response_get_data(response, &len);
 	const gchar *error_message = purple_http_response_get_error(response);
 #else
-			  gpointer user_data, const gchar *url_text, gsize len, const gchar *error_message)
+						  gpointer user_data, const gchar *url_text, gsize len, const gchar *error_message)
 {
 #endif
 	const gchar *body;
@@ -1186,13 +1186,13 @@ discord_send_auth(DiscordAccount *da)
 
 		json_object_set_string_member(properties, "os",
 #if defined(_WIN32)
-					      "Windows"
+									  "Windows"
 #elif defined(__APPLE__)
-					      "OSX"
+									  "OSX"
 #else
-					      "Linux"
+									  "Linux"
 #endif
-					      );
+									  );
 		json_object_set_string_member(properties, "browser", "Pidgin");
 		json_object_set_object_member(data, "properties", properties);
 
@@ -1415,7 +1415,7 @@ discord_make_mentions(DiscordAccount *da, DiscordGuild *guild, gchar *message)
 	return message;
 }
 
-#define HTML_TOGGLE_OUT(f, a, b)               \
+#define HTML_TOGGLE_OUT(f, a, b)           \
 	out = g_string_append(out, f ? b : a); \
 	f = !f;
 
@@ -2292,8 +2292,8 @@ discord_build_groups_from_blist(DiscordAccount *ya)
 	PurpleBlistNode *node;
 
 	for (node = purple_blist_get_root();
-	     node != NULL;
-	     node = purple_blist_node_next(node, TRUE)) {
+		 node != NULL;
+		 node = purple_blist_node_next(node, TRUE)) {
 		if (PURPLE_IS_CHAT(node)) {
 			const gchar *channel_id;
 			const gchar *name;
@@ -2683,13 +2683,13 @@ discord_login_response(DiscordAccount *da, JsonNode *node, gpointer user_data)
 			da->mfa_ticket = g_strdup(json_object_get_string_member(response, "ticket"));
 
 			purple_request_input(da->pc, _("Two-factor authentication"),
-					     _("Enter Discord auth code"),
-					     _("You can get this token from your two-factor authentication mobile app."),
-					     NULL, FALSE, FALSE, "",
-					     _("_Login"), G_CALLBACK(discord_mfa_text_entry),
-					     _("_Cancel"), G_CALLBACK(discord_mfa_cancel),
-					     purple_request_cpar_from_connection(da->pc),
-					     da);
+								 _("Enter Discord auth code"),
+								 _("You can get this token from your two-factor authentication mobile app."),
+								 NULL, FALSE, FALSE, "",
+								 _("_Login"), G_CALLBACK(discord_mfa_text_entry),
+								 _("_Cancel"), G_CALLBACK(discord_mfa_cancel),
+								 purple_request_cpar_from_connection(da->pc),
+								 da);
 			return;
 		}
 
@@ -3185,18 +3185,18 @@ discord_socket_connected(gpointer userdata, PurpleSslConnection *conn, PurpleInp
 	purple_ssl_input_add(da->websocket, discord_socket_got_data, da);
 
 	websocket_header = g_strdup_printf("GET %s HTTP/1.1\r\n"
-					   "Host: %s\r\n"
-					   "Connection: Upgrade\r\n"
-					   "Pragma: no-cache\r\n"
-					   "Cache-Control: no-cache\r\n"
-					   "Upgrade: websocket\r\n"
-					   "Sec-WebSocket-Version: 13\r\n"
-					   "Sec-WebSocket-Key: %s\r\n"
-					   "User-Agent: " DISCORD_USERAGENT "\r\n"
-					   //"Sec-WebSocket-Extensions: permessage-deflate; client_max_window_bits\r\n"
-					   "\r\n",
-					   DISCORD_GATEWAY_SERVER_PATH, DISCORD_GATEWAY_SERVER,
-					   websocket_key);
+									   "Host: %s\r\n"
+									   "Connection: Upgrade\r\n"
+									   "Pragma: no-cache\r\n"
+									   "Cache-Control: no-cache\r\n"
+									   "Upgrade: websocket\r\n"
+									   "Sec-WebSocket-Version: 13\r\n"
+									   "Sec-WebSocket-Key: %s\r\n"
+									   "User-Agent: " DISCORD_USERAGENT "\r\n"
+									   //"Sec-WebSocket-Extensions: permessage-deflate; client_max_window_bits\r\n"
+									   "\r\n",
+									   DISCORD_GATEWAY_SERVER_PATH, DISCORD_GATEWAY_SERVER,
+									   websocket_key);
 
 	purple_ssl_write(da->websocket, websocket_header, strlen(websocket_header));
 
@@ -3940,7 +3940,7 @@ discord_escape_md(const gchar *markdown)
 
 		if (!verbatim) {
 			if (strncmp(markdown + i, "http://", sizeof("http://") - 1) == 0 ||
-			    strncmp(markdown + i, "https://", sizeof("https://") - 1) == 0)
+				strncmp(markdown + i, "https://", sizeof("https://") - 1) == 0)
 
 			{
 				link = verbatim = TRUE;
@@ -3954,9 +3954,9 @@ discord_escape_md(const gchar *markdown)
 		if (!verbatim) {
 			if (
 			  (c == '_' && (markdown[i + 1] == ' ' ||
-					markdown[i + 1] == '\0' ||
-					markdown[i - 1] == ' ' ||
-					markdown[i - 1] == '\0')) ||
+							markdown[i + 1] == '\0' ||
+							markdown[i - 1] == ' ' ||
+							markdown[i - 1] == '\0')) ||
 			  (c == '*') ||
 			  (c == '\\' && markdown[i + 1] != '_') ||
 			  (c == '~' && (markdown[i + 1] == '~'))) {
@@ -4016,11 +4016,11 @@ discord_conversation_send_message(DiscordAccount *da, guint64 room_id, const gch
 static gint
 discord_chat_send(PurpleConnection *pc, gint id,
 #if PURPLE_VERSION_CHECK(3, 0, 0)
-		  PurpleMessage *msg)
+				  PurpleMessage *msg)
 {
 	const gchar *message = purple_message_get_contents(msg);
 #else
-		  const gchar *message, PurpleMessageFlags flags)
+				  const gchar *message, PurpleMessageFlags flags)
 {
 #endif
 
@@ -4105,12 +4105,12 @@ discord_created_direct_message_send(DiscordAccount *da, JsonNode *node, gpointer
 static int
 discord_send_im(PurpleConnection *pc,
 #if PURPLE_VERSION_CHECK(3, 0, 0)
-		PurpleMessage *msg)
+				PurpleMessage *msg)
 {
 	const gchar *who = purple_message_get_recipient(msg);
 	const gchar *message = purple_message_get_contents(msg);
 #else
-		const gchar *who, const gchar *message, PurpleMessageFlags flags)
+				const gchar *who, const gchar *message, PurpleMessageFlags flags)
 {
 #endif
 
@@ -4149,7 +4149,7 @@ static void
 discord_chat_set_topic(PurpleConnection *pc, int id, const char *topic)
 {
 	/* PATCH https:/* DISCORD_API_SERVER /api/v6/channels/%s channel */
-	 * {"name":"test","position":1,"topic":"new topic","bitrate":64000,"user_limit":0} */
+	*{ "name" : "test", "position" : 1, "topic" : "new topic", "bitrate" : 64000, "user_limit" : 0 } * /
 }
 
 static void
@@ -4200,10 +4200,10 @@ discord_get_avatar(DiscordAccount *da, DiscordUser *user)
 static void
 discord_add_buddy(PurpleConnection *pc, PurpleBuddy *buddy, PurpleGroup *group
 #if PURPLE_VERSION_CHECK(3, 0, 0)
-		  ,
-		  const char *message
+				  ,
+				  const char *message
 #endif
-		  )
+				  )
 {
 	DiscordAccount *da = purple_connection_get_protocol_data(pc);
 	const gchar *buddy_name = purple_buddy_get_name(buddy);
@@ -4495,13 +4495,13 @@ discord_join_server(PurpleProtocolAction *action)
 	DiscordAccount *da = purple_connection_get_protocol_data(pc);
 
 	purple_request_input(pc, _("Join a server"),
-			     _("Join a server"),
-			     _("Enter the join URL here"),
-			     NULL, FALSE, FALSE, "https://discord.gg/ABC123",
-			     _("_Join"), G_CALLBACK(discord_join_server_text),
-			     _("_Cancel"), NULL,
-			     purple_request_cpar_from_connection(pc),
-			     da);
+						 _("Join a server"),
+						 _("Enter the join URL here"),
+						 NULL, FALSE, FALSE, "https://discord.gg/ABC123",
+						 _("_Join"), G_CALLBACK(discord_join_server_text),
+						 _("_Cancel"), NULL,
+						 purple_request_cpar_from_connection(pc),
+						 da);
 }
 
 static GList *
@@ -4570,9 +4570,9 @@ plugin_load(PurplePlugin *plugin, GError **error)
 	natural_mention_regex = g_regex_new("^([^:]+): ", G_REGEX_OPTIMIZE, 0, NULL);
 
 	purple_cmd_register("nick", "s", PURPLE_CMD_P_PLUGIN, PURPLE_CMD_FLAG_CHAT |
-								PURPLE_CMD_FLAG_PROTOCOL_ONLY | PURPLE_CMD_FLAG_ALLOW_WRONG_ARGS,
-			    DISCORD_PLUGIN_ID, discord_cmd_nick,
-			    _("nick <new nickname>:  Changes nickname on a server"), NULL);
+															PURPLE_CMD_FLAG_PROTOCOL_ONLY | PURPLE_CMD_FLAG_ALLOW_WRONG_ARGS,
+						DISCORD_PLUGIN_ID, discord_cmd_nick,
+						_("nick <new nickname>:  Changes nickname on a server"), NULL);
 
 #if 0
 	purple_cmd_register("kick", "s", PURPLE_CMD_P_PLUGIN, PURPLE_CMD_FLAG_CHAT |
@@ -4582,14 +4582,14 @@ plugin_load(PurplePlugin *plugin, GError **error)
 #endif
 
 	purple_cmd_register("leave", "", PURPLE_CMD_P_PLUGIN, PURPLE_CMD_FLAG_CHAT |
-								PURPLE_CMD_FLAG_PROTOCOL_ONLY | PURPLE_CMD_FLAG_ALLOW_WRONG_ARGS,
-			    DISCORD_PLUGIN_ID, discord_cmd_leave,
-			    _("leave:  Leave the channel"), NULL);
+															PURPLE_CMD_FLAG_PROTOCOL_ONLY | PURPLE_CMD_FLAG_ALLOW_WRONG_ARGS,
+						DISCORD_PLUGIN_ID, discord_cmd_leave,
+						_("leave:  Leave the channel"), NULL);
 
 	purple_cmd_register("part", "", PURPLE_CMD_P_PLUGIN, PURPLE_CMD_FLAG_CHAT |
-							       PURPLE_CMD_FLAG_PROTOCOL_ONLY | PURPLE_CMD_FLAG_ALLOW_WRONG_ARGS,
-			    DISCORD_PLUGIN_ID, discord_cmd_leave,
-			    _("part:  Leave the channel"), NULL);
+														   PURPLE_CMD_FLAG_PROTOCOL_ONLY | PURPLE_CMD_FLAG_ALLOW_WRONG_ARGS,
+						DISCORD_PLUGIN_ID, discord_cmd_leave,
+						_("part:  Leave the channel"), NULL);
 
 #if 0
 	purple_cmd_register("mute", "s", PURPLE_CMD_P_PLUGIN, PURPLE_CMD_FLAG_CHAT |
@@ -4706,26 +4706,26 @@ static PurplePluginInfo info = {
 		PURPLE_MINOR_VERSION,
 	*/
 	2, 1,
-	PURPLE_PLUGIN_PROTOCOL,		/* type */
-	NULL,				/* ui_requirement */
-	0,				/* flags */
-	NULL,				/* dependencies */
-	PURPLE_PRIORITY_DEFAULT,	/* priority */
-	DISCORD_PLUGIN_ID,		/* id */
-	"Discord",			/* name */
-	DISCORD_PLUGIN_VERSION,		/* version */
-	"",				/* summary */
-	"",				/* description */
+	PURPLE_PLUGIN_PROTOCOL,			/* type */
+	NULL,							/* ui_requirement */
+	0,								/* flags */
+	NULL,							/* dependencies */
+	PURPLE_PRIORITY_DEFAULT,		/* priority */
+	DISCORD_PLUGIN_ID,				/* id */
+	"Discord",						/* name */
+	DISCORD_PLUGIN_VERSION,			/* version */
+	"",								/* summary */
+	"",								/* description */
 	"Eion Robb <eion@robbmob.com>", /* author */
-	DISCORD_PLUGIN_WEBSITE,		/* homepage */
-	libpurple2_plugin_load,		/* load */
-	libpurple2_plugin_unload,       /* unload */
-	NULL,				/* destroy */
-	NULL,				/* ui_info */
-	NULL,				/* extra_info */
-	NULL,				/* prefs_info */
-	discord_actions,		/* actions */
-	NULL,				/* padding */
+	DISCORD_PLUGIN_WEBSITE,			/* homepage */
+	libpurple2_plugin_load,			/* load */
+	libpurple2_plugin_unload,		/* unload */
+	NULL,							/* destroy */
+	NULL,							/* ui_info */
+	NULL,							/* extra_info */
+	NULL,							/* prefs_info */
+	discord_actions,				/* actions */
+	NULL,							/* padding */
 	NULL,
 	NULL,
 	NULL
@@ -4827,21 +4827,21 @@ PURPLE_DEFINE_TYPE_EXTENDED(
   DiscordProtocol, discord_protocol, PURPLE_TYPE_PROTOCOL, 0,
 
   PURPLE_IMPLEMENT_INTERFACE_STATIC(PURPLE_TYPE_PROTOCOL_IM_IFACE,
-				    discord_protocol_im_iface_init)
+									discord_protocol_im_iface_init)
 
-    PURPLE_IMPLEMENT_INTERFACE_STATIC(PURPLE_TYPE_PROTOCOL_CHAT_IFACE,
-				      discord_protocol_chat_iface_init)
+	PURPLE_IMPLEMENT_INTERFACE_STATIC(PURPLE_TYPE_PROTOCOL_CHAT_IFACE,
+									  discord_protocol_chat_iface_init)
 
-      PURPLE_IMPLEMENT_INTERFACE_STATIC(PURPLE_TYPE_PROTOCOL_SERVER_IFACE,
-					discord_protocol_server_iface_init)
+	  PURPLE_IMPLEMENT_INTERFACE_STATIC(PURPLE_TYPE_PROTOCOL_SERVER_IFACE,
+										discord_protocol_server_iface_init)
 
-	PURPLE_IMPLEMENT_INTERFACE_STATIC(PURPLE_TYPE_PROTOCOL_CLIENT_IFACE,
-					  discord_protocol_client_iface_init)
+		PURPLE_IMPLEMENT_INTERFACE_STATIC(PURPLE_TYPE_PROTOCOL_CLIENT_IFACE,
+										  discord_protocol_client_iface_init)
 
-	  PURPLE_IMPLEMENT_INTERFACE_STATIC(PURPLE_TYPE_PROTOCOL_ROOMLIST_IFACE,
-					    discord_protocol_roomlist_iface_init)
+		  PURPLE_IMPLEMENT_INTERFACE_STATIC(PURPLE_TYPE_PROTOCOL_ROOMLIST_IFACE,
+											discord_protocol_roomlist_iface_init)
 
-    );
+	);
 
 static gboolean
 libpurple3_plugin_load(PurplePlugin *plugin, GError **error)
@@ -4883,7 +4883,7 @@ plugin_query(GError **error)
 	  "website", DISCORD_PLUGIN_WEBSITE,
 	  "abi-version", PURPLE_ABI_VERSION,
 	  "flags", PURPLE_PLUGIN_INFO_FLAGS_INTERNAL |
-		     PURPLE_PLUGIN_INFO_FLAGS_AUTO_LOAD,
+				 PURPLE_PLUGIN_INFO_FLAGS_AUTO_LOAD,
 	  NULL);
 }
 
