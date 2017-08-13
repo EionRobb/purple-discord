@@ -1931,7 +1931,9 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 			}
 		}
 
-		discord_buddy_guild(da, guild);
+		if (purple_account_get_bool(da->account, "populate-blist", TRUE)) {
+			discord_buddy_guild(da, guild);
+		}
 
 		purple_debug_info("discord", "Room has '%d' Members\n", json_array_get_length(members));
 
@@ -2442,7 +2444,6 @@ discord_got_guilds(DiscordAccount *da, JsonNode *node, gpointer user_data)
 	for (int i = len - 1; i >= 0; i--) {
 		JsonObject *guild = json_array_get_object_element(guilds, i);
 		discord_populate_guild(da, guild);
-//		discord_buddy_guild(da, discord_get_guild(da, json_object_get_string_member(guild, "id")));
 		json_array_add_string_element(guild_ids, json_object_get_string_member(guild, "id"));
 	}
 
@@ -4153,6 +4154,9 @@ discord_add_account_options(GList *account_options)
 	PurpleAccountOption *option;
 
 	option = purple_account_option_bool_new(N_("Use status message as in-game info"), "use-status-as-game", FALSE);
+	account_options = g_list_append(account_options, option);
+
+	option = purple_account_option_bool_new(N_("Auto-create rooms on buddy list"), "populate-blist", TRUE);
 	account_options = g_list_append(account_options, option);
 
 	return account_options;
