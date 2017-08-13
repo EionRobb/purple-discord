@@ -172,6 +172,7 @@ purple_conversations_find_chat(PurpleConnection *pc, int id)
 #define purple_chat_conversation_remove_user  purple_conv_chat_remove_user
 #define purple_chat_conversation_clear_users  purple_conv_chat_clear_users
 #define purple_chat_conversation_has_user     purple_conv_chat_find_user
+#define purple_chat_conversation_rename_user  purple_conv_chat_rename_user
 #define purple_chat_conversation_get_topic    purple_conv_chat_get_topic
 #define purple_chat_conversation_set_topic    purple_conv_chat_set_topic
 #define PurpleChatUserFlags  PurpleConvChatBuddyFlags
