@@ -1633,6 +1633,20 @@ discord_convert_markdown(const gchar* html)
 	return g_string_free(out, FALSE);
 }
 
+static gchar
+*discord_create_nickname(DiscordUser *author, DiscordGuild *guild)
+{
+	gchar *name = g_hash_table_lookup_int64(guild->nicknames, author->id);
+
+	if(!name) {
+		name = discord_create_fullname(author);
+	} else {
+		name = g_strdup(name);
+	}
+
+	return name;
+}
+
 static guint64
 discord_process_message(DiscordAccount *da, JsonObject *data)
 {
@@ -1768,13 +1782,7 @@ discord_process_message(DiscordAccount *da, JsonObject *data)
 			discord_open_chat(da, tmp, NULL, mentioned);
 		}
 
-		gchar *name = g_hash_table_lookup_int64(guild->nicknames, author->id);
-		gboolean free_name = FALSE;
-
-		if(!name) {
-			name = discord_create_fullname(author);
-			free_name = TRUE;
-		} 
+		gchar *name = discord_create_nickname(author, guild);
 
 		if (escaped_content && *escaped_content) {
 			purple_serv_got_chat_in(da->pc, g_int64_hash(&tmp), name, flags, escaped_content, timestamp);
@@ -1789,9 +1797,7 @@ discord_process_message(DiscordAccount *da, JsonObject *data)
 			}
 		}
 
-		if(free_name) {
-			g_free(name);
-		}
+		g_free(name);
 	}
 	g_free(escaped_content);
 
@@ -3496,9 +3502,10 @@ discord_got_channel_info(DiscordAccount *da, JsonNode *node, gpointer user_data)
 			DiscordUser *user = discord_get_user_int(da, g_array_index(guild->members, guint64, i));
 			gchar *full_username = discord_create_fullname(user);
 			PurpleChatUserFlags cbflags = discord_get_user_flags(da, guild_id, full_username);
+			gchar *nickname = discord_create_nickname(user, guild);
 
 			if (user->status != USER_OFFLINE) {
-				users = g_list_prepend(users, full_username);
+				users = g_list_prepend(users, nickname);
 				flags = g_list_prepend(flags, GINT_TO_POINTER(cbflags));
 			}
 		}
