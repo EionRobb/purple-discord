@@ -3341,7 +3341,7 @@ discord_chat_nick(PurpleConnection *pc, int id, gchar *new_nick)
 	gchar *postdata = json_object_to_string(data);
 
 	gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/v6/guilds/%" G_GUINT64_FORMAT "/members/@me/nick", guild->id);
-	discord_fetch_url_with_method(da, "PATCH", "https://" DISCORD_API_SERVER "/api/v6/guilds/ /@me/nick", postdata, NULL, NULL);
+	discord_fetch_url_with_method(da, "PATCH", url, postdata, NULL, NULL);
 
 	g_free(url);
 	g_free(postdata);
