@@ -1,0 +1,11 @@
+BasedOnStyle: Mozilla
+IndentWidth: 8
+UseTab: Always
+BreakBeforeBraces: Linux
+AllowShortIfStatementsOnASingleLine: false
+IndentCaseLabels: false
+AlwaysBreakAfterDefinitionReturnType: All
+ColumnLimit: 0
+PointerAlignment: Right
+SpaceAfterCStyleCast: true
+AlignTrailingComments: true
