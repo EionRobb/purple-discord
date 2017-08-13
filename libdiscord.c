@@ -1389,8 +1389,10 @@ static void discord_populate_guild(DiscordAccount *da, JsonObject *guild);
 static void discord_got_guilds(DiscordAccount *da, JsonNode *node, gpointer user_data);
 static void discord_got_avatar(DiscordAccount *da, JsonNode *node, gpointer user_data);
 static void discord_get_avatar(DiscordAccount *da, DiscordUser *user);
+static void discord_buddy_guild(DiscordAccount *da, DiscordGuild *guild);
 
 static const gchar *discord_normalise_room_name(const gchar *guild_name, const gchar *name);
+static guint64 discord_compute_permission(DiscordAccount *da, DiscordUser *user, DiscordChannel *channel);
 static DiscordChannel *discord_open_chat(DiscordAccount *da, guint64 id, gchar *name, gboolean present);
 
 static gboolean
@@ -1993,11 +1995,17 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 
 		g_free(da->session_id); da->session_id = g_strdup(json_object_get_string_member(data, "session_id"));
 
+		/* Ensure user is non-null */
+		g_hash_table_replace_int64(da->new_users, da->self_user_id, self_user);
+
 		discord_got_relationships(da, json_object_get_member(data, "relationships"), NULL);
 		discord_got_private_channels(da, json_object_get_member(data, "private_channels"), NULL);
 		discord_got_presences(da, json_object_get_member(data, "presences"), NULL);
 		discord_got_guilds(da, json_object_get_member(data, "guilds"), NULL);
 		discord_got_read_states(da, json_object_get_member(data, "read_state"), NULL);
+
+		/* But steal afterward, this user object is partial */
+		g_hash_table_steal(da->new_users, &da->self_user_id);
 
 		purple_connection_set_state(da->pc, PURPLE_CONNECTION_CONNECTED);
 
@@ -2030,6 +2038,10 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 				guint64 role = to_int(json_array_get_string_element(roles, k));
 				g_array_append_val(membership->roles, role);
 			}
+		}
+
+		if (purple_account_get_bool(da->account, "populate-blist", TRUE)) {
+			discord_buddy_guild(da, guild);
 		}
 
 		purple_debug_info("discord", "Room has '%d' Members\n", json_array_get_length(members));
@@ -2450,6 +2462,59 @@ discord_got_presences(DiscordAccount *da, JsonNode *node, gpointer user_data)
 
 		g_free(merged_username);
 	}
+}
+
+static void
+discord_buddy_guild(DiscordAccount *da, DiscordGuild *guild)
+{
+	/* Create group */
+	/* TODO: What if this is not unique? */
+
+	if(purple_blist_find_group(guild->name)) {
+		/* TODO: Sync then? */
+		return;
+	}
+
+	PurpleGroup *group = purple_group_new(guild->name);
+
+	if(!group) {
+		return;
+	}
+
+	GHashTableIter iter;
+	gpointer key;
+	gpointer value;
+
+	DiscordUser *user = discord_get_user_int(da, da->self_user_id);
+
+	if(!user) {
+		purple_debug_info("discord", "Null user; aborting blist population");
+		return;
+	}
+
+	g_hash_table_iter_init(&iter, guild->channels);
+	while(g_hash_table_iter_next(&iter, &key, &value)){
+		DiscordChannel *channel = value;
+
+		/* Ensure that we actually have permissions for this channel */
+		guint64 permission = discord_compute_permission(da, user, channel);
+
+		/* must have READ_MESSAGES */
+		if(!(permission & 0x400)) continue;
+
+		/* Drop voice channels since we don't support them anyway */
+		if(channel->type == CHANNEL_VOICE) continue;
+
+		GHashTable *components = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
+
+		g_hash_table_replace(components, "id", g_strdup_printf("%" G_GUINT64_FORMAT, channel->id));
+		g_hash_table_replace(components, "name", g_strdup(channel->name));
+
+		PurpleChat *chat = purple_chat_new(da->account, channel->name, components);
+		purple_blist_add_chat(chat, group, NULL);
+	}
+
+	purple_blist_add_group(group, NULL);
 }
 
 static void
@@ -3372,18 +3437,68 @@ discord_set_room_last_id(DiscordAccount *da, guint64 id, guint64 last_id)
 	g_free(channel_id);
 }
 
+/* TODO: Cache better, sane defaults */
 
+// https://support.discordapp.com/hc/en-us/articles/206141927-How-is-the-permission-hierarchy-structured-
 
-typedef struct {
-	DiscordAccount *da;
-	gchar *channel_id;
-	GList *allowed_roles;
-	GList *denied_roles;
-} DiscordChannelPermissionLookup;
+static guint64
+discord_permission_role(DiscordGuild *guild, guint64 r, guint64 permission)
+{
+	DiscordGuildRole *role = g_hash_table_lookup_int64(guild->roles, r);
+	return role ? (permission | role->permissions) : permission;
+}
 
+static guint64
+discord_permission_role_override(DiscordChannel *channel, guint64 role, guint64 permission)
+{
+	DiscordPermissionOverride *ro =
+		g_hash_table_lookup_int64(channel->permission_role_overrides, role);
+
+	return ro ? ((permission & ~(ro->deny)) | ro->allow) : permission;
+}
+
+static guint64
+discord_compute_permission(DiscordAccount *da, DiscordUser *user, DiscordChannel *channel) {
+	guint64 uid = user->id;
+	guint64 permissions = 0;
+
+	DiscordGuildMembership *guild_membership
+		= g_hash_table_lookup_int64(user->guild_memberships, channel->guild_id);
+
+	if(guild_membership) {
+		/* Should always exist, but just in case... */
+
+		DiscordGuild *guild = discord_get_guild_int(da, channel->guild_id);
+
+		/* @everyone */
+		permissions = discord_permission_role(guild, channel->guild_id, permissions);
+
+		for(guint i = 0; i < guild_membership->roles->len; i++) {
+			guint64 r = g_array_index(guild_membership->roles, guint64, i);
+			permissions = discord_permission_role(guild, r, permissions);
+		}
+
+		permissions = discord_permission_role_override(channel, channel->guild_id, permissions);
+
+		for(guint i = 0; i < guild_membership->roles->len; i++) {
+			guint64 role = g_array_index(guild_membership->roles, guint64, i);
+			permissions = discord_permission_role_override(channel, role, permissions);
+		}
+	}
+
+	/* Check special permission overrides just for us */
+
+	DiscordPermissionOverride *uo =
+		g_hash_table_lookup_int64(channel->permission_user_overrides, uid);
+
+	if(uo) {
+		permissions = (permissions & ~(uo->deny)) | uo->allow;
+	}
+
+	return permissions;
+}
 
 static void discord_join_chat(PurpleConnection *pc, GHashTable *chatdata);
-
 
 static void
 discord_got_channel_info(DiscordAccount *da, JsonNode *node, gpointer user_data)
@@ -3447,27 +3562,10 @@ discord_got_channel_info(DiscordAccount *da, JsonNode *node, gpointer user_data)
 		purple_conversation_set_title(PURPLE_CONVERSATION(chatconv), recipient_names->str);
 		g_string_free(recipient_names, TRUE);
 	} else if (json_object_has_member(channel, "permission_overwrites")) {
-		DiscordChannelPermissionLookup *lookup = g_new0(DiscordChannelPermissionLookup, 1);
-		// assume default permission is to view rooms
-		// look through allow and deny roles for 0x400 - READ_MESSAGES
+		DiscordGuild *guild = discord_get_guild(da, guild_id);
 
-		JsonArray *permissions = json_object_get_array_member(channel, "permission_overwrites");
-		guint len = json_array_get_length(permissions);
 		PurpleChatConversation *chat = purple_conversations_find_chat(da->pc, g_int64_hash(&tmp));
 		GList *users = NULL, *flags = NULL;
-
-		for (int i = len - 1; i >= 0; i--) {
-			JsonObject *role = json_array_get_object_element(permissions, i);
-			const gchar *role_id = json_object_get_string_member(role, "id");
-			if (json_object_get_int_member(role, "allow") & 0x400) {
-				lookup->allowed_roles = g_list_prepend(lookup->allowed_roles, g_strdup(role_id));
-			}
-			if (json_object_get_int_member(role, "deny") & 0x400) {
-				lookup->denied_roles = g_list_prepend(lookup->denied_roles, g_strdup(role_id));
-			}
-		}
-
-		DiscordGuild *guild = discord_get_guild(da, guild_id);
 
 		for (guint i = 0; i < guild->members->len; i++){
 			DiscordUser *user = discord_get_user_int(da, g_array_index(guild->members, guint64, i));
@@ -4274,6 +4372,9 @@ discord_add_account_options(GList *account_options)
 	PurpleAccountOption *option;
 
 	option = purple_account_option_bool_new(N_("Use status message as in-game info"), "use-status-as-game", FALSE);
+	account_options = g_list_append(account_options, option);
+
+	option = purple_account_option_bool_new(N_("Auto-create rooms on buddy list"), "populate-blist", TRUE);
 	account_options = g_list_append(account_options, option);
 
 	option = purple_account_option_int_new(N_("Number of users in a large channel"), "large-channel-count", 20);
