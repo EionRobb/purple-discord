@@ -724,7 +724,27 @@ static gchar *discord_create_fullname(DiscordUser *user)
 
 static gchar * discord_create_nickname(DiscordUser *author, DiscordGuild *guild);
 
-static gchar *discord_create_nickname_from_id(DiscordAccount *da, DiscordGuild *g, guint64 id)
+static gchar *
+discord_alloc_nickname(DiscordUser *user, DiscordGuild *guild, const gchar *suggested_nick)
+{
+	gchar *nick;
+
+	if(suggested_nick)  {
+		nick = g_strdup(suggested_nick);
+	} else {
+		nick = user->name;
+	}
+
+	/* TODO: Disambiguate if necessary */
+
+	g_hash_table_replace_int64(guild->nicknames, user->id, g_strdup(nick));
+	g_hash_table_replace(guild->nicknames_rev, g_strdup(nick), g_memdup(&user->id, sizeof(user->id)));
+
+	return nick;
+}
+
+static gchar *
+discord_create_nickname_from_id(DiscordAccount *da, DiscordGuild *g, guint64 id)
 {
 	DiscordUser *user = discord_get_user_int(da, id);
 	if(user){
@@ -2101,13 +2121,7 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 			g_hash_table_replace_int64(u->guild_memberships, membership->id, membership);
 			g_array_append_val(guild->members, u->id);
 
-			/* TODO: Disambiguate if necessary */
-			gchar *nickname = membership->nick;
-
-			if(nickname) {
-				g_hash_table_replace_int64(guild->nicknames, u->id, g_strdup(nickname));
-				g_hash_table_replace(guild->nicknames_rev, g_strdup(nickname), g_memdup(&u->id, sizeof(u->id)));
-			}
+			discord_alloc_nickname(u, guild, membership->nick);
 
 			JsonArray *roles = json_object_get_array_member(member, "roles");
 			for (int k = json_array_get_length(roles) - 1; k >= 0; k--) {
@@ -2155,6 +2169,29 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		g_list_free(users);
 		g_list_free(flags);
 		discord_print_users(da->new_users);
+
+	} else if (purple_strequal(type, "GUILD_MEMBER_UPDATE")) {
+		DiscordUser *user = discord_upsert_user(da->new_users, json_object_get_object_member(data, "user"));
+		DiscordGuild *guild = discord_get_guild_int(da, to_int(json_object_get_string_member(data, "guild_id")));
+
+		const gchar *new_nick = json_object_get_string_member(data, "nick");
+		gchar *old_nick = g_hash_table_lookup_int64(guild->nicknames, user->id);
+
+		if (!purple_strequal(new_nick, old_nick)) {
+			/* Nick change */
+
+			if(old_nick) {
+				g_hash_table_remove(guild->nicknames_rev, old_nick);
+			}
+
+			gchar *nick = discord_alloc_nickname(user, guild, new_nick);
+
+			/* TODO: Propagate */
+			printf("TODO: Propagate nick change from %s -> %s\n", old_nick, nick);
+		}
+
+		/* TODO: Track role changes */
+
 
 	} else {
 		purple_debug_info("discord", "Unhandled message type '%s'\n", type);
