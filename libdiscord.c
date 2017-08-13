@@ -731,7 +731,7 @@ discord_alloc_nickname(DiscordUser *user, DiscordGuild *guild, const gchar *sugg
 	gchar *nick;
 
 	if(suggested_nick)  {
-		nick = g_strdup(suggested_nick);
+		nick = suggested_nick;
 	} else {
 		nick = user->name;
 	}
