@@ -966,7 +966,6 @@ discord_response_callback(PurpleHttpConnection *http_conn,
 	}
 
 	if (body != NULL && !json_parser_load_from_data(parser, body, body_len, NULL)) {
-		//purple_debug_error("discord", "Error parsing response: %s\n", body);
 		if (conn->callback) {
 			JsonNode *dummy_node = json_node_new(JSON_NODE_OBJECT);
 			JsonObject *dummy_object = json_object_new();
@@ -1068,7 +1067,6 @@ discord_fetch_url_with_method(DiscordAccount *ya, const gchar *method, const gch
 
 	//Use the full 'url' until libpurple can handle path's longer than 256 chars
 	g_string_append_printf(headers, "%s /%s HTTP/1.0\r\n", method, path);
-	//g_string_append_printf(headers, "%s %s HTTP/1.0\r\n", method, url);
 	g_string_append_printf(headers, "Connection: close\r\n");
 	g_string_append_printf(headers, "Host: %s\r\n", host);
 	g_string_append_printf(headers, "Accept: */*\r\n");
@@ -2747,13 +2745,11 @@ static void
 discord_close(PurpleConnection *pc)
 {
 	DiscordAccount *da = purple_connection_get_protocol_data(pc);
-	// PurpleAccount *account;
 
 	g_return_if_fail(da != NULL);
 
 	purple_timeout_remove(da->heartbeat_timeout);
 
-	// account = purple_connection_get_account(pc);
 	if (da->websocket != NULL) {
 		purple_ssl_close(da->websocket);
 		da->websocket = NULL;
