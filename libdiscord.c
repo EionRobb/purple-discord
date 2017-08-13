@@ -1473,10 +1473,17 @@ discord_replace_emoji(const GMatchInfo *match, GString *result, gpointer user_da
 	return FALSE;
 }
 
+struct DiscordAG {
+	DiscordAccount *a;
+	DiscordGuild *g;
+};
+
 static gboolean
 discord_replace_mention(const GMatchInfo *match, GString *result, gpointer user_data)
 {
-	DiscordAccount *da = user_data;
+	struct DiscordAG *ag = user_data;
+	DiscordAccount *da = ag->a;
+	DiscordGuild *guild = ag->g;
 	gchar *match_string = g_match_info_fetch(match, 0);
 
 	gchar *snowflake_str = g_match_info_fetch(match, 1);
@@ -1487,7 +1494,7 @@ discord_replace_mention(const GMatchInfo *match, GString *result, gpointer user_
 
 	if(mention_user) {
 		//TODO make this a clickable link
-		gchar *name = discord_create_fullname(mention_user);
+		gchar *name = discord_create_nickname(mention_user, guild);
 
 		PurpleBuddy *buddy = purple_blist_find_buddy(da->account, name);
 
@@ -1511,9 +1518,10 @@ discord_replace_mention(const GMatchInfo *match, GString *result, gpointer user_
 }
 
 static gchar *
-discord_replace_mentions_bare(DiscordAccount *da, gchar *message)
+discord_replace_mentions_bare(DiscordAccount *da, DiscordGuild *g, gchar *message)
 {
-	gchar *tmp = g_regex_replace_eval(mention_regex, message, -1, 0, 0, discord_replace_mention, da, NULL);
+	struct DiscordAG ag = { .a = da, .g = g };
+	gchar *tmp = g_regex_replace_eval(mention_regex, message, -1, 0, 0, discord_replace_mention, &ag, NULL);
 
 	if (tmp != NULL) {
 		g_free(message);
@@ -1668,6 +1676,10 @@ discord_convert_markdown(const gchar* html)
 static gchar *
 discord_create_nickname(DiscordUser *author, DiscordGuild *guild)
 {
+	if(!guild) {
+		return discord_create_fullname(author);
+	}
+
 	gchar *name = g_hash_table_lookup_int64(guild->nicknames, author->id);
 
 	if(!name) {
@@ -1719,7 +1731,9 @@ discord_process_message(DiscordAccount *da, JsonObject *data)
 {
 	DiscordUser *author = discord_upsert_user(da->new_users, json_object_get_object_member(data, "author"));
 
-	const gchar *channel_id = json_object_get_string_member(data, "channel_id");
+	const gchar *channel_id_s = json_object_get_string_member(data, "channel_id");
+	guint64 channel_id = to_int(channel_id_s);
+
 	const gchar *content = json_object_get_string_member(data, "content");
 	const gchar *timestamp_str = json_object_get_string_member(data, "timestamp");
 	time_t timestamp = purple_str_to_time(timestamp_str, FALSE, NULL, NULL, NULL);
@@ -1730,6 +1744,9 @@ discord_process_message(DiscordAccount *da, JsonObject *data)
 	PurpleMessageFlags flags;
 	gchar *tmp;
 	gint i;
+
+	DiscordGuild *guild;
+	discord_get_channel_global_int_guild(da, channel_id, &guild);
 
 	if (author->id == da->self_user_id) {
 		flags = PURPLE_MESSAGE_SEND | PURPLE_MESSAGE_REMOTE_SEND | PURPLE_MESSAGE_DELAYED;
@@ -1748,7 +1765,7 @@ discord_process_message(DiscordAccount *da, JsonObject *data)
 			}
 		}
 
-		escaped_content = discord_replace_mentions_bare(da, escaped_content);
+		escaped_content = discord_replace_mentions_bare(da, guild, escaped_content);
 	}
 
 	if(json_object_get_boolean_member(data, "mention_everyone")) {
@@ -1780,7 +1797,7 @@ discord_process_message(DiscordAccount *da, JsonObject *data)
 	g_free(escaped_content);
 	escaped_content = tmp;
 
-	if (g_hash_table_contains(da->one_to_ones, channel_id)) {
+	if (g_hash_table_contains(da->one_to_ones, channel_id_s)) {
 		//private message
 
 		if (author->id == da->self_user_id) {
@@ -1789,7 +1806,7 @@ discord_process_message(DiscordAccount *da, JsonObject *data)
 				PurpleIMConversation *imconv;
 				PurpleMessage *msg;
 
-				gchar *username = g_hash_table_lookup(da->one_to_ones, channel_id);
+				gchar *username = g_hash_table_lookup(da->one_to_ones, channel_id_s);
 				imconv = purple_conversations_find_im_with_account(username, da->account);
 				if (imconv == NULL)
 				{
@@ -1836,23 +1853,19 @@ discord_process_message(DiscordAccount *da, JsonObject *data)
 		}
 
 	} else if (!nonce || !g_hash_table_remove(da->sent_message_ids, nonce)) {
-		guint64 tmp = to_int(channel_id);
-
 		/* Open the buffer if it's not already */
-		DiscordGuild *guild;
-		discord_get_channel_global_int_guild(da, tmp, &guild);
 		int head_count = guild->members->len;
 
 		gboolean mentioned = flags & PURPLE_MESSAGE_NICK;
 
 		if(mentioned || (head_count < purple_account_get_int(da->account, "large-channel-count", 20))) {
-			discord_open_chat(da, tmp, NULL, mentioned);
+			discord_open_chat(da, channel_id, NULL, mentioned);
 		}
 
 		gchar *name = discord_create_nickname(author, guild);
 
 		if (escaped_content && *escaped_content) {
-			purple_serv_got_chat_in(da->pc, g_int64_hash(&tmp), name, flags, escaped_content, timestamp);
+			purple_serv_got_chat_in(da->pc, g_int64_hash(&channel_id), name, flags, escaped_content, timestamp);
 		}
 
 		if (attachments) {
@@ -1860,7 +1873,7 @@ discord_process_message(DiscordAccount *da, JsonObject *data)
 				JsonObject *attachment = json_array_get_object_element(attachments, i);
 				const gchar *url = json_object_get_string_member(attachment, "url");
 
-				purple_serv_got_chat_in(da->pc, g_int64_hash(&tmp), name, flags, url, timestamp);
+				purple_serv_got_chat_in(da->pc, g_int64_hash(&channel_id), name, flags, url, timestamp);
 			}
 		}
 
@@ -4016,7 +4029,7 @@ const gchar *message, PurpleMessageFlags flags)
 			d_message = tmp;
 		}
 
-		d_message = discord_replace_mentions_bare(da, d_message);
+		d_message = discord_replace_mentions_bare(da, guild, d_message);
 
 		purple_serv_got_chat_in(pc, g_int64_hash(&room_id), da->self_username, PURPLE_MESSAGE_SEND, d_message, time(NULL));
 	}
