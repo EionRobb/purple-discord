@@ -1951,6 +1951,32 @@ release_ctx:
 }
 
 static void
+discord_got_nick_change(DiscordAccount *da, DiscordUser *user, DiscordGuild *guild, const gchar *new, const gchar *old, gboolean self)
+{
+	/* Nick change */
+	gchar *nick = discord_alloc_nickname(user, guild, new);
+
+	/* Propagate through the guild, see e.g. irc_msg_nick */
+	GHashTableIter channel_iter;
+	gpointer key, value;
+
+	g_hash_table_iter_init(&channel_iter, guild->channels);
+	while(g_hash_table_iter_next(&channel_iter, &key, &value)){
+		DiscordChannel *channel = value;
+		PurpleChatConversation *chat = purple_conversations_find_chat(da->pc, g_int64_hash(&channel->id));
+
+		if (purple_chat_conversation_has_user(chat, old) || self) {
+			purple_chat_conversation_rename_user(chat, old, nick);
+		}
+	}
+
+	if(old) {
+		g_hash_table_remove(guild->nicknames_rev, old);
+	}
+}
+
+
+static void
 discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data)
 {
 	discord_get_or_create_default_group();
@@ -2204,31 +2230,10 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		const gchar *old_nick = g_hash_table_lookup_int64(guild->nicknames, user->id);
 
 		if (!purple_strequal(new_nick, old_nick)) {
-			/* Nick change */
-			gchar *nick = discord_alloc_nickname(user, guild, new_nick);
-
-			/* Propagate through the guild, see e.g. irc_msg_nick */
-			GHashTableIter channel_iter;
-			gpointer key, value;
-
-			g_hash_table_iter_init(&channel_iter, guild->channels);
-			while(g_hash_table_iter_next(&channel_iter, &key, &value)){
-				DiscordChannel *channel = value;
-				PurpleChatConversation *chat = purple_conversations_find_chat(da->pc, g_int64_hash(&channel->id));
-
-				if (purple_chat_conversation_has_user(chat, old_nick)) {
-					purple_chat_conversation_rename_user(chat, old_nick, nick);
-				}
-			}
-
-			if(old_nick) {
-				g_hash_table_remove(guild->nicknames_rev, old_nick);
-			}
+			discord_got_nick_change(da, user, guild, new_nick, old_nick, FALSE);
 		}
 
 		/* TODO: Track role changes */
-
-
 	} else {
 		purple_debug_info("discord", "Unhandled message type '%s'\n", type);
 	}
@@ -3346,6 +3351,10 @@ discord_chat_nick(PurpleConnection *pc, int id, gchar *new_nick)
 	g_free(url);
 	g_free(postdata);
 	json_object_unref(data);
+
+	/* Propragate locally as well */
+	const gchar *old_nick = g_hash_table_lookup_int64(guild->nicknames, da->self_user_id);
+	discord_got_nick_change(da, discord_get_user_int(da, da->self_user_id), guild, new_nick, old_nick, TRUE);
 }
 
 static void
