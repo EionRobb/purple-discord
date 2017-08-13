@@ -4951,7 +4951,7 @@ discord_protocol_chat_iface_init(PurpleProtocolChatIface *prpl_info)
 	prpl_info->get_name = discord_get_chat_name;
 	prpl_info->invite = discord_chat_invite;
 	prpl_info->set_topic = discord_chat_set_topic;
-	prpl_info->get_cb_real_name = discord_get_real_name;
+	prpl_info->get_user_real_name = discord_get_real_name;
 }
 
 static void
