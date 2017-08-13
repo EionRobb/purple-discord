@@ -721,6 +721,18 @@ static gchar *discord_create_fullname(DiscordUser *user)
 	}
 	return NULL;
 }
+
+static gchar * discord_create_nickname(DiscordUser *author, DiscordGuild *guild);
+
+static gchar *discord_create_nickname_from_id(DiscordAccount *da, DiscordGuild *g, guint64 id)
+{
+	DiscordUser *user = discord_get_user_int(da, id);
+	if(user){
+		return discord_create_nickname(user, g);
+	}
+	return NULL;
+}
+
 //todo try and remove non-int variants
 
 static DiscordGuild *discord_get_guild_int(DiscordAccount *da, guint64 id)
@@ -1937,6 +1949,9 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 			return;
 		}
 
+		DiscordGuild *guild;
+		discord_get_channel_global_int_guild(da, to_int(channel_id), &guild);
+
 		guint tmp = to_int(channel_id);
 		PurpleChatConversation *chatconv = purple_conversations_find_chat(da->pc, g_int64_hash(&tmp));
 
@@ -1945,7 +1960,7 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		}
 
 		JsonObject *json = json_object_get_object_member(data, "author");
-		gchar *n = discord_create_fullname_from_id(da, to_int(json_object_get_string_member(json, "id")));
+		gchar *n = discord_create_nickname_from_id(da, guild, to_int(json_object_get_string_member(json, "id")));
 
 		struct discord_group_typing_data ctx = {
 			.da = da,
@@ -1965,8 +1980,9 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		/* Don't display typing notfications from ourselves */
 		if (user_id == da->self_user_id) return;
 
-		gchar *username = discord_create_fullname_from_id(da, user_id);
 		DiscordChannel *channel = discord_get_channel_global(da, channel_id);
+		DiscordGuild *guild = discord_get_guild_int(da, channel->guild_id);
+		gchar *username = discord_create_nickname_from_id(da, guild, user_id);
 
 		if (channel != NULL) {
 			struct discord_group_typing_data set = {
