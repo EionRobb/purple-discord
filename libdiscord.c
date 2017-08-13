@@ -360,8 +360,10 @@ static void discord_free_channel(gpointer data)
 static void discord_update_status(DiscordUser *user, JsonObject *json)
 {
 	json_object_get_string_member(json, "id");
+
 	if(json_object_has_member(json, "status")) {
 		const gchar *status = json_object_get_string_member(json, "status");
+
 		if(purple_strequal("online", status)) {
 			user->status = USER_ONLINE;
 		} else if(purple_strequal("idle", status)) {
@@ -418,6 +420,7 @@ discord_dump_int64_hashtable_keys(GHashTable *hash_table)
 	gpointer value;
 
 	g_hash_table_iter_init(&iter, hash_table);
+
 	while(g_hash_table_iter_next(&iter, (gpointer *) &key, &value)) {
 		purple_debug_info("discord", "%" G_GUINT64_FORMAT, *key);
 	}
@@ -429,12 +432,15 @@ static DiscordUser *discord_get_user_name(DiscordAccount *da, int discriminator,
 	gpointer key, value;
 
 	g_hash_table_iter_init(&iter, da->new_users);
+
 	while(g_hash_table_iter_next(&iter, &key, &value)) {
 		DiscordUser *user = value;
+
 		if(user->discriminator == discriminator && purple_strequal(user->name, name)) {
 			return value;
 		}
 	}
+
 	return NULL;
 }
 
@@ -477,9 +483,11 @@ static gchar *discord_create_fullname(DiscordUser *user)
 static gchar *discord_create_fullname_from_id(DiscordAccount *da, guint64 id)
 {
 	DiscordUser *user = discord_get_user_int(da, id);
+
 	if(user) {
 		return discord_create_fullname(user);
 	}
+
 	return NULL;
 }
 
@@ -517,9 +525,11 @@ static gchar *
 discord_create_nickname_from_id(DiscordAccount *da, DiscordGuild *g, guint64 id)
 {
 	DiscordUser *user = discord_get_user_int(da, id);
+
 	if(user) {
 		return discord_create_nickname(user, g);
 	}
+
 	return NULL;
 }
 
@@ -565,6 +575,7 @@ static DiscordChannel *discord_get_channel_global_int_guild(DiscordAccount *da, 
 	gpointer key, value;
 
 	g_hash_table_iter_init(&iter, da->new_guilds);
+
 	while(g_hash_table_iter_next(&iter, &key, &value)) {
 		DiscordGuild *guild = value;
 
@@ -597,16 +608,20 @@ static DiscordChannel *discord_get_channel_global_name(DiscordAccount *da, const
 	gpointer key, value;
 
 	g_hash_table_iter_init(&guild_iter, da->new_guilds);
+
 	while(g_hash_table_iter_next(&guild_iter, &key, &value)) {
 		DiscordGuild *guild = value;
 		g_hash_table_iter_init(&channel_iter, guild->channels);
+
 		while(g_hash_table_iter_next(&channel_iter, &key, &value)) {
 			DiscordChannel *channel = value;
+
 			if(purple_strequal(name, channel->name)) {
 				return channel;
 			}
 		}
 	}
+
 	return NULL;
 }
 
@@ -625,6 +640,7 @@ static void discord_print_append_row(int level, GString *buffer, GString *row)
 	for(int i = 0; i < level; i++) {
 		g_string_prepend_c(row, '\t');
 	}
+
 	g_string_append(buffer, row->str);
 	g_string_append_c(buffer, '\n');
 }
@@ -638,6 +654,7 @@ static void discord_print_permission_override(GString *buffer, GHashTable *permi
 	type = purple_strequal("role", type) ? "Role override count: %d" : "User override count: %d";
 	discord_print_append(2, buffer, row_buffer, type, g_hash_table_size(permission_overrides));
 	g_hash_table_iter_init(&permission_override_iter, permission_overrides);
+
 	while(g_hash_table_iter_next (&permission_override_iter, &key, &value)) {
 		DiscordPermissionOverride *permission_override = value;
 
@@ -659,6 +676,7 @@ static void discord_print_guilds(GHashTable *guilds)
 	gpointer key, value;
 
 	g_hash_table_iter_init(&guild_iter, guilds);
+
 	while(g_hash_table_iter_next (&guild_iter, &key, &value)) {
 		DiscordGuild *guild = value;
 
@@ -670,6 +688,7 @@ static void discord_print_guilds(GHashTable *guilds)
 		discord_print_append(1, buffer, row_buffer, "Afk channel: %s", guild->afk_voice_channel);
 
 		g_hash_table_iter_init(&role_iter, guild->roles);
+
 		while(g_hash_table_iter_next (&role_iter, &key, &value)) {
 			DiscordGuildRole *role = value;
 			discord_print_append(1, buffer, row_buffer, "Role id: %" G_GUINT64_FORMAT, role->id);
@@ -686,6 +705,7 @@ static void discord_print_guilds(GHashTable *guilds)
 		}
 
 		g_hash_table_iter_init(&channel_iter, guild->channels);
+
 		while(g_hash_table_iter_next (&channel_iter, &key, &value)) {
 			DiscordChannel *channel = value;
 
@@ -701,6 +721,7 @@ static void discord_print_guilds(GHashTable *guilds)
 
 		}
 	}
+
 	purple_debug_info("discord", "%s", buffer->str);
 	g_string_free(buffer, TRUE);
 	g_string_free(row_buffer, TRUE);
@@ -718,6 +739,7 @@ static void discord_print_users(GHashTable *users)
 	gpointer key, value;
 
 	g_hash_table_iter_init(&user_iter, users);
+
 	while(g_hash_table_iter_next(&user_iter, &key, &value)) {
 		DiscordUser *user = value;
 
@@ -729,6 +751,7 @@ static void discord_print_users(GHashTable *users)
 		discord_print_append(1, buffer, row_buffer, "Status: %d", user->status);
 
 		g_hash_table_iter_init(&guild_membership_iter, user->guild_memberships);
+
 		while(g_hash_table_iter_next (&guild_membership_iter, &key, &value)) {
 			DiscordGuildMembership *guild_membership = value;
 
@@ -744,6 +767,7 @@ static void discord_print_users(GHashTable *users)
 
 		}
 	}
+
 	purple_debug_info("discord", "%s", buffer->str);
 
 	g_string_free(buffer, TRUE);
@@ -817,6 +841,7 @@ discord_string_get_chunk(const gchar *haystack, gsize len, const gchar *start, c
 	} else {
 		chunk_start = strstr(haystack, start);
 	}
+
 	g_return_val_if_fail(chunk_start, NULL);
 	chunk_start += strlen(start);
 
@@ -825,6 +850,7 @@ discord_string_get_chunk(const gchar *haystack, gsize len, const gchar *start, c
 	} else {
 		chunk_end = strstr(chunk_start, end);
 	}
+
 	g_return_val_if_fail(chunk_end, NULL);
 
 	return g_strndup(chunk_start, chunk_end - chunk_start);
@@ -844,10 +870,12 @@ discord_update_cookies(DiscordAccount *ya, const GList *cookie_headers)
 		cookie_start = cur->data;
 
 		cookie_end = strchr(cookie_start, '=');
+
 		if (cookie_end != NULL) {
 			cookie_name = g_strndup(cookie_start, cookie_end-cookie_start);
 			cookie_start = cookie_end + 1;
 			cookie_end = strchr(cookie_start, ';');
+
 			if (cookie_end != NULL) {
 				cookie_value= g_strndup(cookie_start, cookie_end-cookie_start);
 				cookie_start = cookie_end;
@@ -875,13 +903,16 @@ discord_update_cookies(DiscordAccount *ya, const gchar *headers)
 	/* look for the next "Set-Cookie: " */
 	/* grab the data up until ';' */
 	cookie_start = headers;
+
 	while ((cookie_start = strstr(cookie_start, "\r\nSet-Cookie: ")) && (cookie_start - headers) < header_len) {
 		cookie_start += 14;
 		cookie_end = strchr(cookie_start, '=');
+
 		if (cookie_end != NULL) {
 			cookie_name = g_strndup(cookie_start, cookie_end-cookie_start);
 			cookie_start = cookie_end + 1;
 			cookie_end = strchr(cookie_start, ';');
+
 			if (cookie_end != NULL) {
 				cookie_value= g_strndup(cookie_start, cookie_end-cookie_start);
 				cookie_start = cookie_end;
@@ -942,6 +973,7 @@ discord_response_callback(PurpleHttpConnection *http_conn,
 	body = url_text;
 	body_len = len;
 #endif
+
 	if (body == NULL && error_message != NULL) {
 		//connection error - unersolvable dns name, non existing server
 		gchar *error_msg_formatted = g_strdup_printf(_("Connection error: %s."), error_message);
@@ -950,6 +982,7 @@ discord_response_callback(PurpleHttpConnection *http_conn,
 		g_free(conn);
 		return;
 	}
+
 	if (body != NULL && !json_parser_load_from_data(parser, body, body_len, NULL)) {
 		//purple_debug_error("discord", "Error parsing response: %s\n", body);
 		if (conn->callback) {
@@ -971,6 +1004,7 @@ discord_response_callback(PurpleHttpConnection *http_conn,
 		JsonNode *root = json_parser_get_root(parser);
 
 		purple_debug_misc("discord", "Got response: %s\n", body);
+
 		if (conn->callback) {
 			conn->callback(conn->ya, root, conn->user_data);
 		}
@@ -989,6 +1023,7 @@ discord_fetch_url_with_method(DiscordAccount *ya, const gchar *method, const gch
 	PurpleHttpConnection *http_conn;
 
 	account = ya->account;
+
 	if (purple_account_is_disconnected(account)) {
 		return;
 	}
@@ -1013,6 +1048,7 @@ discord_fetch_url_with_method(DiscordAccount *ya, const gchar *method, const gch
 	purple_http_request_header_set(request, "Accept", "*/*");
 	purple_http_request_header_set(request, "User-Agent", DISCORD_USERAGENT);
 	purple_http_request_header_set(request, "Cookie", cookies);
+
 	if (ya->token) {
 		purple_http_request_header_set(request, "Authorization", ya->token);
 	}
@@ -1029,6 +1065,7 @@ discord_fetch_url_with_method(DiscordAccount *ya, const gchar *method, const gch
 		} else {
 			purple_http_request_header_set(request, "Content-Type", "application/x-www-form-urlencoded");
 		}
+
 		purple_http_request_set_contents(request, postdata, -1);
 	}
 
@@ -1055,6 +1092,7 @@ discord_fetch_url_with_method(DiscordAccount *ya, const gchar *method, const gch
 	g_string_append_printf(headers, "Accept: */*\r\n");
 	g_string_append_printf(headers, "User-Agent: " DISCORD_USERAGENT "\r\n");
 	g_string_append_printf(headers, "Cookie: %s\r\n", cookies);
+
 	if (ya->token) {
 		g_string_append_printf(headers, "Authorization: %s\r\n", ya->token);
 	}
@@ -1071,6 +1109,7 @@ discord_fetch_url_with_method(DiscordAccount *ya, const gchar *method, const gch
 		} else {
 			g_string_append(headers, "Content-Type: application/x-www-form-urlencoded\r\n");
 		}
+
 		g_string_append_printf(headers, "Content-Length: %" G_GSIZE_FORMAT "\r\n", strlen(postdata));
 		g_string_append(headers, "\r\n");
 
@@ -1226,6 +1265,7 @@ discord_replace_channel(const GMatchInfo *match, GString *result, gpointer user_
 	if (channel) {
 		//TODO make this a clickable link
 		guild = discord_get_guild_int(da, channel->guild_id);
+
 		if (guild) {
 			g_string_append_printf(result, "%s", discord_normalise_room_name(guild->name, channel->name));
 		} else {
@@ -1452,6 +1492,7 @@ discord_convert_markdown(const gchar* html)
 					while(html[i] != '\n' && html[i] != ' ' && html[i]) {
 						++i;
 					}
+
 					out = g_string_append(out, "<br/><span style='font-family: monospace; white-space: pre'>");
 				} else {
 					out = g_string_append(out, "</span>");
@@ -1571,6 +1612,7 @@ discord_process_message(DiscordAccount *da, JsonObject *data)
 
 	//Replace <#channel_id> with channel names
 	tmp = g_regex_replace_eval(channel_mentions_regex, escaped_content, -1, 0, 0, discord_replace_channel, da, NULL);
+
 	if (tmp != NULL) {
 		g_free(escaped_content);
 		escaped_content = tmp;
@@ -1578,6 +1620,7 @@ discord_process_message(DiscordAccount *da, JsonObject *data)
 
 	//Replace <:emoji:id> with emojis
 	tmp = g_regex_replace_eval(emoji_regex, escaped_content, -1, 0, 0, discord_replace_emoji, da, NULL);
+
 	if (tmp != NULL) {
 		g_free(escaped_content);
 		escaped_content = tmp;
@@ -1585,6 +1628,7 @@ discord_process_message(DiscordAccount *da, JsonObject *data)
 
 	/* translate Discord-formatted actions into /me syntax */
 	tmp = g_regex_replace(action_star_regex, escaped_content, -1, 0, "/me \\1", 0, NULL);
+
 	if (tmp != NULL) {
 		g_free(escaped_content);
 		escaped_content = tmp;
@@ -1605,9 +1649,11 @@ discord_process_message(DiscordAccount *da, JsonObject *data)
 
 				gchar *username = g_hash_table_lookup(da->one_to_ones, channel_id_s);
 				imconv = purple_conversations_find_im_with_account(username, da->account);
+
 				if (imconv == NULL) {
 					imconv = purple_im_conversation_new(da->account, username);
 				}
+
 				conv = PURPLE_CONVERSATION(imconv);
 
 				if (escaped_content && *escaped_content) {
@@ -1675,6 +1721,7 @@ discord_process_message(DiscordAccount *da, JsonObject *data)
 
 		g_free(name);
 	}
+
 	g_free(escaped_content);
 
 	return to_int(json_object_get_string_member(data, "id"));
@@ -1725,6 +1772,7 @@ discord_set_group_typing(void *_u)
 	purple_chat_user_set_flags(cb, cbflags);
 
 release_ctx:
+
 	if(ctx->free_me) {
 		g_free(ctx->username);
 		g_free(ctx);
@@ -1750,6 +1798,7 @@ discord_got_nick_change(DiscordAccount *da, DiscordUser *user, DiscordGuild *gui
 	gpointer key, value;
 
 	g_hash_table_iter_init(&channel_iter, guild->channels);
+
 	while(g_hash_table_iter_next(&channel_iter, &key, &value)) {
 		DiscordChannel *channel = value;
 		PurpleChatConversation *chat = purple_conversations_find_chat(da->pc, g_int64_hash(&channel->id));
@@ -1785,9 +1834,11 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 			gchar *nickname = discord_create_nickname(user, guild);
 
 			g_hash_table_iter_init(&iter, guild->channels);
+
 			while(g_hash_table_iter_next(&iter, &key, &value)) {
 				DiscordChannel *channel = value;
 				PurpleChatConversation *chat = purple_conversations_find_chat(da->pc, g_int64_hash(&channel->id));
+
 				if(chat != NULL) {
 					if (user->status == USER_OFFLINE) {
 						purple_chat_conversation_remove_user(chat, nickname, NULL);
@@ -1802,6 +1853,7 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 			purple_protocol_got_user_status(da->account, username, status, "message", user->game, NULL);
 			purple_protocol_got_user_idle(da->account, username, idle_since ? TRUE : FALSE, 0);
 		}
+
 		g_free(username);
 	} else if (purple_strequal(type, "MESSAGE_CREATE")/* || purple_strequal(type, "MESSAGE_UPDATE")*/) { //TODO
 		discord_process_message(da, data);
@@ -1898,6 +1950,7 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 
 		if ((channel_type == 0 && json_object_has_member(data, "topic")) || channel_type == 3) {
 			PurpleChatConversation *chatconv = purple_conversations_find_chat(da->pc, g_int64_hash(&channel_id));
+
 			if (chatconv) {
 				purple_chat_conversation_set_topic(chatconv, NULL, json_object_get_string_member(data, (channel_type == 1 ? "topic" : "name")));
 			}
@@ -1927,9 +1980,11 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 	} else if (purple_strequal(type, "READY")) {
 		JsonObject *self_user = json_object_get_object_member(data, "user");
 		da->self_user_id = to_int(json_object_get_string_member(self_user, "id"));
+
 		if (!purple_account_get_private_alias(da->account)) {
 			purple_account_set_private_alias(da->account, json_object_get_string_member(self_user, "username"));
 		}
+
 		g_free(da->self_username);
 		da->self_username = discord_combine_username(json_object_get_string_member(self_user, "username"), json_object_get_string_member(self_user, "discriminator"));
 		purple_connection_set_display_name(da->pc, da->self_username);
@@ -1965,6 +2020,7 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		DiscordGuild *guild = discord_get_guild(da, guild_id);
 
 		purple_debug_info("discord", "Guild id '%" G_GUINT64_FORMAT "' \n", gid);
+
 		//all members in small groups, online in large
 		for (int j = json_array_get_length(members) - 1; j >= 0; j--) {
 			JsonObject *member = json_array_get_object_element(members, j);
@@ -1978,6 +2034,7 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 			g_free(discord_alloc_nickname(u, guild, membership->nick));
 
 			JsonArray *roles = json_object_get_array_member(member, "roles");
+
 			for (int k = json_array_get_length(roles) - 1; k >= 0; k--) {
 				guint64 role = to_int(json_array_get_string_element(roles, k));
 				g_array_append_val(membership->roles, role);
@@ -2010,10 +2067,12 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		gpointer key, value;
 
 		g_hash_table_iter_init(&iter, discord_get_guild(da, guild_id)->channels);
+
 		while(g_hash_table_iter_next(&iter, &key, &value)) {
 			DiscordChannel *channel = value;
 
 			PurpleChatConversation *chat = purple_conversations_find_chat(da->pc, g_int64_hash(&channel->id));
+
 			if (chat != NULL) {
 				purple_chat_conversation_clear_users(chat);
 				purple_chat_conversation_add_users(chat, users, NULL, flags, FALSE);
@@ -2053,6 +2112,7 @@ PurpleGroup* discord_get_or_create_default_group()
 	PurpleGroup *discord_group = NULL;
 
 	discord_group = purple_blist_find_group(_("Discord"));
+
 	if (!discord_group) {
 		discord_group = purple_group_new(_("Discord"));
 		purple_blist_add_group(discord_group, NULL);
@@ -2087,6 +2147,7 @@ discord_roomlist_got_list(DiscordAccount *da, DiscordGuild *guild, gpointer user
 	gpointer key, value;
 
 	g_hash_table_iter_init(&iter, guild->channels);
+
 	while(g_hash_table_iter_next(&iter, &key, &value)) {
 		DiscordChannel *channel = value;
 		PurpleRoomlistRoom *room;
@@ -2098,17 +2159,21 @@ discord_roomlist_got_list(DiscordAccount *da, DiscordGuild *guild, gpointer user
 
 		purple_roomlist_room_add_field(roomlist, room, channel_id);
 		purple_roomlist_room_add_field(roomlist, room, channel->name);
+
 		switch(channel->type) {
 		case 0:
 			type_str = "Text";
 			break;
+
 		case 1:
 			type_str = "Voice";
 			break;
+
 		default:
 			type_str = "Unknown";
 			break;
 		}
+
 		purple_roomlist_room_add_field(roomlist, room, type_str);
 
 		purple_roomlist_room_add(roomlist, room);
@@ -2151,6 +2216,7 @@ discord_roomlist_get_list(PurpleConnection *pc)
 	gpointer key, guild;
 
 	g_hash_table_iter_init(&iter, da->new_guilds);
+
 	while(g_hash_table_iter_next(&iter, &key, &guild)) {
 		discord_roomlist_got_list(da, guild, roomlist);
 	}
@@ -2179,6 +2245,7 @@ discord_set_status(PurpleAccount *account, PurpleStatus *status)
 	json_object_set_int_member(obj, "op", 3);
 	json_object_set_string_member(data, "status", status_id);
 	json_object_set_int_member(data, "since", 0);
+
 	if (purple_account_get_bool(account, "use-status-as-game", FALSE)) {
 		JsonObject *game = json_object_new();
 		const gchar *message = purple_status_get_attr_string(status, "message");
@@ -2189,6 +2256,7 @@ discord_set_status(PurpleAccount *account, PurpleStatus *status)
 	} else {
 		json_object_set_null_member(data, "game");
 	}
+
 	json_object_set_boolean_member(data, "afk", FALSE);
 	json_object_set_object_member(obj, "d", data);
 
@@ -2250,18 +2318,22 @@ discord_build_groups_from_blist(DiscordAccount *ya)
 			const gchar *channel_id;
 			const gchar *name;
 			PurpleChat *chat = PURPLE_CHAT(node);
+
 			if (purple_chat_get_account(chat) != ya->account) {
 				continue;
 			}
 
 			name = purple_chat_get_name(chat);
 			channel_id = purple_blist_node_get_string(node, "channel_id");
+
 			if (name == NULL || channel_id == NULL || purple_strequal(name, channel_id)) {
 				GHashTable *components = purple_chat_get_components(chat);
+
 				if (components != NULL) {
 					if (channel_id == NULL) {
 						channel_id = g_hash_table_lookup(components, "id");
 					}
+
 					if (name == NULL || purple_strequal(name, channel_id)) {
 						name = g_hash_table_lookup(components, "name");
 					}
@@ -2271,12 +2343,14 @@ discord_build_groups_from_blist(DiscordAccount *ya)
 			const gchar *discord_id;
 			const gchar *name;
 			PurpleBuddy *buddy = PURPLE_BUDDY(node);
+
 			if (purple_buddy_get_account(buddy) != ya->account) {
 				continue;
 			}
 
 			name = purple_buddy_get_name(buddy);
 			discord_id = purple_blist_node_get_string(node, "discord_id");
+
 			if (discord_id != NULL) {
 				g_hash_table_replace(ya->one_to_ones, g_strdup(discord_id), g_strdup(name));
 				g_hash_table_replace(ya->last_message_id_dm, g_strdup(discord_id), g_strdup("0"));
@@ -2457,6 +2531,7 @@ discord_buddy_guild(DiscordAccount *da, DiscordGuild *guild)
 	}
 
 	g_hash_table_iter_init(&iter, guild->channels);
+
 	while(g_hash_table_iter_next(&iter, &key, &value)) {
 		DiscordChannel *channel = value;
 
@@ -2504,6 +2579,7 @@ discord_populate_guild(DiscordAccount *da, JsonObject *guild)
 		DiscordChannel *c = discord_add_channel(g, channel, g->id);
 
 		JsonArray *permission_overrides = json_object_get_array_member(channel, "permission_overwrites");
+
 		for(int k = json_array_get_length(permission_overrides) - 1; k >= 0; k--) {
 			JsonObject *permission_override = json_array_get_object_element(permission_overrides, k);
 			discord_add_permission_override(c, permission_override);
@@ -2649,6 +2725,7 @@ discord_login_response(DiscordAccount *da, JsonNode *node, gpointer user_data)
 			purple_connection_error(da->pc, PURPLE_CONNECTION_ERROR_AUTHENTICATION_FAILED, json_object_get_string_member(response, "email"));
 			return;
 		}
+
 		if (json_object_has_member(response, "password")) {
 			// Probably an error about bad password
 			purple_connection_error(da->pc, PURPLE_CONNECTION_ERROR_AUTHENTICATION_FAILED, json_object_get_string_member(response, "password"));
@@ -2685,6 +2762,7 @@ discord_login(PurpleAccount *account)
 
 
 	da->last_load_last_message_id = purple_account_get_int(account, "last_message_id_high", 0);
+
 	if (da->last_load_last_message_id != 0) {
 		da->last_load_last_message_id = (da->last_load_last_message_id << 32) | ((guint64) purple_account_get_int(account, "last_message_id_low", 0) & 0xFFFFFFFF);
 	}
@@ -2727,6 +2805,7 @@ discord_login(PurpleAccount *account)
 	if (!chat_conversation_typing_signal) {
 		chat_conversation_typing_signal = purple_signal_connect(purple_conversations_get_handle(), "chat-conversation-typing", purple_connection_get_protocol(pc), PURPLE_CALLBACK(discord_conv_send_typing), NULL);
 	}
+
 	if (!conversation_updated_signal) {
 		conversation_updated_signal = purple_signal_connect(purple_conversations_get_handle(), "conversation-updated", purple_connection_get_protocol(pc), PURPLE_CALLBACK(discord_mark_conv_seen), NULL);
 	}
@@ -2817,6 +2896,7 @@ discord_process_frame(DiscordAccount *da, const gchar *frame)
 		obj = json_node_get_object(root);
 
 		opcode = json_object_get_int_member(obj, "op");
+
 		switch(opcode) {
 		case 0: {//Dispatch
 			const gchar *type = json_object_get_string_member(obj, "t");
@@ -2827,10 +2907,12 @@ discord_process_frame(DiscordAccount *da, const gchar *frame)
 
 			break;
 		}
+
 		case 7: {//Reconnect
 			discord_start_socket(da);
 			break;
 		}
+
 		case 9: {//Invalid session
 			da->seq = 0;
 			g_free(da->session_id);
@@ -2839,22 +2921,27 @@ discord_process_frame(DiscordAccount *da, const gchar *frame)
 			discord_send_auth(da);
 			break;
 		}
+
 		case 10: {//Hello
 			JsonObject *data = json_object_get_object_member(obj, "d");
 			gint64 heartbeat_interval = json_object_get_int_member(data, "heartbeat_interval");
 			discord_send_auth(da);
 
 			purple_timeout_remove(da->heartbeat_timeout);
+
 			if (heartbeat_interval) {
 				da->heartbeat_timeout = purple_timeout_add(json_object_get_int_member(data, "heartbeat_interval"), discord_send_heartbeat, da);
 			} else {
 				da->heartbeat_timeout = 0;
 			}
+
 			break;
 		}
+
 		case 11: {//Heartbeat ACK
 			break;
 		}
+
 		default: {
 			purple_debug_info("discord", "Unhandled op code %" G_GINT64_FORMAT "\n", opcode);
 			break;
@@ -2899,11 +2986,13 @@ discord_socket_write_data(DiscordAccount *ya, guchar *data, gsize data_len, guch
 			len_size += 8;
 		}
 	}
+
 	full_data = g_new0(guchar, 1 + data_len + len_size + 4);
 
 	if (type == 0) {
 		type = 129;
 	}
+
 	full_data[0] = type;
 
 	if (data_len <= 125) {
@@ -2940,6 +3029,7 @@ discord_socket_write_json(DiscordAccount *rca, JsonObject *data)
 		if (data != NULL) {
 			rca->pending_writes = g_slist_append(rca->pending_writes, data);
 		}
+
 		return;
 	}
 
@@ -3001,6 +3091,7 @@ discord_socket_got_data(gpointer userdata, PurpleSslConnection *conn, PurpleInpu
 
 					if (length_code > 0 && length_code <= 125) {
 						guchar error_buf[2];
+
 						if (purple_ssl_read(conn, &error_buf, 2) == 2) {
 							gint error_code = (error_buf[0] << 8) + error_buf[1];
 							purple_debug_error("discord", "error code %d\n", error_code);
@@ -3024,6 +3115,7 @@ discord_socket_got_data(gpointer userdata, PurpleSslConnection *conn, PurpleInpu
 					gint ping_frame_len = 0;
 					length_code = 0;
 					purple_ssl_read(conn, &length_code, 1);
+
 					if (length_code <= 125) {
 						ping_frame_len = length_code;
 					} else if (length_code == 126) {
@@ -3034,6 +3126,7 @@ discord_socket_got_data(gpointer userdata, PurpleSslConnection *conn, PurpleInpu
 						purple_ssl_read(conn, &ping_frame_len, 8);
 						ping_frame_len = GUINT64_FROM_BE(ping_frame_len);
 					}
+
 					if (ping_frame_len) {
 						guchar *pong_data = g_new0(guchar, ping_frame_len);
 						purple_ssl_read(conn, pong_data, ping_frame_len);
@@ -3043,18 +3136,21 @@ discord_socket_got_data(gpointer userdata, PurpleSslConnection *conn, PurpleInpu
 					} else {
 						discord_socket_write_data(ya, (guchar *) "", 0, 138);
 					}
+
 					return;
 				} else if (ya->packet_code == 138) {
 					// Pong
 					//who cares
 					return;
 				}
+
 				purple_debug_error("discord", "unknown websocket error %d\n", ya->packet_code);
 				return;
 			}
 
 			length_code = 0;
 			purple_ssl_read(conn, &length_code, 1);
+
 			if (length_code <= 125) {
 				ya->frame_len = length_code;
 			} else if (length_code == 126) {
@@ -3065,6 +3161,7 @@ discord_socket_got_data(gpointer userdata, PurpleSslConnection *conn, PurpleInpu
 				purple_ssl_read(conn, &ya->frame_len, 8);
 				ya->frame_len = GUINT64_FROM_BE(ya->frame_len);
 			}
+
 			//purple_debug_info("discord", "frame_len: %" G_GUINT64_FORMAT "\n", ya->frame_len);
 
 			ya->frame = g_new0(gchar, ya->frame_len + 1);
@@ -3073,10 +3170,12 @@ discord_socket_got_data(gpointer userdata, PurpleSslConnection *conn, PurpleInpu
 
 		do {
 			read_len = purple_ssl_read(conn, ya->frame + ya->frame_len_progress, ya->frame_len - ya->frame_len_progress);
+
 			if (read_len > 0) {
 				ya->frame_len_progress += read_len;
 			}
 		} while (read_len > 0 && ya->frame_len_progress < ya->frame_len);
+
 		done_some_reads = TRUE;
 
 		if (ya->frame_len_progress == ya->frame_len) {
@@ -3202,6 +3301,7 @@ discord_chat_leave(PurpleConnection *pc, int id)
 	//todo check source
 	chatconv = purple_conversations_find_chat(pc, id);
 	guint64 room_id = *(guint64 *)purple_conversation_get_data(PURPLE_CONVERSATION(chatconv), "id");
+
 	if (!room_id) {
 		//todo fixme?
 		room_id = to_int(purple_conversation_get_name(PURPLE_CONVERSATION(chatconv)));
@@ -3217,6 +3317,7 @@ discord_chat_nick(PurpleConnection *pc, int id, gchar *new_nick)
 	//todo check source
 	chatconv = purple_conversations_find_chat(pc, id);
 	guint64 room_id = *(guint64 *)purple_conversation_get_data(PURPLE_CONVERSATION(chatconv), "id");
+
 	if (!room_id) {
 		//todo fixme?
 		room_id = to_int(purple_conversation_get_name(PURPLE_CONVERSATION(chatconv)));
@@ -3292,11 +3393,13 @@ static gboolean
 str_is_number(const gchar *str)
 {
 	gint i = strlen(str) - 1;
+
 	for(; i >= 0; i--) {
 		if (!g_ascii_isdigit(str[i])) {
 			return FALSE;
 		}
 	}
+
 	return TRUE;
 }
 
@@ -3309,12 +3412,15 @@ discord_chat_info_defaults(PurpleConnection *pc, const char *chatname)
 	if (chatname != NULL) {
 		if (str_is_number(chatname)) {
 			DiscordChannel *channel = discord_get_channel_global(da, chatname);
+
 			if (channel != NULL) {
 				g_hash_table_insert(defaults, "name", g_strdup(channel->name));
 			}
+
 			g_hash_table_insert(defaults, "id", g_strdup(chatname));
 		} else {
 			DiscordChannel *channel = discord_get_channel_global_name(da, chatname);
+
 			if (channel != NULL) {
 				g_hash_table_insert(defaults, "name", g_strdup(channel->name));
 				g_hash_table_insert(defaults, "id", g_strdup_printf("%" G_GUINT64_FORMAT, channel->id));
@@ -3415,8 +3521,10 @@ discord_get_room_last_id(DiscordAccount *da, guint64 id)
 		//twas a group chat
 		blistnode = PURPLE_BLIST_NODE(purple_blist_find_chat(da->account, channel_id));
 	}
+
 	if (blistnode != NULL) {
 		guint64 last_room_id = purple_blist_node_get_int(blistnode, "last_message_id_high");
+
 		if (last_room_id != 0) {
 			last_room_id = (last_room_id << 32) | ((guint64) purple_blist_node_get_int(blistnode, "last_message_id_low") & 0xFFFFFFFF);
 
@@ -3441,6 +3549,7 @@ discord_set_room_last_id(DiscordAccount *da, guint64 id, guint64 last_id)
 		//twas a group chat
 		blistnode = PURPLE_BLIST_NODE(purple_blist_find_chat(da->account, channel_id));
 	}
+
 	if (blistnode != NULL) {
 		purple_blist_node_set_int(blistnode, "last_message_id_high", last_id >> 32);
 		purple_blist_node_set_int(blistnode, "last_message_id_low", last_id & 0xFFFFFFFF);
@@ -3683,6 +3792,7 @@ discord_join_chat(PurpleConnection *pc, GHashTable *chatdata)
 
 	// Get any missing messages
 	guint64 last_message_id = discord_get_room_last_id(da, id);
+
 	if (last_message_id != 0 && channel->last_message_id > last_message_id) {
 		gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/v6/channels/%" G_GUINT64_FORMAT "/messages?limit=100&after=%" G_GUINT64_FORMAT, id, last_message_id);
 		discord_fetch_url(da, url, NULL, discord_got_history_of_room, channel);
@@ -3747,6 +3857,7 @@ discord_mark_conv_seen(PurpleConversation *conv, PurpleConversationUpdateType ty
 	}
 
 	pc = purple_conversation_get_connection(conv);
+
 	if (!PURPLE_CONNECTION_IS_CONNECTED(pc)) {
 		return;
 	}
@@ -3759,6 +3870,7 @@ discord_mark_conv_seen(PurpleConversation *conv, PurpleConversationUpdateType ty
 
 	guint64 *room_id_ptr = purple_conversation_get_data(conv, "id");
 	guint64 room_id = 0;
+
 	if(room_id_ptr) {
 		room_id = *room_id_ptr;
 	} else {
@@ -3794,6 +3906,7 @@ discord_conv_send_typing(PurpleConversation *conv, PurpleIMTypingState state, Di
 
 	guint64 *room_id_ptr = purple_conversation_get_data(conv, "id");
 	guint64 room_id = 0;
+
 	if(room_id_ptr) {
 		room_id = *room_id_ptr;
 	} else {
@@ -3993,6 +4106,7 @@ discord_chat_send(PurpleConnection *pc, gint id,
 	gchar *d_message = g_strdup(message);
 
 	gchar *tmp = g_regex_replace_eval(emoji_natural_regex, d_message, -1, 0, 0, discord_replace_natural_emoji, guild, NULL);
+
 	if (tmp != NULL) {
 		g_free(d_message);
 		d_message = tmp;
@@ -4002,8 +4116,10 @@ discord_chat_send(PurpleConnection *pc, gint id,
 
 	g_return_val_if_fail(discord_get_channel_global_int(da, room_id), -1); //TODO rejoin room?
 	ret = discord_conversation_send_message(da, room_id, d_message);
+
 	if (ret > 0) {
 		gchar* tmp = g_regex_replace_eval(emoji_regex, d_message, -1, 0, 0, discord_replace_emoji, da, NULL);
+
 		if (tmp != NULL) {
 			g_free(d_message);
 			d_message = tmp;
@@ -4033,6 +4149,7 @@ discord_created_direct_message_send(DiscordAccount *da, JsonNode *node, gpointer
 		purple_message_destroy(msg);
 		return;
 	}
+
 	result = json_node_get_object(node);
 	message = purple_message_get_contents(msg);
 	room_id = json_object_get_string_member(result, "id");
@@ -4086,6 +4203,7 @@ discord_send_im(PurpleConnection *pc,
 
 			return 1;
 		}
+
 		return -1;
 	}
 
@@ -4126,9 +4244,11 @@ discord_get_avatar(DiscordAccount *da, DiscordUser *user)
 	if(!user) {
 		return;
 	}
+
 	gchar *username = discord_create_fullname(user);
 	const gchar *checksum = purple_buddy_icons_get_checksum_for_user(purple_blist_find_buddy(da->account, username));
 	g_free(username);
+
 	if (purple_strequal(checksum, user->avatar)) {
 		return;
 	}
@@ -4227,6 +4347,7 @@ discord_got_info(DiscordAccount *da, JsonNode *node, gpointer user_data)
 
 	//Display other non-profile info that we know about this buddy
 	purple_notify_user_info_add_pair_html(user_info, _("Status"), status_strings[user->status]);
+
 	if (user->game != NULL) {
 		purple_notify_user_info_add_pair_html(user_info, _("In-Game"), user->game);
 	}
@@ -4269,6 +4390,7 @@ discord_get_info(PurpleConnection *pc, const gchar *username)
 	if (!user) {
 		return;
 	}
+
 	//todo string format fix
 	url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/v6/users/%" G_GUINT64_FORMAT "/profile", user->id);
 	discord_fetch_url(da, url, NULL, discord_got_info, user);
@@ -4418,6 +4540,7 @@ discord_join_server_text(gpointer user_data, const gchar *text)
 	const gchar *invite_code;
 
 	invite_code = strrchr(text, '/');
+
 	if (invite_code == NULL) {
 		invite_code = text;
 	} else {
@@ -4613,9 +4736,11 @@ plugin_init(PurplePlugin *plugin)
 	PurplePluginProtocolInfo *prpl_info = g_new0(PurplePluginProtocolInfo, 1);
 
 	info = plugin->info;
+
 	if (info == NULL) {
 		plugin->info = info = g_new0(PurplePluginInfo, 1);
 	}
+
 	info->extra_info = prpl_info;
 #if PURPLE_MINOR_VERSION >= 5
 	prpl_info->struct_size = sizeof(PurplePluginProtocolInfo);
@@ -4813,6 +4938,7 @@ libpurple3_plugin_load(PurplePlugin *plugin, GError **error)
 {
 	discord_protocol_register_type(plugin);
 	discord_protocol = purple_protocols_add(DISCORD_TYPE_PROTOCOL, error);
+
 	if (!discord_protocol) {
 		return FALSE;
 	}
