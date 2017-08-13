@@ -1535,7 +1535,9 @@ discord_replace_mentions_bare(DiscordAccount *da, DiscordGuild *g, gchar *messag
 static gboolean
 discord_make_mention(const GMatchInfo *match, GString *result, gpointer user_data)
 {
-	DiscordAccount *da = user_data;
+	struct DiscordAG *ag = user_data;
+	DiscordAccount *da = ag->a;
+	DiscordGuild *guild = ag->g;
 
 	gchar *match_string = g_match_info_fetch(match, 0);
 	gchar *identifier = g_match_info_fetch(match, 1);
@@ -1564,7 +1566,16 @@ discord_make_mention(const GMatchInfo *match, GString *result, gpointer user_dat
 		}
 	}
 
-	if (user != NULL) {
+	/* If that fails, find it by nick */
+	if(!user) {
+		guint64 *uid = g_hash_table_lookup(guild->nicknames_rev, identifier);
+
+		if(uid) {
+			user = discord_get_user_int(da, *uid);
+		}
+	}
+
+	if (user) {
 		g_string_append_printf(result, "&lt;@%" G_GUINT64_FORMAT "&gt; ", user->id);
 	} else {
 		g_string_append(result, match_string);
@@ -1577,9 +1588,10 @@ discord_make_mention(const GMatchInfo *match, GString *result, gpointer user_dat
 }
 
 static gchar *
-discord_make_mentions(DiscordAccount *da, gchar *message)
+discord_make_mentions(DiscordAccount *da, DiscordGuild *guild, gchar *message)
 {
-	gchar *tmp = g_regex_replace_eval(natural_mention_regex, message, -1, 0, 0, discord_make_mention, da, NULL);
+	struct DiscordAG ag = { .a = da, .g = guild };
+	gchar *tmp = g_regex_replace_eval(natural_mention_regex, message, -1, 0, 0, discord_make_mention, &ag, NULL);
 
 	if (tmp != NULL) {
 		g_free(message);
@@ -4019,7 +4031,7 @@ const gchar *message, PurpleMessageFlags flags)
 	    d_message = tmp;
 	}
 
-	d_message = discord_make_mentions(da, d_message);
+	d_message = discord_make_mentions(da, guild, d_message);
 
 	g_return_val_if_fail(discord_get_channel_global_int(da, room_id), -1); //TODO rejoin room?
 	ret = discord_conversation_send_message(da, room_id, d_message);
