@@ -3677,6 +3677,8 @@ discord_got_channel_info(DiscordAccount *da, JsonNode *node, gpointer user_data)
 				users = g_list_prepend(users, nickname);
 				flags = g_list_prepend(flags, GINT_TO_POINTER(cbflags));
 			}
+
+			g_free(full_username);
 		}
 
 		purple_chat_conversation_clear_users(chat);
