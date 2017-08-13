@@ -464,7 +464,7 @@ static DiscordGuild *discord_new_guild(JsonObject *json)
 	guild->roles = g_hash_table_new_full(g_int64_hash, g_int64_equal, NULL, discord_free_guild_role);
 	guild->members = g_array_new(TRUE, TRUE, sizeof(guint64));
 	guild->nicknames = g_hash_table_new_full(g_int64_hash, g_int64_equal, NULL, g_free);
-	guild->nicknames_rev = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, NULL);
+	guild->nicknames_rev = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
 
 	guild->channels = g_hash_table_new_full(g_int64_hash, g_int64_equal, NULL, discord_free_channel);
 	guild->afk_timeout = json_object_get_int_member(json, "afk_timeout");
@@ -2041,9 +2041,12 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 			g_array_append_val(guild->members, u->id);
 
 			/* TODO: Disambiguate if necessary */
-			gchar *nickname = g_strdup(membership->nick);
-			g_hash_table_replace_int64(guild->nicknames, u->id, nickname);
-			g_hash_table_replace(guild->nicknames_rev, g_strdup(nickname), &u->id);
+			gchar *nickname = membership->nick;
+
+			if(nickname) {
+				g_hash_table_replace_int64(guild->nicknames, u->id, g_strdup(nickname));
+				g_hash_table_replace(guild->nicknames_rev, g_strdup(nickname), g_memdup(&u->id, sizeof(u->id)));
+			}
 
 			JsonArray *roles = json_object_get_array_member(member, "roles");
 			for (int k = json_array_get_length(roles) - 1; k >= 0; k--) {
