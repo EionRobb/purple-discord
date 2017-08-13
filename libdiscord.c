@@ -1474,17 +1474,17 @@ discord_replace_emoji(const GMatchInfo *match, GString *result, gpointer user_da
 	return FALSE;
 }
 
-struct DiscordAG {
-	DiscordAccount *a;
-	DiscordGuild *g;
-};
+typedef struct {
+	DiscordAccount *account;
+	DiscordGuild *guild;
+} DiscordAccountGuild;
 
 static gboolean
 discord_replace_mention(const GMatchInfo *match, GString *result, gpointer user_data)
 {
-	struct DiscordAG *ag = user_data;
-	DiscordAccount *da = ag->a;
-	DiscordGuild *guild = ag->g;
+	DiscordAccountGuild *ag = user_data;
+	DiscordAccount *da = ag->account;
+	DiscordGuild *guild = ag->guild;
 	gchar *match_string = g_match_info_fetch(match, 0);
 
 	gchar *snowflake_str = g_match_info_fetch(match, 1);
@@ -1521,7 +1521,7 @@ discord_replace_mention(const GMatchInfo *match, GString *result, gpointer user_
 static gchar *
 discord_replace_mentions_bare(DiscordAccount *da, DiscordGuild *g, gchar *message)
 {
-	struct DiscordAG ag = { .a = da, .g = g };
+	DiscordAccountGuild ag = { .account = da, .guild = g };
 	gchar *tmp = g_regex_replace_eval(mention_regex, message, -1, 0, 0, discord_replace_mention, &ag, NULL);
 
 	if (tmp != NULL) {
@@ -1535,9 +1535,9 @@ discord_replace_mentions_bare(DiscordAccount *da, DiscordGuild *g, gchar *messag
 static gboolean
 discord_make_mention(const GMatchInfo *match, GString *result, gpointer user_data)
 {
-	struct DiscordAG *ag = user_data;
-	DiscordAccount *da = ag->a;
-	DiscordGuild *guild = ag->g;
+	DiscordAccountGuild *ag = user_data;
+	DiscordAccount *da = ag->account;
+	DiscordGuild *guild = ag->guild;
 
 	gchar *match_string = g_match_info_fetch(match, 0);
 	gchar *identifier = g_match_info_fetch(match, 1);
@@ -1590,7 +1590,7 @@ discord_make_mention(const GMatchInfo *match, GString *result, gpointer user_dat
 static gchar *
 discord_make_mentions(DiscordAccount *da, DiscordGuild *guild, gchar *message)
 {
-	struct DiscordAG ag = { .a = da, .g = guild };
+	DiscordAccountGuild ag = { .account = da, .guild = guild };
 	gchar *tmp = g_regex_replace_eval(natural_mention_regex, message, -1, 0, 0, discord_make_mention, &ag, NULL);
 
 	if (tmp != NULL) {
