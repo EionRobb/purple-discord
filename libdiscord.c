@@ -1755,7 +1755,6 @@ discord_process_message(DiscordAccount *da, JsonObject *data)
 		}
 
 	} else if (!nonce || !g_hash_table_remove(da->sent_message_ids, nonce)) {
-		gchar *merged_username = discord_create_fullname(author);
 		guint64 tmp = to_int(channel_id);
 
 		/* Open the buffer if it's not already */
@@ -1769,8 +1768,16 @@ discord_process_message(DiscordAccount *da, JsonObject *data)
 			discord_open_chat(da, tmp, NULL, mentioned);
 		}
 
+		gchar *name = g_hash_table_lookup_int64(guild->nicknames, author->id);
+		gboolean free_name = FALSE;
+
+		if(!name) {
+			name = discord_create_fullname(author);
+			free_name = TRUE;
+		} 
+
 		if (escaped_content && *escaped_content) {
-			purple_serv_got_chat_in(da->pc, g_int64_hash(&tmp), merged_username, flags, escaped_content, timestamp);
+			purple_serv_got_chat_in(da->pc, g_int64_hash(&tmp), name, flags, escaped_content, timestamp);
 		}
 
 		if (attachments) {
@@ -1778,11 +1785,13 @@ discord_process_message(DiscordAccount *da, JsonObject *data)
 				JsonObject *attachment = json_array_get_object_element(attachments, i);
 				const gchar *url = json_object_get_string_member(attachment, "url");
 
-				purple_serv_got_chat_in(da->pc, g_int64_hash(&tmp), merged_username, flags, url, timestamp);
+				purple_serv_got_chat_in(da->pc, g_int64_hash(&tmp), name, flags, url, timestamp);
 			}
 		}
 
-		g_free(merged_username);
+		if(free_name) {
+			g_free(name);
+		}
 	}
 	g_free(escaped_content);
 
