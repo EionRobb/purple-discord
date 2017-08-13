@@ -1633,8 +1633,8 @@ discord_convert_markdown(const gchar* html)
 	return g_string_free(out, FALSE);
 }
 
-static gchar
-*discord_create_nickname(DiscordUser *author, DiscordGuild *guild)
+static gchar *
+discord_create_nickname(DiscordUser *author, DiscordGuild *guild)
 {
 	gchar *name = g_hash_table_lookup_int64(guild->nicknames, author->id);
 
@@ -1646,6 +1646,41 @@ static gchar
 
 	return name;
 }
+
+static gchar *
+discord_get_real_name(PurpleConnection *pc, gint id, const char *who)
+{
+	DiscordAccount *da = purple_connection_get_protocol_data(pc);
+	PurpleChatConversation *chatconv;
+
+	chatconv = purple_conversations_find_chat(pc, id);
+	guint64 *room_id_ptr = purple_conversation_get_data(PURPLE_CONVERSATION(chatconv), "id");
+	
+	if(!room_id_ptr) {
+		goto bail;
+	}
+
+	guint64 room_id = *room_id_ptr;
+
+	DiscordGuild *guild;
+	discord_get_channel_global_int_guild(da, room_id, &guild);
+
+	if(!guild) {
+		goto bail;
+	}
+
+	guint64 *uid = g_hash_table_lookup(guild->nicknames_rev, who);
+
+	if (uid) {
+		DiscordUser *user = discord_get_user_int(da, *uid);
+		return discord_create_fullname(user);
+	}
+
+	/* Probably a fullname already, bail out */
+bail:
+	return g_strdup(who);
+}
+
 
 static guint64
 discord_process_message(DiscordAccount *da, JsonObject *data)
@@ -4535,6 +4570,7 @@ plugin_init(PurplePlugin *plugin)
 	prpl_info->chat_invite = discord_chat_invite;
 	prpl_info->chat_send = discord_chat_send;
 	prpl_info->set_chat_topic = discord_chat_set_topic;
+	prpl_info->get_cb_real_name = discord_get_real_name;
 	prpl_info->add_buddy = discord_add_buddy;
 	prpl_info->remove_buddy = discord_buddy_remove;
 	prpl_info->group_buddy = discord_fake_group_buddy;
@@ -4637,6 +4673,7 @@ discord_protocol_chat_iface_init(PurpleProtocolChatIface *prpl_info)
 	prpl_info->get_name = discord_get_chat_name;
 	prpl_info->invite = discord_chat_invite;
 	prpl_info->set_topic = discord_chat_set_topic;
+	prpl_info->get_cb_real_name = discord_get_real_name;
 }
 
 static void
