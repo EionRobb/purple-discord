@@ -3610,7 +3610,7 @@ discord_open_chat(DiscordAccount *da, guint64 id, gchar *name, gboolean present)
 	}
 
 	if (channel->type == CHANNEL_VOICE) {
-		purple_notify_error(da, _("Bad channel type"), _("Cannot join a voice channel as text"), "", purple_request_cpar_from_connection(pc));
+		purple_notify_error(da, _("Bad channel type"), _("Cannot join a voice channel as text"), "", purple_request_cpar_from_connection(da->pc));
 		return NULL;
 	}
 
