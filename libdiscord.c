@@ -725,12 +725,27 @@ static gchar *discord_create_fullname(DiscordUser *user)
 
 static gchar * discord_create_nickname(DiscordUser *author, DiscordGuild *guild);
 
-static const gchar *
+static gchar *
 discord_alloc_nickname(DiscordUser *user, DiscordGuild *guild, const gchar *suggested_nick)
 {
-	const gchar *nick = suggested_nick ? suggested_nick : user->name;
+	const gchar *base_nick = suggested_nick ? suggested_nick : user->name;
+	gchar *nick;
 
-	/* TODO: Disambiguate if necessary */
+	if (g_hash_table_lookup(guild->nicknames_rev, base_nick)) {
+		/* Ambiguous; try with the discriminator */
+
+		nick = g_strdup_printf("%s#%04d", base_nick, user->discriminator);
+
+		if (g_hash_table_lookup(guild->nicknames_rev, nick)) {
+			/* Ambiguous; use the full tag */
+
+			g_free(nick);
+			nick = g_strdup_printf("%s (%s#%04d)", base_nick, user->name, user->discriminator);
+		}
+	} else {
+		nick = g_strdup(base_nick);
+	}
+
 
 	g_hash_table_replace_int64(guild->nicknames, user->id, g_strdup(nick));
 	g_hash_table_replace(guild->nicknames_rev, g_strdup(nick), g_memdup(&user->id, sizeof(user->id)));
@@ -1961,7 +1976,7 @@ discord_got_nick_change(DiscordAccount *da, DiscordUser *user, DiscordGuild *gui
 	}
 
 	/* Nick change */
-	const gchar *nick = discord_alloc_nickname(user, guild, new);
+	gchar *nick = discord_alloc_nickname(user, guild, new);
 
 	/* Propagate through the guild, see e.g. irc_msg_nick */
 	GHashTableIter channel_iter;
@@ -1977,6 +1992,7 @@ discord_got_nick_change(DiscordAccount *da, DiscordUser *user, DiscordGuild *gui
 		}
 	}
 
+	g_free(nick);
 }
 
 
@@ -2182,7 +2198,7 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 			g_hash_table_replace_int64(u->guild_memberships, membership->id, membership);
 			g_array_append_val(guild->members, u->id);
 
-			discord_alloc_nickname(u, guild, membership->nick);
+			g_free(discord_alloc_nickname(u, guild, membership->nick));
 
 			JsonArray *roles = json_object_get_array_member(member, "roles");
 			for (int k = json_array_get_length(roles) - 1; k >= 0; k--) {
