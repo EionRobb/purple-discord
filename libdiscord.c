@@ -4142,8 +4142,8 @@ discord_send_im(PurpleConnection *pc,
 static void
 discord_chat_set_topic(PurpleConnection *pc, int id, const char *topic)
 {
-	/* PATCH https:/* DISCORD_API_SERVER /api/v6/channels/%s channel */
-	*{ "name" : "test", "position" : 1, "topic" : "new topic", "bitrate" : 64000, "user_limit" : 0 } * /
+	/* PATCH https:// DISCORD_API_SERVER /api/v6/channels/%s channel */
+	/*{ "name" : "test", "position" : 1, "topic" : "new topic", "bitrate" : 64000, "user_limit" : 0 } */
 }
 
 static void
