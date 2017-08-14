@@ -194,7 +194,7 @@ static void discord_free_guild_role(gpointer data);
 static void discord_free_channel(gpointer data);
 static gboolean discord_permission_is_role(JsonObject *json);
 
-//creating
+/* creating */
 
 static DiscordUser *
 discord_new_user(JsonObject *json)
@@ -304,7 +304,7 @@ discord_new_guild_role(JsonObject *json)
 	return guild_role;
 }
 
-//freeing
+/* freeing */
 
 static void
 discord_free_guild_role(gpointer data)
@@ -365,7 +365,7 @@ discord_free_channel(gpointer data)
 	g_free(channel);
 }
 
-//updating
+/* updating */
 
 static void
 discord_update_status(DiscordUser *user, JsonObject *json)
@@ -420,7 +420,7 @@ discord_add_permission_override(DiscordChannel *channel, JsonObject *json)
 	return permission_override;
 }
 
-//managing
+/* managing */
 static gboolean
 discord_permission_is_role(JsonObject *json)
 {
@@ -554,7 +554,7 @@ discord_create_nickname_from_id(DiscordAccount *da, DiscordGuild *g, guint64 id)
 	return NULL;
 }
 
-//todo try and remove non-int variants
+/* TODO try and remove non-int variants */
 
 static DiscordGuild *
 discord_get_guild_int(DiscordAccount *da, guint64 id)
@@ -647,7 +647,7 @@ discord_get_channel_global(DiscordAccount *da, const gchar *id)
 {
 	return discord_get_channel_global_int(da, to_int(id));
 }
-//debug
+/* debug */
 
 #define discord_print_append(L, B, R, M, D) \
 	g_string_printf((R), (M), (D));         \
@@ -1196,7 +1196,7 @@ discord_send_auth(DiscordAccount *da)
 		json_object_set_string_member(properties, "browser", "Pidgin");
 		json_object_set_object_member(data, "properties", properties);
 
-		/* todo real presense */
+		/* TODO real presense */
 		json_object_set_string_member(presence, "status", "online");
 		json_object_set_object_member(data, "presence", presence);
 	}
@@ -2464,7 +2464,7 @@ discord_got_presences(DiscordAccount *da, JsonNode *node, gpointer user_data)
 	guint len = json_array_get_length(presences);
 
 	for (i = len - 1; i >= 0; i--) {
-		/* todo convert to user object */
+		/* TODO convert to user object */
 		JsonObject *presence = json_array_get_object_element(presences, i);
 		JsonObject *user = json_object_get_object_member(presence, "user");
 		const gchar *status = json_object_get_string_member(presence, "status");
@@ -2745,7 +2745,7 @@ discord_login(PurpleAccount *account)
 	da->result_callbacks = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
 	da->received_message_queue = g_queue_new();
 
-	/* todo make these the roots of all discord data */
+	/* TODO make these the roots of all discord data */
 	da->new_users = g_hash_table_new_full(g_int64_hash, g_int64_equal, NULL, discord_free_user);
 	da->new_guilds = g_hash_table_new_full(g_int64_hash, g_int64_equal, NULL, discord_free_guild);
 
@@ -2839,7 +2839,7 @@ discord_close(PurpleConnection *pc)
 	g_free(da);
 }
 
-//static void discord_start_polling(DiscordAccount *ya);
+/* static void discord_start_polling(DiscordAccount *ya); */
 
 static gboolean
 discord_process_frame(DiscordAccount *da, const gchar *frame)
@@ -3260,7 +3260,7 @@ discord_chat_leave(PurpleConnection *pc, int id)
 	guint64 room_id = *(guint64 *) purple_conversation_get_data(PURPLE_CONVERSATION(chatconv), "id");
 
 	if (!room_id) {
-		/* todo fixme? */
+		/* TODO FIXME? */
 		room_id = to_int(purple_conversation_get_name(PURPLE_CONVERSATION(chatconv)));
 	}
 
@@ -3271,12 +3271,12 @@ static void
 discord_chat_nick(PurpleConnection *pc, int id, gchar *new_nick)
 {
 	PurpleChatConversation *chatconv;
-	/* todo check source */
+	/* TODO check source */
 	chatconv = purple_conversations_find_chat(pc, id);
 	guint64 room_id = *(guint64 *) purple_conversation_get_data(PURPLE_CONVERSATION(chatconv), "id");
 
 	if (!room_id) {
-		/* todo fixme? */
+		/* TODO FIXME? */
 		room_id = to_int(purple_conversation_get_name(PURPLE_CONVERSATION(chatconv)));
 	}
 
@@ -3677,7 +3677,7 @@ discord_open_chat(DiscordAccount *da, guint64 id, gchar *name, gboolean present)
 	}
 
 	if (chatconv == NULL) {
-		/* todo fixme */
+		/* TODO FIXME */
 		gchar *chat_name = g_strdup_printf("%" G_GUINT64_FORMAT, id);
 		chatconv = purple_conversations_find_chat_with_account(chat_name, da->account);
 		g_free(chat_name);
@@ -4253,7 +4253,7 @@ discord_fake_group_rename(PurpleConnection *pc, const char *old_name, PurpleGrou
 	/* Do nothing to stop the remove+add behaviour */
 }
 
-//todo can we optimize this out?
+/* TODO can we optimize this out? */
 static void
 discord_got_info(DiscordAccount *da, JsonNode *node, gpointer user_data)
 {
@@ -4322,7 +4322,7 @@ discord_get_info(PurpleConnection *pc, const gchar *username)
 		return;
 	}
 
-	/* todo string format fix */
+	/* TODO string format fix */
 	url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/v6/users/%" G_GUINT64_FORMAT "/profile", user->id);
 	discord_fetch_url(da, url, NULL, discord_got_info, user);
 	g_free(url);
@@ -4653,7 +4653,7 @@ plugin_init(PurplePlugin *plugin)
 	prpl_info->struct_size = sizeof(PurplePluginProtocolInfo);
 #endif
 #if PURPLE_MINOR_VERSION >= 8
-//prpl_info->add_buddy_with_invite = discord_add_buddy_with_invite;
+/* prpl_info->add_buddy_with_invite = discord_add_buddy_with_invite; */
 #endif
 
 	prpl_info->options = OPT_PROTO_CHAT_TOPIC | OPT_PROTO_SLASH_COMMANDS_NATIVE;
@@ -4730,7 +4730,7 @@ static PurplePluginInfo info = {
 PURPLE_INIT_PLUGIN(discord, plugin_init, info);
 
 #else
-//Purple 3 plugin load functions
+/* Purple 3 plugin load functions */
 
 G_MODULE_EXPORT GType discord_protocol_get_type(void);
 #define DISCORD_TYPE_PROTOCOL (discord_protocol_get_type())
