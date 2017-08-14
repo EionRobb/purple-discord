@@ -521,6 +521,10 @@ discord_alloc_nickname(DiscordUser *user, DiscordGuild *guild, const gchar *sugg
 	const gchar *base_nick = suggested_nick ? suggested_nick : user->name;
 	gchar *nick;
 
+	if (base_nick == NULL) {
+		return NULL;
+	}
+	
 	if (g_hash_table_lookup(guild->nicknames_rev, base_nick)) {
 		/* Ambiguous; try with the discriminator */
 
