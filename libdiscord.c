@@ -1962,20 +1962,22 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 			gchar *username = discord_create_fullname(user);
 			gint64 type = json_object_get_int_member(data, "type");
 			
-			if (type == 2) {
-				/* remove user from blocklist */
-				purple_account_privacy_deny_remove(da->account, username, TRUE);
-				
-			} else {
-				PurpleBuddy *buddy = purple_blist_find_buddy(da->account, username);
-				purple_blist_remove_buddy(buddy);
+			if (username != NULL) {
+				if (type == 2) {
+					/* remove user from blocklist */
+					purple_account_privacy_deny_remove(da->account, username, TRUE);
+					
+				} else {
+					PurpleBuddy *buddy = purple_blist_find_buddy(da->account, username);
+					purple_blist_remove_buddy(buddy);
 
-				g_hash_table_remove(da->one_to_ones, g_hash_table_lookup(da->one_to_ones_rev, username));
-				g_hash_table_remove(da->last_message_id_dm, g_hash_table_lookup(da->one_to_ones_rev, username));
-				g_hash_table_remove(da->one_to_ones_rev, username);
+					g_hash_table_remove(da->one_to_ones, g_hash_table_lookup(da->one_to_ones_rev, username));
+					g_hash_table_remove(da->last_message_id_dm, g_hash_table_lookup(da->one_to_ones_rev, username));
+					g_hash_table_remove(da->one_to_ones_rev, username);
+				}
+
+				g_free(username);
 			}
-
-			g_free(username);
 		}
 	} else if (purple_strequal(type, "RESUMED")) {
 
@@ -4423,6 +4425,38 @@ discord_status_text(PurpleBuddy *buddy)
 	return NULL;
 }
 
+static void
+discord_block_user(PurpleConnection *pc, const char *who)
+{
+	DiscordAccount *da = purple_connection_get_protocol_data(pc);
+	gchar *url;
+	DiscordUser *user = discord_get_user_fullname(da, who);
+
+	if (!user) {
+		return;
+	}
+
+	url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/v6/users/@me/relationships/%" G_GUINT64_FORMAT, user->id);
+	discord_fetch_url_with_method(da, "PUT", url, "{\"type\":2}", NULL, NULL);
+	g_free(url);
+}
+
+static void
+discord_unblock_user(PurpleConnection *pc, const char *who)
+{
+	DiscordAccount *da = purple_connection_get_protocol_data(pc);
+	gchar *url;
+	DiscordUser *user = discord_get_user_fullname(da, who);
+
+	if (!user) {
+		return;
+	}
+
+	url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/v6/users/@me/relationships/%" G_GUINT64_FORMAT, user->id);
+	discord_fetch_url_with_method(da, "DELETE", url, NULL, NULL, NULL);
+	g_free(url);
+}
+
 const gchar *
 discord_list_emblem(PurpleBuddy *buddy)
 {
@@ -4721,6 +4755,8 @@ plugin_init(PurplePlugin *plugin)
 	prpl_info->group_buddy = discord_fake_group_buddy;
 	prpl_info->rename_group = discord_fake_group_rename;
 	prpl_info->get_info = discord_get_info;
+	prpl_info->add_deny = discord_block_user;
+	prpl_info->rem_deny = discord_unblock_user;
 
 	prpl_info->roomlist_get_list = discord_roomlist_get_list;
 	prpl_info->roomlist_room_serialize = discord_roomlist_serialize;
@@ -4841,6 +4877,13 @@ discord_protocol_client_iface_init(PurpleProtocolClientIface *prpl_info)
 }
 
 static void
+discord_protocol_privacy_iface_init(PurpleProtocolPrivacyIface *prpl_info)
+{
+	prpl_info->add_deny = discord_block_user;
+	prpl_info->rem_deny = discord_unblock_user;
+}
+
+static void
 discord_protocol_roomlist_iface_init(PurpleProtocolRoomlistIface *prpl_info)
 {
 	prpl_info->get_list = discord_roomlist_get_list;
@@ -4850,24 +4893,27 @@ discord_protocol_roomlist_iface_init(PurpleProtocolRoomlistIface *prpl_info)
 static PurpleProtocol *discord_protocol;
 
 PURPLE_DEFINE_TYPE_EXTENDED(
-  DiscordProtocol, discord_protocol, PURPLE_TYPE_PROTOCOL, 0,
+	DiscordProtocol, discord_protocol, PURPLE_TYPE_PROTOCOL, 0,
 
-  PURPLE_IMPLEMENT_INTERFACE_STATIC(PURPLE_TYPE_PROTOCOL_IM_IFACE,
-									discord_protocol_im_iface_init)
+	PURPLE_IMPLEMENT_INTERFACE_STATIC(PURPLE_TYPE_PROTOCOL_IM_IFACE,
+									  discord_protocol_im_iface_init)
 
 	PURPLE_IMPLEMENT_INTERFACE_STATIC(PURPLE_TYPE_PROTOCOL_CHAT_IFACE,
 									  discord_protocol_chat_iface_init)
 
-	  PURPLE_IMPLEMENT_INTERFACE_STATIC(PURPLE_TYPE_PROTOCOL_SERVER_IFACE,
-										discord_protocol_server_iface_init)
+	PURPLE_IMPLEMENT_INTERFACE_STATIC(PURPLE_TYPE_PROTOCOL_SERVER_IFACE,
+									  discord_protocol_server_iface_init)
 
-		PURPLE_IMPLEMENT_INTERFACE_STATIC(PURPLE_TYPE_PROTOCOL_CLIENT_IFACE,
-										  discord_protocol_client_iface_init)
+	PURPLE_IMPLEMENT_INTERFACE_STATIC(PURPLE_TYPE_PROTOCOL_CLIENT_IFACE,
+									  discord_protocol_client_iface_init)
+								  
+	PURPLE_IMPLEMENT_INTERFACE_STATIC(PURPLE_TYPE_PROTOCOL_PRIVACY_IFACE,
+									  discord_protocol_privacy_iface_init)
 
-		  PURPLE_IMPLEMENT_INTERFACE_STATIC(PURPLE_TYPE_PROTOCOL_ROOMLIST_IFACE,
-											discord_protocol_roomlist_iface_init)
+	PURPLE_IMPLEMENT_INTERFACE_STATIC(PURPLE_TYPE_PROTOCOL_ROOMLIST_IFACE,
+									  discord_protocol_roomlist_iface_init)
 
-	);
+);
 
 static gboolean
 libpurple3_plugin_load(PurplePlugin *plugin, GError **error)
