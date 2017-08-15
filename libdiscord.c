@@ -95,6 +95,7 @@ typedef struct {
 	guint64 last_message_id;
 	GHashTable *permission_user_overrides;
 	GHashTable *permission_role_overrides;
+	GList *recipients; /* For group DMs */
 } DiscordChannel;
 
 typedef struct {
@@ -163,6 +164,7 @@ typedef struct {
 
 	GHashTable *one_to_ones;		/* A store of known room_id's -> username's */
 	GHashTable *one_to_ones_rev;	/* A store of known usernames's -> room_id's */
+	GHashTable *group_dms;			/* A store of known room_id's -> DiscordChannel's */
 	GHashTable *last_message_id_dm; /* A store of known room_id's -> last_message_id's */
 	GHashTable *sent_message_ids;   /* A store of message id's that we generated from this instance */
 	GHashTable *result_callbacks;   /* Result ID -> Callback function */
@@ -273,6 +275,8 @@ discord_new_channel(JsonObject *json)
 
 	channel->permission_user_overrides = g_hash_table_new_full(g_int64_hash, g_int64_equal, NULL, g_free);
 	channel->permission_role_overrides = g_hash_table_new_full(g_int64_hash, g_int64_equal, NULL, g_free);
+
+	channel->recipients = NULL;
 
 	return channel;
 }
@@ -1926,6 +1930,8 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		const gchar *last_message_id = json_object_get_string_member(data, "last_message_id");
 
 		if (channel_type == 1) {
+			/* 1:1 direct message */
+
 			JsonObject *first_recipient = json_array_get_object_element(json_object_get_array_member(data, "recipients"), 0);
 
 			if (first_recipient != NULL) {
@@ -1936,6 +1942,21 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 				g_hash_table_replace(da->last_message_id_dm, g_strdup(channel_id), g_strdup(last_message_id));
 				g_hash_table_replace(da->one_to_ones_rev, discord_combine_username(username, discriminator), g_strdup(channel_id));
 			}
+		} else if (channel_type == 3) {
+			/* Allocate group DM channels on their own */
+
+			DiscordChannel *channel = discord_new_channel(data);
+			JsonArray *recipients = json_object_get_array_member(data, "recipients");
+
+			for (int i = json_array_get_length(recipients) - 1; i >= 0; i--) {
+				DiscordUser *recipient =
+					discord_upsert_user(da->new_users,
+										json_array_get_object_element(recipients, i));
+
+				channel->recipients = g_list_prepend(channel->recipients, g_memdup(&(recipient->id), sizeof(guint64)));
+			}
+
+			g_hash_table_replace_int64(da->group_dms, channel->id, channel);
 		}
 	} else if (purple_strequal(type, "CHANNEL_UPDATE")) {
 		guint64 channel_id = to_int(json_object_get_string_member(data, "id"));
@@ -2752,6 +2773,7 @@ discord_login(PurpleAccount *account)
 	/* TODO make these the roots of all discord data */
 	da->new_users = g_hash_table_new_full(g_int64_hash, g_int64_equal, NULL, discord_free_user);
 	da->new_guilds = g_hash_table_new_full(g_int64_hash, g_int64_equal, NULL, discord_free_guild);
+	da->group_dms = g_hash_table_new_full(g_int64_hash, g_int64_equal, NULL, discord_free_channel);
 
 	discord_build_groups_from_blist(da);
 
