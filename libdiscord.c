@@ -3412,6 +3412,8 @@ discord_got_history_of_room(DiscordAccount *da, JsonNode *node, gpointer user_da
 	}
 
 	if (rolling_last_message_id != 0) {
+		/* TODO: Reenable once rate limiting is sorted out */
+#if 0
 		discord_set_room_last_id(da, channel->id, rolling_last_message_id);
 
 		if (rolling_last_message_id < last_message) {
@@ -3420,6 +3422,9 @@ discord_got_history_of_room(DiscordAccount *da, JsonNode *node, gpointer user_da
 			discord_fetch_url(da, url, NULL, discord_got_history_of_room, channel);
 			g_free(url);
 		}
+#endif
+
+		discord_set_room_last_id(da, channel->id, last_message);
 	}
 }
 
