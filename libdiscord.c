@@ -1960,12 +1960,20 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 
 		if (user) {
 			gchar *username = discord_create_fullname(user);
-			PurpleBuddy *buddy = purple_blist_find_buddy(da->account, username);
-			purple_blist_remove_buddy(buddy);
+			gint64 type = json_object_get_int_member(data, "type");
+			
+			if (type == 2) {
+				/* remove user from blocklist */
+				purple_account_privacy_deny_remove(da->account, username, TRUE);
+				
+			} else {
+				PurpleBuddy *buddy = purple_blist_find_buddy(da->account, username);
+				purple_blist_remove_buddy(buddy);
 
-			g_hash_table_remove(da->one_to_ones, g_hash_table_lookup(da->one_to_ones_rev, username));
-			g_hash_table_remove(da->last_message_id_dm, g_hash_table_lookup(da->one_to_ones_rev, username));
-			g_hash_table_remove(da->one_to_ones_rev, username);
+				g_hash_table_remove(da->one_to_ones, g_hash_table_lookup(da->one_to_ones_rev, username));
+				g_hash_table_remove(da->last_message_id_dm, g_hash_table_lookup(da->one_to_ones_rev, username));
+				g_hash_table_remove(da->one_to_ones_rev, username);
+			}
 
 			g_free(username);
 		}
@@ -2410,6 +2418,7 @@ discord_create_relationship(DiscordAccount *da, JsonObject *json)
 
 		purple_account_request_authorization(da->account, merged_username, NULL, NULL, NULL, FALSE, discord_friends_auth_accept, discord_friends_auth_reject, store);
 	} else if (type == 1) {
+		/* buddy on list */
 		PurpleBuddy *buddy = purple_blist_find_buddy(da->account, merged_username);
 
 		if (buddy == NULL) {
@@ -2418,6 +2427,13 @@ discord_create_relationship(DiscordAccount *da, JsonObject *json)
 		}
 
 		discord_get_avatar(da, user);
+		
+	} else if (type == 2) {
+		/* blocked buddy */
+		purple_account_privacy_deny_add(da->account, merged_username, TRUE);
+		
+	} else if (type == 4) {
+		/* pending buddy */
 	}
 
 	g_free(merged_username);
