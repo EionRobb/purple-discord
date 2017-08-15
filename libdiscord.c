@@ -1915,7 +1915,7 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 			clear->set = FALSE;
 			clear->free_me = TRUE;
 
-			purple_timeout_add_seconds(10, discord_set_group_typing, clear);
+			g_timeout_add_seconds(10, discord_set_group_typing, clear);
 		} else {
 			DiscordUser *user = discord_get_user_int(da, user_id);
 			gchar *merged_username = discord_create_fullname(user);
@@ -2795,7 +2795,9 @@ discord_close(PurpleConnection *pc)
 
 	g_return_if_fail(da != NULL);
 
-	purple_timeout_remove(da->heartbeat_timeout);
+	if (da->heartbeat_timeout) {
+		g_source_remove(da->heartbeat_timeout);
+	}
 
 	if (da->websocket != NULL) {
 		purple_ssl_close(da->websocket);
@@ -2901,10 +2903,12 @@ discord_process_frame(DiscordAccount *da, const gchar *frame)
 			gint64 heartbeat_interval = json_object_get_int_member(data, "heartbeat_interval");
 			discord_send_auth(da);
 
-			purple_timeout_remove(da->heartbeat_timeout);
+			if (da->heartbeat_timeout) {
+				g_source_remove(da->heartbeat_timeout);
+			}
 
 			if (heartbeat_interval) {
-				da->heartbeat_timeout = purple_timeout_add(json_object_get_int_member(data, "heartbeat_interval"), discord_send_heartbeat, da);
+				da->heartbeat_timeout = g_timeout_add(json_object_get_int_member(data, "heartbeat_interval"), discord_send_heartbeat, da);
 			} else {
 				da->heartbeat_timeout = 0;
 			}
@@ -3224,7 +3228,9 @@ discord_socket_failed(PurpleSslConnection *conn, PurpleSslErrorType errortype, g
 static void
 discord_start_socket(DiscordAccount *da)
 {
-	purple_timeout_remove(da->heartbeat_timeout);
+	if (da->heartbeat_timeout) {
+		g_source_remove(da->heartbeat_timeout);
+	}
 
 	/* Reset all the old stuff */
 	if (da->websocket != NULL) {

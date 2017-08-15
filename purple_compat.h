@@ -172,6 +172,11 @@ purple_message_destroy(PurpleMessage *message)
 	purple_notify_message((handle), PURPLE_NOTIFY_MSG_ERROR, (title), \
 						  (primary), (secondary), NULL, NULL)
 
+// Kinda gross, since we can technically use the glib mainloop from purple2
+#define g_timeout_add_seconds  purple_timeout_add_seconds
+#define g_timeout_add          purple_timeout_add
+#define g_source_remove        purple_timeout_remove
+
 #else
 // Purple3 helper functions
 #define purple_conversation_set_data(conv, key, value) g_object_set_data(G_OBJECT(conv), key, value)
