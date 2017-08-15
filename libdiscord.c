@@ -1812,6 +1812,27 @@ discord_got_nick_change(DiscordAccount *da, DiscordUser *user, DiscordGuild *gui
 }
 
 static void
+discord_got_group_dm(DiscordAccount *da, JsonObject *data)
+{
+	printf("Got a group DM with...\n");
+
+	DiscordChannel *channel = discord_new_channel(data);
+	JsonArray *recipients = json_object_get_array_member(data, "recipients");
+
+	for (int i = json_array_get_length(recipients) - 1; i >= 0; i--) {
+		DiscordUser *recipient =
+			discord_upsert_user(da->new_users,
+								json_array_get_object_element(recipients, i));
+
+		channel->recipients = g_list_prepend(channel->recipients, g_memdup(&(recipient->id), sizeof(guint64)));
+
+		printf("%d: %s\n", i, recipient->name);
+	}
+
+	g_hash_table_replace_int64(da->group_dms, channel->id, channel);
+}
+
+static void
 discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data)
 {
 	discord_get_or_create_default_group();
@@ -1943,20 +1964,7 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 				g_hash_table_replace(da->one_to_ones_rev, discord_combine_username(username, discriminator), g_strdup(channel_id));
 			}
 		} else if (channel_type == 3) {
-			/* Allocate group DM channels on their own */
-
-			DiscordChannel *channel = discord_new_channel(data);
-			JsonArray *recipients = json_object_get_array_member(data, "recipients");
-
-			for (int i = json_array_get_length(recipients) - 1; i >= 0; i--) {
-				DiscordUser *recipient =
-					discord_upsert_user(da->new_users,
-										json_array_get_object_element(recipients, i));
-
-				channel->recipients = g_list_prepend(channel->recipients, g_memdup(&(recipient->id), sizeof(guint64)));
-			}
-
-			g_hash_table_replace_int64(da->group_dms, channel->id, channel);
+			discord_got_group_dm(da, data);
 		}
 	} else if (purple_strequal(type, "CHANNEL_UPDATE")) {
 		guint64 channel_id = to_int(json_object_get_string_member(data, "id"));
@@ -2477,6 +2485,8 @@ discord_got_private_channels(DiscordAccount *da, JsonNode *node, gpointer user_d
 			g_hash_table_replace(da->last_message_id_dm, g_strdup(room_id), g_strdup(last_message_id));
 
 			g_free(merged_username);
+		} else if (room_type == 3) {
+			discord_got_group_dm(da, channel);
 		}
 	}
 }
