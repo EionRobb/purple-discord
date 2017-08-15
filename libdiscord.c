@@ -1836,13 +1836,15 @@ discord_got_group_dm(DiscordAccount *da, JsonObject *data)
 
 	GHashTable *components = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
 
+	int channel_type = 3;
+
 	g_hash_table_replace(components, "id", g_strdup_printf("%" G_GUINT64_FORMAT, channel->id));
 	g_hash_table_replace(components, "name", name);
-	g_hash_table_replace(components, "type", 3);
+	g_hash_table_replace(components, "type", g_memdup(&channel_type, sizeof(channel_type)));
 
 	PurpleGroup *group = discord_get_or_create_default_group();
 	PurpleChat *chat = purple_chat_new(da->account, name, components);
-	purple_blist_add_group(group, NULL);
+	purple_blist_add_chat(chat, group, NULL);
 }
 
 static void
