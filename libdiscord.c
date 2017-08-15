@@ -1918,7 +1918,11 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 			purple_timeout_add_seconds(10, discord_set_group_typing, clear);
 		} else {
 			DiscordUser *user = discord_get_user_int(da, user_id);
-			purple_serv_got_typing(da->pc, user->name, 10, PURPLE_IM_TYPING);
+			gchar *merged_username = discord_create_fullname(user);
+			
+			purple_serv_got_typing(da->pc, merged_username, 10, PURPLE_IM_TYPING);
+			
+			g_free(merged_username);
 		}
 	} else if (purple_strequal(type, "CHANNEL_CREATE")) {
 		const gchar *channel_id = json_object_get_string_member(data, "id");
