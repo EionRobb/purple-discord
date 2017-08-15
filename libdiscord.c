@@ -164,7 +164,6 @@ typedef struct {
 
 	GHashTable *one_to_ones;		/* A store of known room_id's -> username's */
 	GHashTable *one_to_ones_rev;	/* A store of known usernames's -> room_id's */
-	GHashTable *group_dms;			/* A store of known room_id's -> DiscordChannel's */
 	GHashTable *last_message_id_dm; /* A store of known room_id's -> last_message_id's */
 	GHashTable *sent_message_ids;   /* A store of message id's that we generated from this instance */
 	GHashTable *result_callbacks;   /* Result ID -> Callback function */
@@ -172,6 +171,7 @@ typedef struct {
 
 	GHashTable *new_users;
 	GHashTable *new_guilds;
+	GHashTable *group_dms;			/* A store of known room_id's -> DiscordChannel's */
 
 	GSList *http_conns; /**< PurpleHttpConnection to be cancelled on logout */
 	gint frames_since_reconnect;
@@ -594,6 +594,10 @@ discord_upsert_guild(GHashTable *guild_table, JsonObject *json)
 static DiscordChannel *
 discord_get_channel_global_int_guild(DiscordAccount *da, guint64 id, DiscordGuild **o_guild)
 {
+	/* Check for group DM first to avoid iterating guilds */
+	DiscordChannel *group_dm = g_hash_table_lookup_int64(da->group_dms, id);
+	if(group_dm) return group_dm;
+
 	GHashTableIter iter;
 	gpointer key, value;
 
