@@ -34,6 +34,29 @@ Requires devel headers/libs for libpurple and libjson-glib [libglib2.0-dev, libj
 	sudo make install
 ```
 
+Advanced Options
+----------------
+**Use status message as in-game info**: If enabled, the status message set via
+Pidgin (the text under Available, Away, etc in the buddy list) will be
+used as the game info for Discord "Playing ...".
+
+**Auto-create rooms on buddy list**: If enabled, the plugin will add the
+channels (rooms) from the servers you're on as chats on your buddy list.
+This is preferred if you're using Pidgin, so you don't need to access
+the room list manually. If you're not using Pidgin (or finch), you
+probably don't want this, since they have different buddy list APIs.
+Note: If the room list changes, it won't recreate the list unless you
+delete the entire group.
+
+**Number of users in a large channel**: Mention behaviour is "smart" in
+here. If you're in a small channel, every time a message is sent, you'll
+be notified and the channel will pop up. If you're in a large channel,
+you'll only be notified if you're explicitly mentioned in the message.
+This value is the threshold to define a large channel. By default, if
+there are more than 80 (online) users in the channel, it will be
+considered large.
+
+
 Show your appreciation
 ----------------------
 Did this plugin make your life happier?  [Send me $1](https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=PZMBF2QVF69GA) to say thanks!
