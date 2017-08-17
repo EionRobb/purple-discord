@@ -2651,7 +2651,10 @@ discord_got_read_states(DiscordAccount *da, JsonNode *node, gpointer user_data)
 				discord_get_history(da, channel, last_id, mentions * 2);
 			} else {
 				/* TODO: fetch channel history */
-				purple_debug_misc("discord", "%d unhandled mentions in channel %s\n", mentions, discord_get_channel_global(da, channel)->name);
+				DiscordChannel *dchannel = discord_get_channel_global(da, channel);
+				if (dchannel != NULL) {
+					purple_debug_misc("discord", "%d unhandled mentions in channel %s\n", mentions, dchannel->name);
+				}
 			}
 		}
 	}
@@ -3694,9 +3697,7 @@ discord_open_chat(DiscordAccount *da, guint64 id, gchar *name, gboolean present)
 	}
 
 	if (name == NULL) {
-		if (channel != NULL) {
-			name = channel->name;
-		}
+		name = channel->name;
 	}
 
 	if (channel->type == CHANNEL_VOICE) {
@@ -3823,7 +3824,7 @@ discord_mark_conv_seen(PurpleConversation *conv, PurpleConversationUpdateType ty
 		return;
 	}
 
-	if (g_strcmp0(purple_protocol_get_id(purple_connection_get_protocol(pc)), DISCORD_PLUGIN_ID)) {
+	if (!purple_strequal(purple_protocol_get_id(purple_connection_get_protocol(pc)), DISCORD_PLUGIN_ID)) {
 		return;
 	}
 
@@ -3857,7 +3858,7 @@ discord_conv_send_typing(PurpleConversation *conv, PurpleIMTypingState state, Di
 		return 0;
 	}
 
-	if (g_strcmp0(purple_protocol_get_id(purple_connection_get_protocol(pc)), DISCORD_PLUGIN_ID)) {
+	if (!purple_strequal(purple_protocol_get_id(purple_connection_get_protocol(pc)), DISCORD_PLUGIN_ID)) {
 		return 0;
 	}
 
@@ -3937,14 +3938,15 @@ discord_html_to_markdown(gchar *html)
 static gchar *
 discord_escape_md(const gchar *markdown)
 {
+	size_t markdown_len = strlen(markdown);
 	/* Worst case allocation */
-	GString *s = g_string_sized_new(strlen(markdown) * 2);
+	GString *s = g_string_sized_new(markdown_len * 2);
 
 	gboolean verbatim = FALSE;
 	gboolean code_block = FALSE;
 	gboolean link = FALSE;
 
-	for (guint i = 0; i < strlen(markdown); ++i) {
+	for (guint i = 0; i < markdown_len; ++i) {
 		char c = markdown[i];
 
 		if (c == '`') {
