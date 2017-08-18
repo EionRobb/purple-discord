@@ -1542,7 +1542,7 @@ discord_get_real_name(PurpleConnection *pc, gint id, const char *who)
 
 	guint64 room_id = *room_id_ptr;
 
-	DiscordGuild *guild;
+	DiscordGuild *guild = NULL;
 	discord_get_channel_global_int_guild(da, room_id, &guild);
 
 	if (!guild) {
@@ -1580,7 +1580,7 @@ discord_process_message(DiscordAccount *da, JsonObject *data)
 	gchar *tmp;
 	gint i;
 
-	DiscordGuild *guild;
+	DiscordGuild *guild = NULL;
 	discord_get_channel_global_int_guild(da, channel_id, &guild);
 
 	if (author->id == da->self_user_id) {
@@ -1692,7 +1692,7 @@ discord_process_message(DiscordAccount *da, JsonObject *data)
 		}
 	} else if (!nonce || !g_hash_table_remove(da->sent_message_ids, nonce)) {
 		/* Open the buffer if it's not already */
-		int head_count = guild->members->len;
+		int head_count = guild ? guild->members->len : 0;
 
 		gboolean mentioned = flags & PURPLE_MESSAGE_NICK;
 
@@ -1858,7 +1858,7 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 			return;
 		}
 
-		DiscordGuild *guild;
+		DiscordGuild *guild = NULL;
 		discord_get_channel_global_int_guild(da, to_int(channel_id), &guild);
 
 		guint tmp = to_int(channel_id);
@@ -3317,7 +3317,7 @@ discord_chat_nick(PurpleConnection *pc, int id, gchar *new_nick)
 
 	DiscordAccount *da = purple_connection_get_protocol_data(pc);
 
-	DiscordGuild *guild;
+	DiscordGuild *guild = NULL;
 	discord_get_channel_global_int_guild(da, room_id, &guild);
 
 	JsonObject *data = json_object_new();
@@ -4062,7 +4062,7 @@ discord_chat_send(PurpleConnection *pc, gint id,
 	g_return_val_if_fail(room_id_ptr, -1);
 	guint64 room_id = *room_id_ptr;
 
-	DiscordGuild *guild;
+	DiscordGuild *guild = NULL;
 	discord_get_channel_global_int_guild(da, room_id, &guild);
 	g_return_val_if_fail(guild, -1);
 
