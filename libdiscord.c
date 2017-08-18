@@ -567,18 +567,10 @@ discord_create_nickname_from_id(DiscordAccount *da, DiscordGuild *g, guint64 id)
 	return NULL;
 }
 
-/* TODO try and remove non-int variants */
-
 static DiscordGuild *
 discord_get_guild_int(DiscordAccount *da, guint64 id)
 {
 	return g_hash_table_lookup_int64(da->new_guilds, id);
-}
-
-static DiscordGuild *
-discord_get_guild(DiscordAccount *da, const gchar *id)
-{
-	return discord_get_guild_int(da, to_int(id));
 }
 
 static DiscordGuild *
@@ -3710,7 +3702,6 @@ discord_got_channel_info(DiscordAccount *da, JsonNode *node, gpointer user_data)
 {
 	JsonObject *channel = json_node_get_object(node);
 	const gchar *id = json_object_get_string_member(channel, "id");
-	const gchar *guild_id = json_object_get_string_member(channel, "guild_id");
 
 	PurpleChatConversation *chatconv;
 
@@ -3757,7 +3748,7 @@ discord_got_channel_info(DiscordAccount *da, JsonNode *node, gpointer user_data)
 		g_list_free(users);
 		g_list_free(flags);
 	} else if (json_object_has_member(channel, "permission_overwrites")) {
-		DiscordGuild *guild = discord_get_guild(da, guild_id);
+		DiscordGuild *guild = discord_get_guild_int(da, to_int(json_object_get_string_member(channel, "guild_id")));
 
 		PurpleChatConversation *chat = purple_conversations_find_chat(da->pc, g_int64_hash(&tmp));
 		GList *users = NULL, *flags = NULL;
@@ -4438,8 +4429,8 @@ discord_got_info(DiscordAccount *da, JsonNode *node, gpointer user_data)
 
 	for (i = json_array_get_length(mutual_guilds) - 1; i >= 0; i--) {
 		JsonObject *guild = json_array_get_object_element(mutual_guilds, i);
-		const gchar *id = json_object_get_string_member(guild, "id");
-		const gchar *name = discord_get_guild(da, id)->name;
+		guint64 id = to_int(json_object_get_string_member(guild, "id"));
+		const gchar *name = discord_get_guild_int(da, id)->name;
 
 		purple_notify_user_info_add_pair_html(user_info, NULL, name);
 	}
