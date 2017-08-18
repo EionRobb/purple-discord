@@ -1398,7 +1398,7 @@ discord_make_mention(const GMatchInfo *match, GString *result, gpointer user_dat
 	}
 
 	/* If that fails, find it by nick */
-	if (!user) {
+	if (!user && guild) {
 		guint64 *uid = g_hash_table_lookup(guild->nicknames_rev, identifier);
 
 		if (uid) {
@@ -4065,6 +4065,8 @@ discord_conversation_send_message(DiscordAccount *da, guint64 room_id, const gch
 	gchar *stripped;
 	gchar * final;
 
+	printf("Low level send message -> %lu: %s\n", room_id, message);
+
 	nonce = g_strdup_printf("%" G_GUINT32_FORMAT, g_random_int());
 	g_hash_table_insert(da->sent_message_ids, nonce, nonce);
 
@@ -4114,21 +4116,27 @@ discord_chat_send(PurpleConnection *pc, gint id,
 
 	da = purple_connection_get_protocol_data(pc);
 	chatconv = purple_conversations_find_chat(pc, id);
+	printf("Chat conv: %p\n", chatconv);
 	guint64 *room_id_ptr = purple_conversation_get_data(PURPLE_CONVERSATION(chatconv), "id");
+	printf("Room_id_ptr: %p\n", room_id_ptr);
 	g_return_val_if_fail(room_id_ptr, -1);
 	guint64 room_id = *room_id_ptr;
-
-	DiscordGuild *guild = NULL;
-	discord_get_channel_global_int_guild(da, room_id, &guild);
-	g_return_val_if_fail(guild, -1);
+	printf("ID: %lu\n", room_id);
 
 	gchar *d_message = g_strdup(message);
 
-	gchar *tmp = g_regex_replace_eval(emoji_natural_regex, d_message, -1, 0, 0, discord_replace_natural_emoji, guild, NULL);
+	DiscordGuild *guild = NULL;
+	discord_get_channel_global_int_guild(da, room_id, &guild);
+	
+	if(guild) {
+		g_return_val_if_fail(guild, -1);
 
-	if (tmp != NULL) {
-		g_free(d_message);
-		d_message = tmp;
+		gchar *tmp = g_regex_replace_eval(emoji_natural_regex, d_message, -1, 0, 0, discord_replace_natural_emoji, guild, NULL);
+
+		if (tmp != NULL) {
+			g_free(d_message);
+			d_message = tmp;
+		}
 	}
 
 	d_message = discord_make_mentions(da, guild, d_message);
