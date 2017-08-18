@@ -3747,7 +3747,7 @@ discord_got_channel_info(DiscordAccount *da, JsonNode *node, gpointer user_data)
 			JsonObject *recipient = json_array_get_object_element(recipients, i);
 			DiscordUser *user = discord_upsert_user(da->new_users, recipient);
 
-			users = g_list_prepend(users, user->name);
+			users = g_list_prepend(users, discord_create_fullname(user));
 			flags = g_list_prepend(flags, PURPLE_CHAT_USER_NONE);
 		}
 
