@@ -68,8 +68,11 @@ gchar *status_strings[4] = {
 };
 
 typedef enum {
-	CHANNEL_TEXT,
-	CHANNEL_VOICE
+	CHANNEL_GUILD_TEXT = 0,
+	CHANNEL_DM = 1,
+	CHANNEL_VOICE = 2,
+	CHANNEL_GROUP_DM = 3,
+	CHANNEL_GUILD_CATEGORY = 4
 } DiscordChannelType;
 
 typedef struct {
@@ -270,7 +273,7 @@ discord_new_channel(JsonObject *json)
 	channel->name = g_strdup(json_object_get_string_member(json, "name"));
 	channel->topic = g_strdup(json_object_get_string_member(json, "topic"));
 	channel->position = json_object_get_int_member(json, "position");
-	channel->type = json_object_get_int_member(json, "type") ? CHANNEL_VOICE : CHANNEL_TEXT;
+	channel->type = json_object_get_int_member(json, "type");
 	channel->last_message_id = to_int(json_object_get_string_member(json, "last_message_id"));
 
 	channel->permission_user_overrides = g_hash_table_new_full(g_int64_hash, g_int64_equal, NULL, g_free);
