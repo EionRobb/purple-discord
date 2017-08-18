@@ -507,6 +507,8 @@ discord_upsert_user(GHashTable *user_table, JsonObject *json)
 static gchar *
 discord_create_fullname(DiscordUser *user)
 {
+	g_return_val_if_fail(user != NULL, NULL);
+	
 	return g_strdup_printf("%s#%04d", user->name, user->discriminator);
 }
 
