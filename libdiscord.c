@@ -3375,6 +3375,32 @@ discord_chat_leave(PurpleConnection *pc, int id)
 }
 
 static void
+discord_chat_invite(PurpleConnection *pc, int id, const char *message, const char *who)
+{
+	// DiscordAccount *ya;
+	// const gchar *room_id;
+	// PurpleChatConversation *chatconv;
+	// JsonObject *data = json_object_new();
+
+	// ya = purple_connection_get_protocol_data(pc);
+	// chatconv = purple_conversations_find_chat(pc, id);
+	// room_id = purple_conversation_get_data(PURPLE_CONVERSATION(chatconv), "id");
+	// if (room_id == NULL) {
+		// room_id = purple_conversation_get_name(PURPLE_CONVERSATION(chatconv));
+	// }
+
+	// json_object_set_string_member(data, "msg", "InviteGroupMember");
+	// json_object_set_string_member(data, "groupId", groupId);
+	// json_object_set_int_member(data, "opId", ya->opid++);
+	// json_object_set_string_member(data, "userId", who);
+	// json_object_set_string_member(data, "memberId", "00000000000FFFFF");
+	// json_object_set_string_member(data, "firstName", "");
+	// json_object_set_string_member(data, "lastName", "");
+
+	// discord_socket_write_json(ya, data);
+}
+
+static void
 discord_chat_nick(PurpleConnection *pc, int id, gchar *new_nick)
 {
 	PurpleChatConversation *chatconv;
