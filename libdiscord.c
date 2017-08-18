@@ -3374,30 +3374,35 @@ discord_chat_leave(PurpleConnection *pc, int id)
 	discord_chat_leave_by_room_id(pc, room_id);
 }
 
+/* Invite to a _group DM_
+ * The API for inviting to a guild is different, TODO implement that one too */
+
 static void
 discord_chat_invite(PurpleConnection *pc, int id, const char *message, const char *who)
 {
-	// DiscordAccount *ya;
-	// const gchar *room_id;
-	// PurpleChatConversation *chatconv;
-	// JsonObject *data = json_object_new();
+	DiscordAccount *ya;
+	gchar *room_id;
+	PurpleChatConversation *chatconv;
+	DiscordChannel *channel;
 
-	// ya = purple_connection_get_protocol_data(pc);
-	// chatconv = purple_conversations_find_chat(pc, id);
-	// room_id = purple_conversation_get_data(PURPLE_CONVERSATION(chatconv), "id");
-	// if (room_id == NULL) {
-		// room_id = purple_conversation_get_name(PURPLE_CONVERSATION(chatconv));
-	// }
+	JsonObject *data = json_object_new();
 
-	// json_object_set_string_member(data, "msg", "InviteGroupMember");
-	// json_object_set_string_member(data, "groupId", groupId);
-	// json_object_set_int_member(data, "opId", ya->opid++);
-	// json_object_set_string_member(data, "userId", who);
-	// json_object_set_string_member(data, "memberId", "00000000000FFFFF");
-	// json_object_set_string_member(data, "firstName", "");
-	// json_object_set_string_member(data, "lastName", "");
+	ya = purple_connection_get_protocol_data(pc);
+	chatconv = purple_conversations_find_chat(pc, id);
+	room_id = purple_conversation_get_data(PURPLE_CONVERSATION(chatconv), "id");
+	channel = discord_get_channel_global_int(ya, to_int(room_id));
 
-	// discord_socket_write_json(ya, data);
+	printf("Inviting %s\n", who);
+
+/*	data = json_object_new();
+	json_object_set_string_member(data, "status", status_id);
+	postdata = json_object_to_string(data);
+
+	discord_fetch_url_with_method(ya, "PATCH", "https://" DISCORD_API_SERVER "/api/v6/users/@me/settings", postdata, NULL, NULL);
+
+	g_free(postdata);
+	json_object_unref(data);*/
+
 }
 
 static void
@@ -4843,7 +4848,7 @@ plugin_init(PurplePlugin *plugin)
 	prpl_info->send_typing = discord_send_typing;
 	prpl_info->join_chat = discord_join_chat;
 	prpl_info->get_chat_name = discord_get_chat_name;
-	//	prpl_info->chat_invite = discord_chat_invite;
+	prpl_info->chat_invite = discord_chat_invite;
 	prpl_info->chat_send = discord_chat_send;
 	prpl_info->set_chat_topic = discord_chat_set_topic;
 	prpl_info->get_cb_real_name = discord_get_real_name;
@@ -4946,7 +4951,7 @@ discord_protocol_chat_iface_init(PurpleProtocolChatIface *prpl_info)
 	prpl_info->info_defaults = discord_chat_info_defaults;
 	prpl_info->join = discord_join_chat;
 	prpl_info->get_name = discord_get_chat_name;
-	//	prpl_info->invite = discord_chat_invite;
+	prpl_info->invite = discord_chat_invite;
 	prpl_info->set_topic = discord_chat_set_topic;
 	prpl_info->get_user_real_name = discord_get_real_name;
 }
