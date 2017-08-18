@@ -1843,8 +1843,6 @@ discord_name_group_dm(DiscordAccount *da, DiscordChannel *channel) {
 static void
 discord_got_group_dm(DiscordAccount *da, JsonObject *data)
 {
-	printf("Got a group DM with...\n");
-
 	DiscordChannel *channel = discord_new_channel(data);
 	JsonArray *recipients = json_object_get_array_member(data, "recipients");
 
@@ -1854,8 +1852,6 @@ discord_got_group_dm(DiscordAccount *da, JsonObject *data)
 								json_array_get_object_element(recipients, i));
 
 		channel->recipients = g_list_prepend(channel->recipients, g_memdup(&(recipient->id), sizeof(guint64)));
-
-		printf("%d: %s\n", i, recipient->name);
 	}
 
 	g_hash_table_replace_int64(da->group_dms, channel->id, channel);
@@ -4079,8 +4075,6 @@ discord_conversation_send_message(DiscordAccount *da, guint64 room_id, const gch
 	gchar *stripped;
 	gchar * final;
 
-	printf("Low level send message -> %lu: %s\n", room_id, message);
-
 	nonce = g_strdup_printf("%" G_GUINT32_FORMAT, g_random_int());
 	g_hash_table_insert(da->sent_message_ids, nonce, nonce);
 
@@ -4130,12 +4124,9 @@ discord_chat_send(PurpleConnection *pc, gint id,
 
 	da = purple_connection_get_protocol_data(pc);
 	chatconv = purple_conversations_find_chat(pc, id);
-	printf("Chat conv: %p\n", chatconv);
 	guint64 *room_id_ptr = purple_conversation_get_data(PURPLE_CONVERSATION(chatconv), "id");
-	printf("Room_id_ptr: %p\n", room_id_ptr);
 	g_return_val_if_fail(room_id_ptr, -1);
 	guint64 room_id = *room_id_ptr;
-	printf("ID: %lu\n", room_id);
 
 	gchar *d_message = g_strdup(message);
 
