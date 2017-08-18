@@ -484,12 +484,6 @@ discord_get_user_int(DiscordAccount *da, guint64 id)
 }
 
 static DiscordUser *
-discord_get_user(DiscordAccount *da, const gchar *id)
-{
-	return discord_get_user_int(da, to_int(id));
-}
-
-static DiscordUser *
 discord_upsert_user(GHashTable *user_table, JsonObject *json)
 {
 	guint64 *key = NULL, user_id = to_int(json_object_get_string_member(json, "id"));
@@ -2011,8 +2005,8 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 	} else if (purple_strequal(type, "RELATIONSHIP_ADD")) {
 		discord_create_relationship(da, data);
 	} else if (purple_strequal(type, "RELATIONSHIP_REMOVE")) {
-		const gchar *user_id = json_object_get_string_member(data, "id");
-		DiscordUser *user = discord_get_user(da, user_id);
+		guint64 user_id = to_int(json_object_get_string_member(data, "id"));
+		DiscordUser *user = discord_get_user_int(da, user_id);
 
 		if (user) {
 			gchar *username = discord_create_fullname(user);
