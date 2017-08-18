@@ -2081,13 +2081,10 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 
 		JsonArray *presences = json_object_get_array_member(data, "presences");
 		JsonArray *members = json_object_get_array_member(data, "members");
-		const gchar *guild_id = json_object_get_string_member(data, "id");
-		guint64 gid = to_int(guild_id);
+		guint64 guild_id = to_int(json_object_get_string_member(data, "id"));
 		GList *users = NULL, *flags = NULL;
 
-		DiscordGuild *guild = discord_get_guild(da, guild_id);
-
-		purple_debug_info("discord", "Guild id '%" G_GUINT64_FORMAT "' \n", gid);
+		DiscordGuild *guild = discord_get_guild_int(da, guild_id);
 
 		/* all members in small groups, online in large */
 		for (int j = json_array_get_length(members) - 1; j >= 0; j--) {
@@ -2095,7 +2092,7 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 			JsonObject *user = json_object_get_object_member(member, "user");
 
 			DiscordUser *u = discord_upsert_user(da->new_users, user);
-			DiscordGuildMembership *membership = discord_new_guild_membership(gid, member);
+			DiscordGuildMembership *membership = discord_new_guild_membership(guild_id, member);
 			g_hash_table_replace_int64(u->guild_memberships, membership->id, membership);
 			g_array_append_val(guild->members, u->id);
 
@@ -2112,8 +2109,6 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		if (purple_account_get_bool(da->account, "populate-blist", TRUE)) {
 			discord_buddy_guild(da, guild);
 		}
-
-		purple_debug_info("discord", "Room has '%d' Members\n", json_array_get_length(members));
 
 		/* Presence only contains online users */
 		for (int j = json_array_get_length(presences) - 1; j >= 0; j--) {
@@ -2132,7 +2127,7 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		GHashTableIter iter;
 		gpointer key, value;
 
-		g_hash_table_iter_init(&iter, discord_get_guild(da, guild_id)->channels);
+		g_hash_table_iter_init(&iter, discord_get_guild_int(da, guild_id)->channels);
 
 		while (g_hash_table_iter_next(&iter, &key, &value)) {
 			DiscordChannel *channel = value;
