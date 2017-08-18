@@ -801,16 +801,13 @@ discord_print_users(GHashTable *users)
 }
 
 PurpleChatUserFlags
-discord_get_user_flags(DiscordAccount *da, const gchar *guild_id, const gchar *username)
+discord_get_user_flags(DiscordAccount *da, DiscordGuild *guild, DiscordUser *user)
 {
-	DiscordGuild *guild = discord_get_guild(da, guild_id);
-	DiscordUser *user = discord_get_user_fullname(da, username);
-
 	if (user == NULL) {
 		return PURPLE_CHAT_USER_NONE;
 	}
 
-	guint64 gid = to_int(guild_id);
+	guint64 gid = guild->id;
 	DiscordGuildMembership *guild_membership = g_hash_table_lookup_int64(user->guild_memberships, gid);
 	PurpleChatUserFlags best_flag = user->bot ? PURPLE_CHAT_USER_VOICE : PURPLE_CHAT_USER_NONE;
 
@@ -1837,7 +1834,7 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 					if (user->status == USER_OFFLINE) {
 						purple_chat_conversation_remove_user(chat, nickname, NULL);
 					} else if (!purple_chat_conversation_has_user(chat, nickname)) {
-						PurpleChatUserFlags flags = discord_get_user_flags(da, guild_id, nickname);
+						PurpleChatUserFlags flags = discord_get_user_flags(da, guild, user);
 						purple_chat_conversation_add_user(chat, nickname, NULL, flags, FALSE);
 					}
 				}
@@ -2058,9 +2055,7 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 			DiscordUser *user = discord_upsert_user(da->new_users, json_object_get_object_member(presence, "user"));
 			discord_update_status(user, presence);
 
-			gchar *full_username = discord_create_fullname(user);
-			PurpleChatUserFlags cbflags = discord_get_user_flags(da, guild_id, full_username);
-			g_free(full_username);
+			PurpleChatUserFlags cbflags = discord_get_user_flags(da, guild, user);
 
 			users = g_list_prepend(users, discord_create_nickname(user, guild));
 			flags = g_list_prepend(flags, GINT_TO_POINTER(cbflags));
@@ -3628,15 +3623,12 @@ discord_got_channel_info(DiscordAccount *da, JsonNode *node, gpointer user_data)
 
 		for (i = len - 1; i >= 0; i--) {
 			JsonObject *recipient = json_array_get_object_element(recipients, i);
-			const gchar *username = json_object_get_string_member(recipient, "username");
-			const gchar *discriminator = json_object_get_string_member(recipient, "discriminator");
-			gchar *full_username = discord_combine_username(username, discriminator);
-			PurpleChatUserFlags cbflags = discord_get_user_flags(da, guild_id, full_username);
+			DiscordUser *user = discord_upsert_user(da->new_users, recipient);
 
-			users = g_list_prepend(users, full_username);
-			flags = g_list_prepend(flags, GINT_TO_POINTER(cbflags));
+			users = g_list_prepend(users, user->name);
+			flags = g_list_prepend(flags, PURPLE_CHAT_USER_NONE);
 
-			g_string_append_printf(recipient_names, ", %s", username);
+			g_string_append_printf(recipient_names, ", %s", user->name);
 		}
 
 		purple_chat_conversation_clear_users(chatconv);
@@ -3660,16 +3652,13 @@ discord_got_channel_info(DiscordAccount *da, JsonNode *node, gpointer user_data)
 
 		for (guint i = 0; i < guild->members->len; i++) {
 			DiscordUser *user = discord_get_user_int(da, g_array_index(guild->members, guint64, i));
-			gchar *full_username = discord_create_fullname(user);
-			PurpleChatUserFlags cbflags = discord_get_user_flags(da, guild_id, full_username);
+			PurpleChatUserFlags cbflags = discord_get_user_flags(da, guild, user);
 			gchar *nickname = discord_create_nickname(user, guild);
 
 			if (user->status != USER_OFFLINE) {
 				users = g_list_prepend(users, nickname);
 				flags = g_list_prepend(flags, GINT_TO_POINTER(cbflags));
 			}
-
-			g_free(full_username);
 		}
 
 		purple_chat_conversation_clear_users(chat);
