@@ -1820,6 +1820,27 @@ discord_got_nick_change(DiscordAccount *da, DiscordUser *user, DiscordGuild *gui
 	g_free(nick);
 }
 
+static gchar *
+discord_name_group_dm(DiscordAccount *da, DiscordChannel *channel) {
+	/* TODO: Disambiguate with same participants, by topic, username nondiscriminator, cut length... */
+	GString *name = g_string_new(NULL);
+	GList *l;
+
+	for (l = channel->recipients; l != NULL; l = l->next) {
+		guint64 *recipient_ptr = l->data;
+		DiscordUser *recipient = discord_get_user_int(da, *recipient_ptr);
+
+		printf("Recipient: %p\n", recipient);
+		g_string_append(name, discord_create_fullname(recipient));
+
+		if (l->next) {
+			g_string_append(name, g_strdup(", "));
+		}
+	}
+
+	return g_string_free(name, FALSE);
+}
+
 static void
 discord_got_group_dm(DiscordAccount *da, JsonObject *data)
 {
@@ -1841,7 +1862,7 @@ discord_got_group_dm(DiscordAccount *da, JsonObject *data)
 	g_hash_table_replace_int64(da->group_dms, channel->id, channel);
 
 	/* Smush into buddy list */
-	gchar *name = from_int(channel->id);
+	gchar *name = discord_name_group_dm(da, channel);
 
 	GHashTable *components = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
 
