@@ -2172,6 +2172,17 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		}
 
 		/* TODO: Track role changes */
+	} else if (purple_strequal(type, "CHANNEL_RECIPIENT_ADD") || purple_strequal(type, "CHANNEL_RECIPIENT_REMOVE")) {
+		DiscordUser *user = discord_upsert_user(da->new_users, json_object_get_object_member(data, "user"));
+		gchar *name = discord_create_fullname(user);
+		guint64 room_id = to_int(json_object_get_string_member(data, "channel_id"));
+		PurpleChatConversation *chat = purple_conversations_find_chat(da->pc, g_int64_hash(&room_id));
+
+		if (purple_strequal(type, "CHANNEL_RECIPIENT_ADD")) {
+			purple_chat_conversation_add_user(chat, name, NULL, PURPLE_CHAT_USER_NONE, TRUE);
+		} else {
+			purple_chat_conversation_remove_user(chat, name, NULL);
+		}
 	} else {
 		purple_debug_info("discord", "Unhandled message type '%s'\n", type);
 	}
