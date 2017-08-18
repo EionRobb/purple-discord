@@ -1830,7 +1830,6 @@ discord_name_group_dm(DiscordAccount *da, DiscordChannel *channel) {
 		guint64 *recipient_ptr = l->data;
 		DiscordUser *recipient = discord_get_user_int(da, *recipient_ptr);
 
-		printf("Recipient: %p\n", recipient);
 		g_string_append(name, discord_create_fullname(recipient));
 
 		if (l->next) {
@@ -1862,18 +1861,18 @@ discord_got_group_dm(DiscordAccount *da, JsonObject *data)
 	g_hash_table_replace_int64(da->group_dms, channel->id, channel);
 
 	/* Smush into buddy list */
-	gchar *name = discord_name_group_dm(da, channel);
+	channel->name = discord_name_group_dm(da, channel);
 
 	GHashTable *components = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
 
 	DiscordChannelType channel_type = CHANNEL_GROUP_DM;
 
 	g_hash_table_replace(components, g_strdup("id"), g_strdup_printf("%" G_GUINT64_FORMAT, channel->id));
-	g_hash_table_replace(components, g_strdup("name"), name);
+	g_hash_table_replace(components, g_strdup("name"), g_strdup(channel->name));
 	g_hash_table_replace(components, g_strdup("type"), g_memdup(&channel_type, sizeof(channel_type)));
 
 	PurpleGroup *group = discord_get_or_create_default_group();
-	PurpleChat *chat = purple_chat_new(da->account, name, components);
+	PurpleChat *chat = purple_chat_new(da->account, channel->name, components);
 	purple_blist_add_chat(chat, group, NULL);
 }
 
@@ -3697,7 +3696,6 @@ discord_got_channel_info(DiscordAccount *da, JsonNode *node, gpointer user_data)
 	}
 
 	if (json_object_has_member(channel, "recipients")) {
-		GString *recipient_names = g_string_new(NULL);
 		JsonArray *recipients = json_object_get_array_member(channel, "recipients");
 		gint i;
 		guint len = json_array_get_length(recipients);
@@ -3712,8 +3710,6 @@ discord_got_channel_info(DiscordAccount *da, JsonNode *node, gpointer user_data)
 
 			users = g_list_prepend(users, full_username);
 			flags = g_list_prepend(flags, GINT_TO_POINTER(cbflags));
-
-			g_string_append_printf(recipient_names, ", %s", username);
 		}
 
 		purple_chat_conversation_clear_users(chatconv);
@@ -3726,9 +3722,6 @@ discord_got_channel_info(DiscordAccount *da, JsonNode *node, gpointer user_data)
 
 		g_list_free(users);
 		g_list_free(flags);
-
-		purple_conversation_set_title(PURPLE_CONVERSATION(chatconv), recipient_names->str);
-		g_string_free(recipient_names, TRUE);
 	} else if (json_object_has_member(channel, "permission_overwrites")) {
 		DiscordGuild *guild = discord_get_guild(da, guild_id);
 
