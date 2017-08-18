@@ -369,6 +369,8 @@ discord_free_channel(gpointer data)
 
 	g_hash_table_unref(channel->permission_user_overrides);
 	g_hash_table_unref(channel->permission_role_overrides);
+	g_list_free_full(channel->recipients, g_free);
+
 	g_free(channel);
 }
 
@@ -1843,7 +1845,7 @@ discord_got_group_dm(DiscordAccount *da, JsonObject *data)
 
 	GHashTable *components = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
 
-	int channel_type = 3;
+	DiscordChannelType channel_type = CHANNEL_GROUP_DM;
 
 	g_hash_table_replace(components, "id", g_strdup_printf("%" G_GUINT64_FORMAT, channel->id));
 	g_hash_table_replace(components, "name", name);
