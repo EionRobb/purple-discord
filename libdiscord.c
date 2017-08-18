@@ -1847,9 +1847,9 @@ discord_got_group_dm(DiscordAccount *da, JsonObject *data)
 
 	DiscordChannelType channel_type = CHANNEL_GROUP_DM;
 
-	g_hash_table_replace(components, "id", g_strdup_printf("%" G_GUINT64_FORMAT, channel->id));
-	g_hash_table_replace(components, "name", name);
-	g_hash_table_replace(components, "type", g_memdup(&channel_type, sizeof(channel_type)));
+	g_hash_table_replace(components, g_strdup("id"), g_strdup_printf("%" G_GUINT64_FORMAT, channel->id));
+	g_hash_table_replace(components, g_strdup("name"), name);
+	g_hash_table_replace(components, g_strdup("type"), g_memdup(&channel_type, sizeof(channel_type)));
 
 	PurpleGroup *group = discord_get_or_create_default_group();
 	PurpleChat *chat = purple_chat_new(da->account, name, components);
@@ -2610,8 +2610,8 @@ discord_buddy_guild(DiscordAccount *da, DiscordGuild *guild)
 
 		GHashTable *components = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
 
-		g_hash_table_replace(components, "id", g_strdup_printf("%" G_GUINT64_FORMAT, channel->id));
-		g_hash_table_replace(components, "name", g_strdup(channel->name));
+		g_hash_table_replace(components, g_strdup("id"), g_strdup_printf("%" G_GUINT64_FORMAT, channel->id));
+		g_hash_table_replace(components, g_strdup("name"), g_strdup(channel->name));
 
 		PurpleChat *chat = purple_chat_new(da->account, channel->name, components);
 		purple_blist_add_chat(chat, group, NULL);
