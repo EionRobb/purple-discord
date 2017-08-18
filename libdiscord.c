@@ -95,6 +95,7 @@ typedef struct {
 	guint64 last_message_id;
 	GHashTable *permission_user_overrides;
 	GHashTable *permission_role_overrides;
+	GList *recipients; /* For group DMs */
 } DiscordChannel;
 
 typedef struct {
@@ -170,6 +171,7 @@ typedef struct {
 
 	GHashTable *new_users;
 	GHashTable *new_guilds;
+	GHashTable *group_dms;			/* A store of known room_id's -> DiscordChannel's */
 
 	GSList *http_conns; /**< PurpleHttpConnection to be cancelled on logout */
 	gint frames_since_reconnect;
@@ -273,6 +275,8 @@ discord_new_channel(JsonObject *json)
 
 	channel->permission_user_overrides = g_hash_table_new_full(g_int64_hash, g_int64_equal, NULL, g_free);
 	channel->permission_role_overrides = g_hash_table_new_full(g_int64_hash, g_int64_equal, NULL, g_free);
+
+	channel->recipients = NULL;
 
 	return channel;
 }
@@ -590,6 +594,10 @@ discord_upsert_guild(GHashTable *guild_table, JsonObject *json)
 static DiscordChannel *
 discord_get_channel_global_int_guild(DiscordAccount *da, guint64 id, DiscordGuild **o_guild)
 {
+	/* Check for group DM first to avoid iterating guilds */
+	DiscordChannel *group_dm = g_hash_table_lookup_int64(da->group_dms, id);
+	if(group_dm) return group_dm;
+
 	GHashTableIter iter;
 	gpointer key, value;
 
@@ -1808,6 +1816,42 @@ discord_got_nick_change(DiscordAccount *da, DiscordUser *user, DiscordGuild *gui
 }
 
 static void
+discord_got_group_dm(DiscordAccount *da, JsonObject *data)
+{
+	printf("Got a group DM with...\n");
+
+	DiscordChannel *channel = discord_new_channel(data);
+	JsonArray *recipients = json_object_get_array_member(data, "recipients");
+
+	for (int i = json_array_get_length(recipients) - 1; i >= 0; i--) {
+		DiscordUser *recipient =
+			discord_upsert_user(da->new_users,
+								json_array_get_object_element(recipients, i));
+
+		channel->recipients = g_list_prepend(channel->recipients, g_memdup(&(recipient->id), sizeof(guint64)));
+
+		printf("%d: %s\n", i, recipient->name);
+	}
+
+	g_hash_table_replace_int64(da->group_dms, channel->id, channel);
+
+	/* Smush into buddy list */
+	gchar *name = from_int(channel->id);
+
+	GHashTable *components = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
+
+	int channel_type = 3;
+
+	g_hash_table_replace(components, "id", g_strdup_printf("%" G_GUINT64_FORMAT, channel->id));
+	g_hash_table_replace(components, "name", name);
+	g_hash_table_replace(components, "type", g_memdup(&channel_type, sizeof(channel_type)));
+
+	PurpleGroup *group = discord_get_or_create_default_group();
+	PurpleChat *chat = purple_chat_new(da->account, name, components);
+	purple_blist_add_chat(chat, group, NULL);
+}
+
+static void
 discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data)
 {
 	discord_get_or_create_default_group();
@@ -1930,6 +1974,8 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		const gchar *last_message_id = json_object_get_string_member(data, "last_message_id");
 
 		if (channel_type == 1) {
+			/* 1:1 direct message */
+
 			JsonObject *first_recipient = json_array_get_object_element(json_object_get_array_member(data, "recipients"), 0);
 
 			if (first_recipient != NULL) {
@@ -1940,6 +1986,8 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 				g_hash_table_replace(da->last_message_id_dm, g_strdup(channel_id), g_strdup(last_message_id));
 				g_hash_table_replace(da->one_to_ones_rev, discord_combine_username(username, discriminator), g_strdup(channel_id));
 			}
+		} else if (channel_type == 3) {
+			discord_got_group_dm(da, data);
 		}
 	} else if (purple_strequal(type, "CHANNEL_UPDATE")) {
 		guint64 channel_id = to_int(json_object_get_string_member(data, "id"));
@@ -2478,6 +2526,8 @@ discord_got_private_channels(DiscordAccount *da, JsonNode *node, gpointer user_d
 			g_hash_table_replace(da->last_message_id_dm, g_strdup(room_id), g_strdup(last_message_id));
 
 			g_free(merged_username);
+		} else if (room_type == 3) {
+			discord_got_group_dm(da, channel);
 		}
 	}
 }
@@ -2777,6 +2827,7 @@ discord_login(PurpleAccount *account)
 	/* TODO make these the roots of all discord data */
 	da->new_users = g_hash_table_new_full(g_int64_hash, g_int64_equal, NULL, discord_free_user);
 	da->new_guilds = g_hash_table_new_full(g_int64_hash, g_int64_equal, NULL, discord_free_guild);
+	da->group_dms = g_hash_table_new_full(g_int64_hash, g_int64_equal, NULL, discord_free_channel);
 
 	discord_build_groups_from_blist(da);
 
