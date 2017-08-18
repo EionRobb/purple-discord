@@ -1807,8 +1807,6 @@ discord_got_nick_change(DiscordAccount *da, DiscordUser *user, DiscordGuild *gui
 static void
 discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data)
 {
-	discord_get_or_create_default_group();
-
 	if (purple_strequal(type, "PRESENCE_UPDATE")) {
 		DiscordUser *user = discord_upsert_user(da->new_users, json_object_get_object_member(data, "user"));
 		discord_update_status(user, data);
