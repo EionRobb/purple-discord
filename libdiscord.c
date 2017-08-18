@@ -3381,29 +3381,33 @@ static void
 discord_chat_invite(PurpleConnection *pc, int id, const char *message, const char *who)
 {
 	DiscordAccount *ya;
-	gchar *room_id;
+	guint64 room_id;
 	PurpleChatConversation *chatconv;
-	DiscordChannel *channel;
 	DiscordUser *user;
 
 	JsonObject *data;
 
 	ya = purple_connection_get_protocol_data(pc);
 	chatconv = purple_conversations_find_chat(pc, id);
-	room_id = purple_conversation_get_data(PURPLE_CONVERSATION(chatconv), "id");
-	channel = discord_get_channel_global_int(ya, to_int(room_id));
+	guint64 *room_id_ptr = purple_conversation_get_data(PURPLE_CONVERSATION(chatconv), "id");
+	room_id = *room_id_ptr;
+
+	if(!room_id_ptr) {
+		return;
+	}
 
 	user = discord_get_user_fullname(ya, who);
 
 	if (!user) {
 		purple_debug_info("discord", "Missing user in invitation for %s", who);
+		return;
 	}
 
 	data = json_object_new();
 	json_object_set_string_member(data, "recipient", from_int(user->id));
 	gchar *postdata = json_object_to_string(data);
 
-	gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/v6/channels/%" G_GUINT64_FORMAT "/recipients/%" G_GUINT64_FORMAT, channel->id, user->id);
+	gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/v6/channels/%" G_GUINT64_FORMAT "/recipients/%" G_GUINT64_FORMAT, room_id, user->id);
 	discord_fetch_url_with_method(ya, "PUT", url, postdata, NULL, NULL);
 	g_free(url);
 
