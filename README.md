@@ -56,6 +56,10 @@ This value is the threshold to define a large channel. By default, if
 there are more than 80 (online) users in the channel, it will be
 considered large.
 
+**Maximum number of backlog messages to fetch**: If messages were sent in a
+room while you were offline, by default they will be retrieved and displayed.
+For performance reasons, the number displayed is limited, by default to 100.
+This limit controls the number displayed. Set to 0 to display backlog entirely.
 
 Show your appreciation
 ----------------------

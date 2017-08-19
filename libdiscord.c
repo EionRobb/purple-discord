@@ -3539,11 +3539,17 @@ discord_get_chat_name(GHashTable *data)
 	return g_strdup(temp);
 }
 
+typedef struct {
+	DiscordChannel *channel;
+	int remaining_messages;
+} HistoryFetch;
+
 static void
 discord_got_history_of_room(DiscordAccount *da, JsonNode *node, gpointer user_data)
 {
 	JsonArray *messages = json_node_get_array(node);
-	DiscordChannel *channel = user_data;
+	HistoryFetch *fetch = user_data;
+	DiscordChannel *channel = fetch->channel;
 	gint i, len = json_array_get_length(messages);
 	guint64 last_message = channel->last_message_id;
 	guint64 rolling_last_message_id = 0;
@@ -3563,11 +3569,18 @@ discord_got_history_of_room(DiscordAccount *da, JsonNode *node, gpointer user_da
 	if (rolling_last_message_id != 0) {
 		if (rolling_last_message_id < last_message) {
 			/* Request the next 100 messages */
-			gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/v6/channels/%" G_GUINT64_FORMAT "/messages?limit=100&after=%" G_GUINT64_FORMAT, channel->id, rolling_last_message_id);
-			discord_fetch_url(da, url, NULL, discord_got_history_of_room, channel);
-			g_free(url);
+			fetch->remaining_messages -= len;
+
+			if(fetch->remaining_messages > 0) {
+				gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/v6/channels/%" G_GUINT64_FORMAT "/messages?limit=100&after=%" G_GUINT64_FORMAT, channel->id, rolling_last_message_id);
+				discord_fetch_url(da, url, NULL, discord_got_history_of_room, fetch);
+				g_free(url);
+				return;
+			}
 		}
 	}
+
+	g_free(fetch);
 }
 
 /* identical endpoint as above, but not rolling */
@@ -3805,9 +3818,16 @@ discord_join_chat(PurpleConnection *pc, GHashTable *chatdata)
 	}
 
 	if (*last_message_id != 0 && channel->last_message_id > *last_message_id) {
-		gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/v6/channels/%" G_GUINT64_FORMAT "/messages?limit=100&after=%" G_GUINT64_FORMAT, id, *last_message_id);
-		discord_fetch_url(da, url, NULL, discord_got_history_of_room, channel);
-		g_free(url);
+		HistoryFetch data = {
+			.channel = channel,
+			.remaining_messages = purple_account_get_int(da->account, "backlog-maximum", 100)
+		};
+
+		if(data.remaining_messages) {
+			gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/v6/channels/%" G_GUINT64_FORMAT "/messages?limit=100&after=%" G_GUINT64_FORMAT, id, *last_message_id);
+			discord_fetch_url(da, url, NULL, discord_got_history_of_room, g_memdup(&data, sizeof(data)));
+			g_free(url);
+		}
 	}
 }
 
@@ -4576,6 +4596,9 @@ discord_add_account_options(GList *account_options)
 	account_options = g_list_append(account_options, option);
 
 	option = purple_account_option_int_new(N_("Number of users in a large channel"), "large-channel-count", 20);
+	account_options = g_list_append(account_options, option);
+
+	option = purple_account_option_int_new(N_("Maximum number of backlog messages to fetch"), "backlog-maximum", 100);
 	account_options = g_list_append(account_options, option);
 
 	return account_options;
