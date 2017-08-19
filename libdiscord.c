@@ -3875,7 +3875,7 @@ discord_mark_room_messages_read(DiscordAccount *da, guint64 channel_id)
 	discord_fetch_url(da, url, "{\"token\":null}", NULL, NULL);
 	g_free(url);
 
-	g_hash_table_replace(da->read_state, id, from_int(last_message_id));
+	g_hash_table_replace(da->read_state, id, g_memdup(&last_message_id, sizeof(last_message_id)));
 }
 
 static void
