@@ -1694,7 +1694,7 @@ discord_process_message(DiscordAccount *da, JsonObject *data)
 	gchar *escaped_content = purple_markup_escape_text(content, -1);
 	JsonArray *attachments = json_object_get_array_member(data, "attachments");
 	JsonArray *mentions = json_object_get_array_member(data, "mentions");
-	JsonArray *mentions_roles = json_object_get_array_member(data, "mentions_roles");
+	JsonArray *mention_roles = json_object_get_array_member(data, "mention_roles");
 	PurpleMessageFlags flags;
 	gchar *tmp;
 	gint i;
@@ -1719,13 +1719,12 @@ discord_process_message(DiscordAccount *da, JsonObject *data)
 		}
 	}
 
-	if (mentions_roles) {
+	if (mention_roles) {
 		DiscordUser *self = discord_get_user_int(da, da->self_user_id);
 		DiscordGuildMembership *membership = g_hash_table_lookup_int64(self->guild_memberships, guild->id);
 
-		for (i = json_array_get_length(mentions) - 1; i >= 0; i--) {
-			JsonObject *role = json_array_get_object_element(mentions, i);
-			guint64 id = to_int(json_object_get_string_member(role, "id"));
+		for (i = json_array_get_length(mention_roles) - 1; i >= 0; i--) {
+			guint64 id = to_int(json_array_get_string_element(mention_roles, i));
 
 			for (guint i = 0; i < membership->roles->len; i++) {
 				guint64 role_id = g_array_index(membership->roles, guint64, i);
