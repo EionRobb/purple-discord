@@ -1298,7 +1298,6 @@ discord_replace_channel(const GMatchInfo *match, GString *result, gpointer user_
 static gboolean
 discord_replace_role(const GMatchInfo *match, GString *result, gpointer user_data)
 {
-	printf("Role reversal?\n");
 	DiscordAccountGuild *ag = user_data;
 	/* DiscordAccount *da = ag->account; */
 	DiscordGuild *guild = ag->guild;
@@ -1306,22 +1305,17 @@ discord_replace_role(const GMatchInfo *match, GString *result, gpointer user_dat
 	gchar *match_string = g_match_info_fetch(match, 0);
 	gchar *role_id = g_match_info_fetch(match, 1);
 	guint64 rid = to_int(role_id);
-	printf("%s -> %lu\n", role_id, rid);
 
 	DiscordGuildRole *role = g_hash_table_lookup_int64(guild->roles, rid);
-	printf("role %p\n", role);
 
 	if (rid == guild->id) {
-		printf("eveyrone\n");
-		g_string_append(result, "<b>@everyone</b> ");
+		g_string_append(result, "<b>@everyone</b>");
 	} else if (role) {
 		/* TODO make this a clickable link */
 		/* TODO honour colour if available */
 
-		printf("%s\n", role->name);
-		g_string_append_printf(result, "<b>@%s</b> ", role->name);
+		g_string_append_printf(result, "<b>@%s</b>", role->name);
 	} else {
-		printf("ack\n");
 		g_string_append(result, match_string);
 	}
 
