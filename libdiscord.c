@@ -47,6 +47,7 @@
 #define IGNORE_PRINTS
 
 static GRegex *channel_mentions_regex = NULL;
+static GRegex *role_mentions_regex = NULL;
 static GRegex *emoji_regex = NULL;
 static GRegex *emoji_natural_regex = NULL;
 static GRegex *action_star_regex = NULL;
@@ -181,6 +182,11 @@ typedef struct {
 	GSList *pending_writes;
 	gint roomlist_guild_count;
 } DiscordAccount;
+
+typedef struct {
+	DiscordAccount *account;
+	DiscordGuild *guild;
+} DiscordAccountGuild;
 
 static guint64
 to_int(const gchar *id)
@@ -1290,6 +1296,37 @@ discord_replace_channel(const GMatchInfo *match, GString *result, gpointer user_
 }
 
 static gboolean
+discord_replace_role(const GMatchInfo *match, GString *result, gpointer user_data)
+{
+	DiscordAccountGuild *ag = user_data;
+	/* DiscordAccount *da = ag->account; */
+	DiscordGuild *guild = ag->guild;
+
+	gchar *match_string = g_match_info_fetch(match, 0);
+	gchar *role_id = g_match_info_fetch(match, 1);
+	guint64 rid = to_int(role_id);
+
+	DiscordGuildRole *role = g_hash_table_lookup_int64(guild->roles, rid);
+
+	if (rid == guild->id) {
+		g_string_append(result, "<b>@everyone</b> ");
+	} else if (role) {
+		/* TODO make this a clickable link */
+		/* TODO honour colour if available */
+
+		g_string_append_printf(result, "<b>@%s</b> ", role->name);
+	} else {
+		g_string_append(result, match_string);
+	}
+
+	g_free(role_id);
+	g_free(match_string);
+
+	return FALSE;
+}
+
+
+static gboolean
 discord_replace_emoji(const GMatchInfo *match, GString *result, gpointer user_data)
 {
 	gchar *alt_text = g_match_info_fetch(match, 1);
@@ -1303,11 +1340,6 @@ discord_replace_emoji(const GMatchInfo *match, GString *result, gpointer user_da
 
 	return FALSE;
 }
-
-typedef struct {
-	DiscordAccount *account;
-	DiscordGuild *guild;
-} DiscordAccountGuild;
 
 static gboolean
 discord_replace_mention(const GMatchInfo *match, GString *result, gpointer user_data)
@@ -1679,6 +1711,17 @@ discord_process_message(DiscordAccount *da, JsonObject *data)
 	if (tmp != NULL) {
 		g_free(escaped_content);
 		escaped_content = tmp;
+	}
+
+	/* Replace <@&role_id> with role names */
+	if (guild) {
+		DiscordAccountGuild ag = { .account = da, .guild = guild };
+		tmp = g_regex_replace_eval(channel_mentions_regex, escaped_content, -1, 0, 0, discord_replace_role, &ag, NULL);
+
+		if (tmp != NULL) {
+			g_free(escaped_content);
+			escaped_content = tmp;
+		}
 	}
 
 	/* Replace <:emoji:id> with emojis */
@@ -4790,6 +4833,7 @@ plugin_load(PurplePlugin *plugin, GError **error)
 {
 
 	channel_mentions_regex = g_regex_new("&lt;#(\\d+)&gt;", G_REGEX_OPTIMIZE, 0, NULL);
+	role_mentions_regex = g_regex_new("&lt;@&(\\d+)&gt;", G_REGEX_OPTIMIZE, 0, NULL);
 	emoji_regex = g_regex_new("&lt;:([^:]+):(\\d+)&gt;", G_REGEX_OPTIMIZE, 0, NULL);
 	emoji_natural_regex = g_regex_new(":([^:]+):", G_REGEX_OPTIMIZE, 0, NULL);
 	action_star_regex = g_regex_new("^_([^\\*]+)_$", G_REGEX_OPTIMIZE, 0, NULL);
