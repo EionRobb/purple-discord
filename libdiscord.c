@@ -1594,7 +1594,9 @@ discord_process_message(DiscordAccount *da, JsonObject *data)
 	gint i;
 
 	DiscordGuild *guild = NULL;
-	discord_get_channel_global_int_guild(da, channel_id, &guild);
+	DiscordChannel *channel = discord_get_channel_global_int_guild(da, channel_id, &guild);
+
+	channel->last_message_id = to_int(json_object_get_string_member(data, "id"));
 
 	if (author->id == da->self_user_id) {
 		flags = PURPLE_MESSAGE_SEND | PURPLE_MESSAGE_REMOTE_SEND | PURPLE_MESSAGE_DELAYED;
