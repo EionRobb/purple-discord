@@ -1295,10 +1295,9 @@ discord_got_emoji_raw(DiscordAccount *da, JsonNode *node, gpointer user_data)
 	}
 
 	if ( (--handle->ay->yield) == 0) {
+		handle->ay->da = da;
 		discord_resume_process_message(handle->ay, handle->ay->message, TRUE);
 	}
-
-	g_free(handle);
 }
 
 static gboolean
@@ -1613,14 +1612,18 @@ discord_process_message(DiscordAccount *da, JsonObject *data)
 	DiscordAccountYield *ay = g_new0(DiscordAccountYield, 1);
 	ay->da = da;
 	ay->yield = FALSE;
-	ay->data = data;
+	ay->data = json_object_ref(data);
 	ay->message = escaped_content;
 
 	gchar *tmp = g_regex_replace_eval(emoji_regex, escaped_content, -1, 0, 0, discord_replace_emoji, ay, NULL);
 
 	if (!ay->yield) {
-		g_free(escaped_content);
-		discord_resume_process_message(ay, tmp, FALSE);
+		if (tmp) {
+			g_free(escaped_content);
+			escaped_content = tmp;
+		}
+
+		discord_resume_process_message(ay, escaped_content, FALSE);
 	}
 
 	return to_int(json_object_get_string_member(data, "id"));
@@ -1640,9 +1643,12 @@ discord_resume_process_message(DiscordAccountYield *ay, gchar *escaped_content, 
 			g_free(escaped_content);
 			escaped_content = tmp;
 		}
-	}
 
-	g_free(ay);
+		if (ay->yield) {
+			printf("too late for that!\n");
+			return;
+		}
+	}
 
 	DiscordUser *author = discord_upsert_user(da->new_users, json_object_get_object_member(data, "author"));
 
@@ -1789,6 +1795,7 @@ discord_resume_process_message(DiscordAccountYield *ay, gchar *escaped_content, 
 	}
 
 	g_free(escaped_content);
+	json_object_unref(data);
 }
 
 struct discord_group_typing_data {
