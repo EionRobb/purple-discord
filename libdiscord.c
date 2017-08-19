@@ -1312,9 +1312,12 @@ discord_replace_role(const GMatchInfo *match, GString *result, gpointer user_dat
 		g_string_append(result, "<b>@everyone</b>");
 	} else if (role) {
 		/* TODO make this a clickable link */
-		/* TODO honour colour if available */
 
-		g_string_append_printf(result, "<b>@%s</b>", role->name);
+		if (role->color) {
+			g_string_append_printf(result, "<span style=\"color:#%06X\"><b>@%s</b></span>", role->color, role->name);
+		} else {
+			g_string_append_printf(result, "<b>@%s</b>", role->name);
+		}
 	} else {
 		g_string_append(result, match_string);
 	}
