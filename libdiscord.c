@@ -1252,11 +1252,10 @@ discord_replace_channel(const GMatchInfo *match, GString *result, gpointer user_
 	gchar *match_string = g_match_info_fetch(match, 0);
 	gchar *channel_id = g_match_info_fetch(match, 1);
 	DiscordChannel *channel = discord_get_channel_global(da, channel_id);
-	DiscordGuild *guild;
 
 	if (channel) {
 		/* TODO make this a clickable link */
-		guild = discord_get_guild(da, channel->guild_id);
+		DiscordGuild *guild = discord_get_guild(da, channel->guild_id);
 
 		if (guild) {
 			g_string_append_printf(result, "%s", discord_normalise_room_name(guild->name, channel->name));
@@ -2165,9 +2164,7 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 PurpleGroup *
 discord_get_or_create_default_group()
 {
-	PurpleGroup *discord_group = NULL;
-
-	discord_group = purple_blist_find_group(_("Discord"));
+	PurpleGroup *discord_group = purple_blist_find_group(_("Discord"));
 
 	if (!discord_group) {
 		discord_group = purple_group_new(_("Discord"));
@@ -2366,32 +2363,7 @@ discord_build_groups_from_blist(DiscordAccount *ya)
 	for (node = purple_blist_get_root();
 		 node != NULL;
 		 node = purple_blist_node_next(node, TRUE)) {
-		if (PURPLE_IS_CHAT(node)) {
-			const gchar *channel_id;
-			const gchar *name;
-			PurpleChat *chat = PURPLE_CHAT(node);
-
-			if (purple_chat_get_account(chat) != ya->account) {
-				continue;
-			}
-
-			name = purple_chat_get_name(chat);
-			channel_id = purple_blist_node_get_string(node, "channel_id");
-
-			if (name == NULL || channel_id == NULL || purple_strequal(name, channel_id)) {
-				GHashTable *components = purple_chat_get_components(chat);
-
-				if (components != NULL) {
-					if (channel_id == NULL) {
-						channel_id = g_hash_table_lookup(components, "id");
-					}
-
-					if (name == NULL || purple_strequal(name, channel_id)) {
-						name = g_hash_table_lookup(components, "name");
-					}
-				}
-			}
-		} else if (PURPLE_IS_BUDDY(node)) {
+		if (PURPLE_IS_BUDDY(node)) {
 			const gchar *discord_id;
 			const gchar *name;
 			PurpleBuddy *buddy = PURPLE_BUDDY(node);
@@ -2934,7 +2906,6 @@ discord_process_frame(DiscordAccount *da, const gchar *frame)
 {
 	JsonParser *parser = json_parser_new();
 	JsonNode *root;
-	JsonObject *obj;
 	gint64 opcode;
 
 	purple_debug_info("discord", "got frame data: %s\n", frame);
@@ -2947,7 +2918,7 @@ discord_process_frame(DiscordAccount *da, const gchar *frame)
 	root = json_parser_get_root(parser);
 
 	if (root != NULL) {
-		obj = json_node_get_object(root);
+		JsonObject *obj = json_node_get_object(root);
 
 		opcode = json_object_get_int_member(obj, "op");
 
@@ -3375,12 +3346,12 @@ discord_chat_invite(PurpleConnection *pc, int id, const char *message, const cha
 	ya = purple_connection_get_protocol_data(pc);
 	chatconv = purple_conversations_find_chat(pc, id);
 	guint64 *room_id_ptr = purple_conversation_get_data(PURPLE_CONVERSATION(chatconv), "id");
-	room_id = *room_id_ptr;
 
 	if(!room_id_ptr) {
 		return;
 	}
 
+	room_id = *room_id_ptr;
 	user = discord_get_user_fullname(ya, who);
 
 	if (!user) {
@@ -4236,17 +4207,15 @@ discord_send_im(PurpleConnection *pc,
 
 	/* Create DM if there isn't one */
 	if (room_id == NULL) {
-		JsonObject *data;
 #if !PURPLE_VERSION_CHECK(3, 0, 0)
 		PurpleMessage *msg = purple_message_new_outgoing(who, message, flags);
 #endif
 		DiscordUser *user = discord_get_user_fullname(da, who);
-		gchar *postdata;
 
 		if (user) {
-			data = json_object_new();
+			JsonObject *data = json_object_new();
 			json_object_set_int_member(data, "recipient_id", user->id);
-			postdata = json_object_to_string(data);
+			gchar *postdata = json_object_to_string(data);
 
 			discord_fetch_url(da, "https://" DISCORD_API_SERVER "/api/v6/users/@me/channels", postdata, discord_created_direct_message_send, msg);
 
@@ -4676,11 +4645,8 @@ discord_actions(
 static PurpleCmdRet
 discord_cmd_leave(PurpleConversation *conv, const gchar *cmd, gchar **args, gchar **error, gpointer data)
 {
-	PurpleConnection *pc = NULL;
-	int id = -1;
-
-	pc = purple_conversation_get_connection(conv);
-	id = purple_chat_conversation_get_id(PURPLE_CHAT_CONVERSATION(conv));
+	PurpleConnection *pc = purple_conversation_get_connection(conv);
+	int id = purple_chat_conversation_get_id(PURPLE_CHAT_CONVERSATION(conv));
 
 	if (pc == NULL || id == -1) {
 		return PURPLE_CMD_RET_FAILED;
@@ -4694,11 +4660,8 @@ discord_cmd_leave(PurpleConversation *conv, const gchar *cmd, gchar **args, gcha
 static PurpleCmdRet
 discord_cmd_nick(PurpleConversation *conv, const gchar *cmd, gchar **args, gchar **error, gpointer data)
 {
-	PurpleConnection *pc = NULL;
-	int id = -1;
-
-	pc = purple_conversation_get_connection(conv);
-	id = purple_chat_conversation_get_id(PURPLE_CHAT_CONVERSATION(conv));
+	PurpleConnection *pc = purple_conversation_get_connection(conv);
+	int id = purple_chat_conversation_get_id(PURPLE_CHAT_CONVERSATION(conv));
 
 	if (pc == NULL || id == -1) {
 		return PURPLE_CMD_RET_FAILED;
