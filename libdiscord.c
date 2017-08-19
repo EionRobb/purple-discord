@@ -602,7 +602,7 @@ discord_upsert_guild(GHashTable *guild_table, JsonObject *json)
 static DiscordChannel *
 discord_get_channel_global_int_guild(DiscordAccount *da, guint64 id, DiscordGuild **o_guild)
 {
-	/* Check for group DM first to avoid iterating guilds */
+	/* Check for DM first to avoid iterating guilds */
 	DiscordChannel *group_dm = g_hash_table_lookup_int64(da->group_dms, id);
 	if(group_dm) return group_dm;
 
@@ -2723,22 +2723,17 @@ discord_got_read_states(DiscordAccount *da, JsonNode *node, gpointer user_data)
 		const gchar *channel = json_object_get_string_member(state, "id");
 		guint64 last_id = to_int(json_object_get_string_member(state, "last_message_id"));
 		guint mentions = json_object_get_int_member(state, "mention_count");
-
-		if (mentions) {
-			gboolean isDM = g_hash_table_contains(da->one_to_ones, channel);
-
-			if (isDM) {
-				discord_get_history(da, channel, from_int(last_id), mentions * 2);
-			} else {
-				/* TODO: fetch channel history */
-				DiscordChannel *dchannel = discord_get_channel_global(da, channel);
-				if (dchannel != NULL) {
-					purple_debug_misc("discord", "%d unhandled mentions in channel %s\n", mentions, dchannel->name);
-				}
-			}
-		}
+		gboolean isDM = g_hash_table_contains(da->one_to_ones, channel);
 
 		g_hash_table_replace(da->read_state, g_strdup(channel), g_memdup(&last_id, sizeof(last_id)));
+
+		DiscordChannel *chan = discord_get_channel_global_int(da, to_int(channel));
+
+		if (mentions && isDM) {
+			discord_get_history(da, channel, from_int(last_id), mentions * 2);
+		} else if (chan && last_id && chan->last_message_id && last_id > chan->last_message_id) {
+			discord_open_chat(da, chan->id, NULL, mentions);
+		}
 	}
 }
 
@@ -3793,33 +3788,10 @@ discord_open_chat(DiscordAccount *da, guint64 id, gchar *name, gboolean present)
 	discord_fetch_url(da, url, NULL, discord_got_channel_info, channel);
 	g_free(url);
 
-	return channel;
-}
-
-static void
-discord_join_chat(PurpleConnection *pc, GHashTable *chatdata)
-{
-	DiscordAccount *da = purple_connection_get_protocol_data(pc);
-
-	guint64 id = to_int(g_hash_table_lookup(chatdata, "id"));
-
-	gchar *name = (gchar *) g_hash_table_lookup(chatdata, "name");
-
-	DiscordChannel *channel = discord_open_chat(da, id, name, TRUE);
-
-	if (!channel) {
-		return;
-	}
-
 	/* Get any missing messages */
-	guint64 *last_message_id = g_hash_table_lookup(da->read_state, g_hash_table_lookup(chatdata, "id"));
+	guint64 *last_message_id = g_hash_table_lookup(da->read_state, from_int(id));
 
-	if(!last_message_id) {
-		/* No history to grab! */
-		return;
-	}
-
-	if (*last_message_id != 0 && channel->last_message_id > *last_message_id) {
+	if (last_message_id && *last_message_id != 0 && channel->last_message_id > *last_message_id) {
 		HistoryFetch data = {
 			.channel = channel,
 			.remaining_messages = purple_account_get_int(da->account, "backlog-maximum", 100)
@@ -3831,6 +3803,19 @@ discord_join_chat(PurpleConnection *pc, GHashTable *chatdata)
 			g_free(url);
 		}
 	}
+
+	return channel;
+}
+
+static void
+discord_join_chat(PurpleConnection *pc, GHashTable *chatdata)
+{
+	DiscordAccount *da = purple_connection_get_protocol_data(pc);
+
+	guint64 id = to_int(g_hash_table_lookup(chatdata, "id"));
+	gchar *name = (gchar *) g_hash_table_lookup(chatdata, "name");
+
+	discord_open_chat(da, id, name, TRUE);
 }
 
 static void
