@@ -1314,7 +1314,7 @@ discord_replace_role(const GMatchInfo *match, GString *result, gpointer user_dat
 		/* TODO make this a clickable link */
 
 		if (role->color) {
-			g_string_append_printf(result, "<span style=\"color:#%06X\"><b>@%s</b></span>", role->color, role->name);
+			g_string_append_printf(result, "<font color=\"#%06X\"><b>@%s</b></font>", role->color, role->name);
 		} else {
 			g_string_append_printf(result, "<b>@%s</b>", role->name);
 		}
