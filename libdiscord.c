@@ -2743,7 +2743,9 @@ discord_got_read_states(DiscordAccount *da, JsonNode *node, gpointer user_data)
 		if (mentions && isDM) {
 			discord_get_history(da, channel, from_int(last_id), mentions * 2);
 		} else if (chan && last_id && chan->last_message_id && last_id < chan->last_message_id) {
-			discord_open_chat(da, chan->id, NULL, discord_should_open_chat(da, guild, mentions));
+			if (purple_account_get_int(da->account, "backlog-maximum", 100)) {
+				discord_open_chat(da, chan->id, NULL, discord_should_open_chat(da, guild, mentions));
+			}
 		}
 	}
 }
