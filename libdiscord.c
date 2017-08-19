@@ -1740,7 +1740,9 @@ discord_process_message(DiscordAccount *da, JsonObject *data)
 		}
 	}
 
-	escaped_content = discord_replace_mentions_bare(da, guild, escaped_content);
+	if (mentions || mention_roles) {
+		escaped_content = discord_replace_mentions_bare(da, guild, escaped_content);
+	}
 
 	if (json_object_get_boolean_member(data, "mention_everyone")) {
 		flags |= PURPLE_MESSAGE_NICK;
