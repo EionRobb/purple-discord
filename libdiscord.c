@@ -1383,7 +1383,7 @@ discord_replace_mention(const GMatchInfo *match, GString *result, gpointer user_
 static gchar *
 discord_replace_mentions_bare(DiscordAccount *da, DiscordGuild *g, gchar *message)
 {
-	DiscordAccountGuild ag = {.account = da, .guild = g };
+	DiscordAccountGuild ag = { .account = da, .guild = g };
 	gchar *tmp = g_regex_replace_eval(mention_regex, message, -1, 0, 0, discord_replace_mention, &ag, NULL);
 
 	if (tmp != NULL) {
@@ -1501,8 +1501,9 @@ discord_make_mention(const GMatchInfo *match, GString *result, gpointer user_dat
 	} else {
 		/* If that fails, find a role */
 		guint64 role = discord_find_role_by_name(guild, identifier);
+
 		if (role) {
-			g_string_append_printf(result, "&lt;@&%" G_GUINT64_FORMAT "&gt; ", role);
+			g_string_append_printf(result, "&lt;@&amp;%" G_GUINT64_FORMAT "&gt; ", role);
 		} else {
 			/* If that fails, find a channel */
 			guint64 channel = discord_find_channel_by_name(guild, identifier);
@@ -4833,7 +4834,7 @@ plugin_load(PurplePlugin *plugin, GError **error)
 {
 
 	channel_mentions_regex = g_regex_new("&lt;#(\\d+)&gt;", G_REGEX_OPTIMIZE, 0, NULL);
-	role_mentions_regex = g_regex_new("&lt;@\\&(\\d+)&gt;", G_REGEX_OPTIMIZE, 0, NULL);
+	role_mentions_regex = g_regex_new("&lt;@&amp;(\\d+)&gt;", G_REGEX_OPTIMIZE, 0, NULL);
 	emoji_regex = g_regex_new("&lt;:([^:]+):(\\d+)&gt;", G_REGEX_OPTIMIZE, 0, NULL);
 	emoji_natural_regex = g_regex_new(":([^:]+):", G_REGEX_OPTIMIZE, 0, NULL);
 	action_star_regex = g_regex_new("^_([^\\*]+)_$", G_REGEX_OPTIMIZE, 0, NULL);
