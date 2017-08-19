@@ -849,32 +849,6 @@ discord_combine_username(const gchar *username, const gchar *discriminator)
 	return g_strconcat(username, "#", discriminator, NULL);
 }
 
-gchar *
-discord_string_get_chunk(const gchar *haystack, gsize len, const gchar *start, const gchar *end)
-{
-	const gchar *chunk_start, *chunk_end;
-	g_return_val_if_fail(haystack && start && end, NULL);
-
-	if (len > 0) {
-		chunk_start = g_strstr_len(haystack, len, start);
-	} else {
-		chunk_start = strstr(haystack, start);
-	}
-
-	g_return_val_if_fail(chunk_start, NULL);
-	chunk_start += strlen(start);
-
-	if (len > 0) {
-		chunk_end = g_strstr_len(chunk_start, len - (chunk_start - haystack), end);
-	} else {
-		chunk_end = strstr(chunk_start, end);
-	}
-
-	g_return_val_if_fail(chunk_end, NULL);
-
-	return g_strndup(chunk_start, chunk_end - chunk_start);
-}
-
 #if PURPLE_VERSION_CHECK(3, 0, 0)
 static void
 discord_update_cookies(DiscordAccount *ya, const GList *cookie_headers)
