@@ -1417,7 +1417,7 @@ discord_replace_mentions_bare(DiscordAccount *da, DiscordGuild *g, gchar *messag
 }
 
 static guint64
-discord_find_role_by_name(DiscordGuild *guild, gchar *name)
+discord_find_role_by_name(DiscordGuild *guild, const gchar *name)
 {
 	if (purple_strequal(name, "everyone")) {
 		return guild->id;
