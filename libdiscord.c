@@ -176,6 +176,8 @@ typedef struct {
 	GHashTable *new_guilds;
 	GHashTable *group_dms;			/* A store of known room_id's -> DiscordChannel's */
 
+	GHashTable *emoji_images;		/* A store of known emoji_id's -> imgstore ID's */
+
 	GSList *http_conns; /**< PurpleHttpConnection to be cancelled on logout */
 	gint frames_since_reconnect;
 	GSList *pending_writes;
@@ -1254,17 +1256,82 @@ discord_replace_channel(const GMatchInfo *match, GString *result, gpointer user_
 	return FALSE;
 }
 
+typedef struct {
+	DiscordAccount *da;
+	int yield;
+	gchar *message;
+	JsonObject *data;
+} DiscordAccountYield;
+
+typedef struct {
+	DiscordAccountYield *ay;
+	int id;
+} DiscordEmojiHandle;
+
+static void discord_resume_process_message(DiscordAccountYield *ay, gchar *escaped_content, gboolean repeat_emojis);
+
+static void
+discord_got_emoji_raw(DiscordAccount *da, JsonNode *node, gpointer user_data)
+{
+	DiscordEmojiHandle *handle = user_data;
+
+	if (node != NULL) {
+		JsonObject *response = json_node_get_object(node);
+		const gchar *response_str;
+		gsize response_len;
+		gpointer response_dup;
+
+		response_str = g_dataset_get_data(node, "raw_body");
+		response_len = json_object_get_int_member(response, "len");
+		response_dup = g_memdup(response_str, response_len);
+
+		int image = purple_imgstore_add_with_id(response_dup, response_len, NULL); /* new */
+
+		g_hash_table_replace_int64(da->emoji_images, handle->id, g_memdup(&image, sizeof(image)));
+	} else {
+		/* TODO: Question mark emoji? */
+		int dead_image = 1;
+		g_hash_table_replace_int64(da->emoji_images, handle->id, g_memdup(&dead_image, sizeof(dead_image)));
+	}
+
+	if ( (--handle->ay->yield) == 0) {
+		discord_resume_process_message(handle->ay, handle->ay->message, TRUE);
+	}
+
+	g_free(handle);
+}
+
 static gboolean
 discord_replace_emoji(const GMatchInfo *match, GString *result, gpointer user_data)
 {
+	DiscordAccountYield *ay = user_data;
+	DiscordAccount *da = ay->da;
+
 	gchar *alt_text = g_match_info_fetch(match, 1);
 	gchar *emoji_id = g_match_info_fetch(match, 2);
+	guint64 id = to_int(emoji_id);
 
-	/* TODO: download and cache emoji as a PurpleStoredImage? */
-	g_string_append_printf(result, "<img src=\"https://cdn.discordapp.com/emojis/%s.png\" alt=\":%s:\"/>", emoji_id, alt_text);
+	/* If the emoji is cached, use it immediately.
+	 * If not, yield and download it
+	 */
 
-	g_free(emoji_id);
-	g_free(alt_text);
+	int* image_p = g_hash_table_lookup_int64(da->emoji_images, id);
+
+	if (image_p && *image_p) {
+		g_string_append_printf(result, "<img id=\"%u\" alt=\":%s:\"/>", *image_p, alt_text);
+		g_free(emoji_id);
+		g_free(alt_text);
+	} else {
+		DiscordEmojiHandle *handle = g_new0(DiscordEmojiHandle, 1);
+		handle->ay = ay;
+		handle->id = id;
+
+		gchar *url = g_strdup_printf("https://cdn.discordapp.com/emojis/%s.png", emoji_id);
+		discord_fetch_url(da, url, NULL, discord_got_emoji_raw, handle);
+		g_free(url);
+
+		ay->yield++;
+	}
 
 	return FALSE;
 }
@@ -1539,22 +1606,58 @@ bail:
 static guint64
 discord_process_message(DiscordAccount *da, JsonObject *data)
 {
+	/* Replace <:emoji:id> with emojis; hoisted for yield */
+	const gchar *content = json_object_get_string_member(data, "content");
+	gchar *escaped_content = purple_markup_escape_text(content, -1);
+
+	DiscordAccountYield *ay = g_new0(DiscordAccountYield, 1);
+	ay->da = da;
+	ay->yield = FALSE;
+	ay->data = data;
+	ay->message = escaped_content;
+
+	gchar *tmp = g_regex_replace_eval(emoji_regex, escaped_content, -1, 0, 0, discord_replace_emoji, ay, NULL);
+
+	if (!ay->yield) {
+		g_free(escaped_content);
+		discord_resume_process_message(ay, tmp, FALSE);
+	}
+
+	return to_int(json_object_get_string_member(data, "id"));
+}
+
+static void
+discord_resume_process_message(DiscordAccountYield *ay, gchar *escaped_content, gboolean repeat_emojis)
+{
+	DiscordAccount *da = ay->da;
+	JsonObject *data = ay->data;
+
+	if (repeat_emojis) {
+		gchar *tmp = g_regex_replace_eval(emoji_regex, escaped_content, -1, 0, 0, discord_replace_emoji, ay, NULL);
+
+		/* Even if it yields, it's too late */
+		if (tmp) {
+			g_free(escaped_content);
+			escaped_content = tmp;
+		}
+	}
+
+	g_free(ay);
+
 	DiscordUser *author = discord_upsert_user(da->new_users, json_object_get_object_member(data, "author"));
 
 	const gchar *channel_id_s = json_object_get_string_member(data, "channel_id");
 	guint64 channel_id = to_int(channel_id_s);
 
-	const gchar *content = json_object_get_string_member(data, "content");
 	const gchar *timestamp_str = json_object_get_string_member(data, "timestamp");
 	time_t timestamp = purple_str_to_time(timestamp_str, FALSE, NULL, NULL, NULL);
 	const gchar *nonce = json_object_get_string_member(data, "nonce");
-	gchar *escaped_content = purple_markup_escape_text(content, -1);
 	JsonArray *attachments = json_object_get_array_member(data, "attachments");
 	JsonArray *mentions = json_object_get_array_member(data, "mentions");
 	PurpleMessageFlags flags;
 	gchar *tmp;
 	gint i;
-
+	
 	DiscordGuild *guild = NULL;
 	discord_get_channel_global_int_guild(da, channel_id, &guild);
 
@@ -1584,14 +1687,6 @@ discord_process_message(DiscordAccount *da, JsonObject *data)
 
 	/* Replace <#channel_id> with channel names */
 	tmp = g_regex_replace_eval(channel_mentions_regex, escaped_content, -1, 0, 0, discord_replace_channel, da, NULL);
-
-	if (tmp != NULL) {
-		g_free(escaped_content);
-		escaped_content = tmp;
-	}
-
-	/* Replace <:emoji:id> with emojis */
-	tmp = g_regex_replace_eval(emoji_regex, escaped_content, -1, 0, 0, discord_replace_emoji, da, NULL);
 
 	if (tmp != NULL) {
 		g_free(escaped_content);
@@ -1694,8 +1789,6 @@ discord_process_message(DiscordAccount *da, JsonObject *data)
 	}
 
 	g_free(escaped_content);
-
-	return to_int(json_object_get_string_member(data, "id"));
 }
 
 struct discord_group_typing_data {
@@ -2784,6 +2877,7 @@ discord_login(PurpleAccount *account)
 	da->new_users = g_hash_table_new_full(g_int64_hash, g_int64_equal, NULL, discord_free_user);
 	da->new_guilds = g_hash_table_new_full(g_int64_hash, g_int64_equal, NULL, discord_free_guild);
 	da->group_dms = g_hash_table_new_full(g_int64_hash, g_int64_equal, NULL, discord_free_channel);
+	da->emoji_images = g_hash_table_new_full(g_int64_hash, g_int64_equal, NULL, g_free);
 
 	discord_build_groups_from_blist(da);
 
@@ -2847,6 +2941,8 @@ discord_close(PurpleConnection *pc)
 	da->new_users = NULL;
 	g_hash_table_unref(da->new_guilds);
 	da->new_guilds = NULL;
+	g_hash_table_unref(da->emoji_images);
+	da->emoji_images = NULL;
 	g_queue_free(da->received_message_queue);
 	da->received_message_queue = NULL;
 
