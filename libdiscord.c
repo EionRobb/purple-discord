@@ -2719,7 +2719,6 @@ discord_got_read_states(DiscordAccount *da, JsonNode *node, gpointer user_data)
 		JsonObject *state = json_array_get_object_element(states, i);
 
 		const gchar *channel = json_object_get_string_member(state, "id");
-		guint64 channel_id = to_int(channel);
 		guint64 last_id = to_int(json_object_get_string_member(state, "last_message_id"));
 		guint mentions = json_object_get_int_member(state, "mention_count");
 
@@ -3842,7 +3841,8 @@ discord_mark_room_messages_read(DiscordAccount *da, guint64 channel_id)
 		purple_debug_info("discord", "Won't ack message ID == 0");
 	}
 
-	guint64 *known_message_id = g_hash_table_lookup(da->read_state, from_int(channel_id));
+	gchar *id = from_int(channel_id);
+	guint64 *known_message_id = g_hash_table_lookup(da->read_state, id);
 
 	if (known_message_id && last_message_id == *known_message_id) {
 		/* Up to date */
@@ -3854,6 +3854,8 @@ discord_mark_room_messages_read(DiscordAccount *da, guint64 channel_id)
 	url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/v6/channels/%" G_GUINT64_FORMAT "/messages/%" G_GUINT64_FORMAT "/ack", channel_id, last_message_id);
 	discord_fetch_url(da, url, "{\"token\":null}", NULL, NULL);
 	g_free(url);
+
+	g_hash_table_replace(da->read_state, id, from_int(last_message_id));
 }
 
 static void
