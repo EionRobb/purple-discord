@@ -3813,9 +3813,12 @@ discord_open_chat(DiscordAccount *da, guint64 id, gchar *name, gboolean present)
 		return NULL;
 	}
 
-	chatconv = purple_conversations_find_chat_with_account(from_int(id), da->account);
+	gchar *id_str = from_int(id);
+	chatconv = purple_conversations_find_chat_with_account(id_str, da->account);
 
 	if (chatconv != NULL && !purple_chat_conversation_has_left(chatconv)) {
+		g_free(id_str);
+
 		if (present) {
 			purple_conversation_present(PURPLE_CONVERSATION(chatconv));
 		}
@@ -3823,7 +3826,9 @@ discord_open_chat(DiscordAccount *da, guint64 id, gchar *name, gboolean present)
 		return NULL;
 	}
 
-	chatconv = purple_serv_got_joined_chat(da->pc, g_int64_hash(&id), from_int(id));
+	chatconv = purple_serv_got_joined_chat(da->pc, g_int64_hash(&id), id_str);
+	g_free(id_str);
+
 	purple_conversation_set_data(PURPLE_CONVERSATION(chatconv), "id", g_memdup(&(id), sizeof(gint64)));
 
 	purple_conversation_present(PURPLE_CONVERSATION(chatconv));
