@@ -1574,6 +1574,17 @@ bail:
 	return g_strdup(who);
 }
 
+static gboolean
+discord_should_open_chat(DiscordAccount *da, DiscordGuild *guild, gboolean mentioned)
+{
+	if (mentioned) {
+		return TRUE;
+	}
+
+	int head_count = guild ? guild->members->len : 0;
+	return head_count < purple_account_get_int(da->account, "large-channel-count", 20);
+}
+
 static guint64
 discord_process_message(DiscordAccount *da, JsonObject *data)
 {
@@ -1707,11 +1718,10 @@ discord_process_message(DiscordAccount *da, JsonObject *data)
 		}
 	} else if (!nonce || !g_hash_table_remove(da->sent_message_ids, nonce)) {
 		/* Open the buffer if it's not already */
-		int head_count = guild ? guild->members->len : 0;
 
 		gboolean mentioned = flags & PURPLE_MESSAGE_NICK;
 
-		if (mentioned || (head_count < purple_account_get_int(da->account, "large-channel-count", 20))) {
+		if (discord_should_open_chat(da, guild, mentioned)) {
 			discord_open_chat(da, channel_id, NULL, mentioned);
 		}
 
@@ -2727,12 +2737,13 @@ discord_got_read_states(DiscordAccount *da, JsonNode *node, gpointer user_data)
 
 		g_hash_table_replace(da->read_state, g_strdup(channel), g_memdup(&last_id, sizeof(last_id)));
 
-		DiscordChannel *chan = discord_get_channel_global_int(da, to_int(channel));
+		DiscordGuild *guild;
+		DiscordChannel *chan = discord_get_channel_global_int_guild(da, to_int(channel), &guild);
 
 		if (mentions && isDM) {
 			discord_get_history(da, channel, from_int(last_id), mentions * 2);
-		} else if (chan && last_id && chan->last_message_id && last_id > chan->last_message_id) {
-			discord_open_chat(da, chan->id, NULL, mentions);
+		} else if (chan && last_id && chan->last_message_id && last_id < chan->last_message_id) {
+			discord_open_chat(da, chan->id, NULL, discord_should_open_chat(da, guild, mentions));
 		}
 	}
 }
