@@ -524,24 +524,30 @@ static gchar *
 discord_alloc_nickname(DiscordUser *user, DiscordGuild *guild, const gchar *suggested_nick)
 {
 	const gchar *base_nick = suggested_nick ? suggested_nick : user->name;
-	gchar *nick;
+	gchar *nick = NULL;
 
 	if (base_nick == NULL) {
 		return NULL;
 	}
+
+	DiscordUser *existing = g_hash_table_lookup(guild->nicknames_rev, base_nick);
 	
-	if (g_hash_table_lookup(guild->nicknames_rev, base_nick)) {
+	if (existing && existing->id != user->id) {
 		/* Ambiguous; try with the discriminator */
 
 		nick = g_strdup_printf("%s#%04d", base_nick, user->discriminator);
 
-		if (g_hash_table_lookup(guild->nicknames_rev, nick)) {
+		existing = g_hash_table_lookup(guild->nicknames_rev, nick);
+
+		if (existing && existing->id != user->id) {
 			/* Ambiguous; use the full tag */
 
 			g_free(nick);
 			nick = g_strdup_printf("%s (%s#%04d)", base_nick, user->name, user->discriminator);
 		}
-	} else {
+	}
+	
+	if (!nick) {
 		nick = g_strdup(base_nick);
 	}
 
