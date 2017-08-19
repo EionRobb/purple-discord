@@ -1382,18 +1382,16 @@ discord_make_mention(const GMatchInfo *match, GString *result, gpointer user_dat
 	return FALSE;
 }
 
-static gchar *
-discord_make_mentions(DiscordAccount *da, DiscordGuild *guild, gchar *message)
+static void
+discord_make_mentions(DiscordAccount *da, DiscordGuild *guild, gchar **message)
 {
 	DiscordAccountGuild ag = {.account = da, .guild = guild };
-	gchar *tmp = g_regex_replace_eval(natural_mention_regex, message, -1, 0, 0, discord_make_mention, &ag, NULL);
+	gchar *tmp = g_regex_replace_eval(natural_mention_regex, *message, -1, 0, 0, discord_make_mention, &ag, NULL);
 
 	if (tmp != NULL) {
-		g_free(message);
-		return tmp;
+		g_free(*message);
+		*message = tmp;
 	}
-
-	return message;
 }
 
 #define HTML_TOGGLE_OUT(f, a, b)           \
@@ -4104,6 +4102,8 @@ discord_chat_send(PurpleConnection *pc, gint id,
 	DiscordGuild *guild = NULL;
 	discord_get_channel_global_int_guild(da, room_id, &guild);
 	
+	discord_make_mentions(da, guild, &d_message);
+
 	if(guild) {
 		g_return_val_if_fail(guild, -1);
 
@@ -4114,8 +4114,6 @@ discord_chat_send(PurpleConnection *pc, gint id,
 			d_message = tmp;
 		}
 	}
-
-	d_message = discord_make_mentions(da, guild, d_message);
 
 	g_return_val_if_fail(discord_get_channel_global_int(da, room_id), -1); /* TODO rejoin room? */
 	ret = discord_conversation_send_message(da, room_id, d_message);
