@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: 0.9\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2017-08-20 11:37-0700\n"
+"POT-Creation-Date: 2017-08-20 12:12-0700\n"
 "PO-Revision-Date: 2017-08-11 10:24-0700\n"
 "Last-Translator: Alyssa Rosenzweig <alyssa@rosenzweig.io>\n"
 "Language-Team: es <LL@li.org>\n"
@@ -20,10 +20,6 @@ msgstr ""
 msgid "Connection error: %s."
 msgstr "Error de conexión: %s"
 
-#: ../libdiscord.c:2279 ../libdiscord.c:2282
-msgid "Discord"
-msgstr ""
-
 #: ../libdiscord.c:2367 ../libdiscord.c:4472
 msgid "ID"
 msgstr "identificación"
@@ -35,6 +31,10 @@ msgstr "Nombre"
 #: ../libdiscord.c:2373
 msgid "Room Type"
 msgstr "Tipo de sala"
+
+#: ../libdiscord.c:2830
+msgid "Cancelled 2FA auth"
+msgstr ""
 
 #: ../libdiscord.c:2853
 msgid "Two-factor authentication"
@@ -59,6 +59,26 @@ msgstr "Iniciar sesión"
 #, fuzzy
 msgid "_Cancel"
 msgstr "Cancelar"
+
+#: ../libdiscord.c:2877
+msgid "Bad username/password"
+msgstr ""
+
+#: ../libdiscord.c:2888
+msgid "Username needs to be an email address"
+msgstr ""
+
+#: ../libdiscord.c:3241
+msgid "Reauthentication required"
+msgstr ""
+
+#: ../libdiscord.c:3339
+msgid "Lost connection to server"
+msgstr ""
+
+#: ../libdiscord.c:3383
+msgid "Couldn't connect to gateway"
+msgstr ""
 
 #: ../libdiscord.c:3528
 msgid "Channel ID"
@@ -104,7 +124,8 @@ msgstr "No interrumpir"
 msgid "Status"
 msgstr "Status"
 
-#: ../libdiscord.c:4488
+#: ../libdiscord.c:4488 ../libdiscord.c:4568 ../libdiscord.c:4571
+#: ../libdiscord.c:4574 ../libdiscord.c:4577
 msgid "In-Game"
 msgstr "En juego"
 
@@ -132,6 +153,18 @@ msgstr "Jugando"
 #: ../libdiscord.c:4682
 msgid "Email address..."
 msgstr "Dirección de correo electrónico"
+
+#: ../libdiscord.c:4692
+msgid "Use status message as in-game info"
+msgstr "Usar el mensaje de status como la información del juego."
+
+#: ../libdiscord.c:4695
+msgid "Auto-create rooms on buddy list"
+msgstr ""
+
+#: ../libdiscord.c:4698
+msgid "Number of users in a large channel"
+msgstr ""
 
 #: ../libdiscord.c:4732 ../libdiscord.c:4733
 msgid "Join a server"
@@ -181,14 +214,14 @@ msgstr ""
 msgid "topic <description>:  Set the channel topic description"
 msgstr ""
 
-#~ msgid "Use status message as in-game info"
-#~ msgstr "Usar el mensaje de status como la información del juego."
+#: ../libdiscord.c:5129
+msgid "Protocol"
+msgstr "Protocolo"
 
-#~ msgid "Protocol"
-#~ msgstr "Protocolo"
+#: ../libdiscord.c:5130
+msgid "Discord Protocol Plugins."
+msgstr "Plug-in del Protocolo de Discord"
 
-#~ msgid "Discord Protocol Plugins."
-#~ msgstr "Plug-in del Protocolo de Discord"
-
-#~ msgid "Adds Discord protocol support to libpurple."
-#~ msgstr "Le añade el protocolo de Discord a libpurple."
+#: ../libdiscord.c:5131
+msgid "Adds Discord protocol support to libpurple."
+msgstr "Le añade el protocolo de Discord a libpurple."
