@@ -1,1 +1,1 @@
-msgfmt es.po > es.mo
+msgfmt es.po -o es.mo
