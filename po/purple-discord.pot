@@ -8,162 +8,173 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2017-08-11 09:45-0700\n"
+"POT-Creation-Date: 2017-08-20 11:37-0700\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
 "Language: \n"
 "MIME-Version: 1.0\n"
-"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Type: text/plain; charset=CHARSET\n"
 "Content-Transfer-Encoding: 8bit\n"
 
-#. connection error - unersolvable dns name, non existing server
-#: ../libdiscord.c:1123
+#: ../libdiscord.c:997
 #, c-format
 msgid "Connection error: %s."
 msgstr ""
 
-#: ../libdiscord.c:2052 ../libdiscord.c:3877
+#: ../libdiscord.c:2279 ../libdiscord.c:2282
+msgid "Discord"
+msgstr ""
+
+#: ../libdiscord.c:2367 ../libdiscord.c:4472
 msgid "ID"
 msgstr ""
 
-#: ../libdiscord.c:2055 ../libdiscord.c:3086
+#: ../libdiscord.c:2370 ../libdiscord.c:3533
 msgid "Name"
 msgstr ""
 
-#: ../libdiscord.c:2058
+#: ../libdiscord.c:2373
 msgid "Room Type"
 msgstr ""
 
-#: ../libdiscord.c:2488
+#: ../libdiscord.c:2853
 msgid "Two-factor authentication"
 msgstr ""
 
-#: ../libdiscord.c:2489
+#: ../libdiscord.c:2854
 msgid "Enter Discord auth code"
 msgstr ""
 
-#: ../libdiscord.c:2490
+#: ../libdiscord.c:2855
 msgid "You can get this token from your two-factor authentication mobile app."
 msgstr ""
 
-#: ../libdiscord.c:2492
-msgid "Login"
+#: ../libdiscord.c:2857
+msgid "_Login"
 msgstr ""
 
-#: ../libdiscord.c:2493 ../libdiscord.c:4098
-msgid "Cancel"
+#: ../libdiscord.c:2858
+msgid "_Cancel"
 msgstr ""
 
-#: ../libdiscord.c:3081
+#: ../libdiscord.c:3528
 msgid "Channel ID"
 msgstr ""
 
-#: ../libdiscord.c:3395
+#: ../libdiscord.c:3873
 msgid "Bad channel type"
 msgstr ""
 
-#: ../libdiscord.c:3395
+#: ../libdiscord.c:3873
 msgid "Cannot join a voice channel as text"
 msgstr ""
 
-#: ../libdiscord.c:3686
+#: ../libdiscord.c:4279
 msgid "Could not create conversation"
 msgstr ""
 
-#: ../libdiscord.c:3879
+#: ../libdiscord.c:4474
 msgid "Full Username"
 msgstr ""
 
-#: ../libdiscord.c:3880
+#: ../libdiscord.c:4475
 msgid "Username"
 msgstr ""
 
-#: ../libdiscord.c:3884 ../libdiscord.c:3953 ../libdiscord.c:3968
+#: ../libdiscord.c:4479 ../libdiscord.c:4552 ../libdiscord.c:4568
 msgid "Online"
 msgstr ""
 
-#: ../libdiscord.c:3885 ../libdiscord.c:3956 ../libdiscord.c:3971
+#: ../libdiscord.c:4480 ../libdiscord.c:4555 ../libdiscord.c:4571
 msgid "Idle"
 msgstr ""
 
-#: ../libdiscord.c:3886 ../libdiscord.c:3965 ../libdiscord.c:3977
+#: ../libdiscord.c:4481 ../libdiscord.c:4564 ../libdiscord.c:4577
 msgid "Offline"
 msgstr ""
 
-#: ../libdiscord.c:3887 ../libdiscord.c:3959 ../libdiscord.c:3974
+#: ../libdiscord.c:4482 ../libdiscord.c:4558 ../libdiscord.c:4574
 msgid "Do Not Disturb"
 msgstr ""
 
-#: ../libdiscord.c:3890 ../libdiscord.c:4032
+#: ../libdiscord.c:4485 ../libdiscord.c:4664
 msgid "Status"
 msgstr ""
 
-#: ../libdiscord.c:3892
+#: ../libdiscord.c:4488
 msgid "In-Game"
 msgstr ""
 
-#: ../libdiscord.c:3896
+#: ../libdiscord.c:4492
 msgid "Connected Accounts"
 msgstr ""
 
-#: ../libdiscord.c:3908
+#: ../libdiscord.c:4506
 msgid "Mutual Servers"
 msgstr ""
 
-#: ../libdiscord.c:3962
+#: ../libdiscord.c:4561
 msgid "Invisible"
 msgstr ""
 
-#: ../libdiscord.c:3997
+#: ../libdiscord.c:4597
 #, c-format
 msgid "Playing %s"
 msgstr ""
 
-#: ../libdiscord.c:4037
+#: ../libdiscord.c:4669
 msgid "Playing"
 msgstr ""
 
-#: ../libdiscord.c:4050
+#: ../libdiscord.c:4682
 msgid "Email address..."
 msgstr ""
 
-#: ../libdiscord.c:4060
-msgid "Use status message as in-game info"
-msgstr ""
-
-#: ../libdiscord.c:4093 ../libdiscord.c:4094
+#: ../libdiscord.c:4732 ../libdiscord.c:4733
 msgid "Join a server"
 msgstr ""
 
-#: ../libdiscord.c:4095
+#: ../libdiscord.c:4734
 msgid "Enter the join URL here"
 msgstr ""
 
-#: ../libdiscord.c:4097
+#: ../libdiscord.c:4736
 msgid "Join"
 msgstr ""
 
-#: ../libdiscord.c:4116
+#: ../libdiscord.c:4737
+msgid "Cancel"
+msgstr ""
+
+#: ../libdiscord.c:4754
 msgid "Join a server..."
 msgstr ""
 
-#: ../libdiscord.c:4173
+#: ../libdiscord.c:4805
+msgid "nick <new nickname>:  Changes nickname on a server"
+msgstr ""
+
+#: ../libdiscord.c:4811
+msgid "kick <username>:  Remove someone from channel"
+msgstr ""
+
+#: ../libdiscord.c:4817
 msgid "leave:  Leave the channel"
 msgstr ""
 
-#: ../libdiscord.c:4178
+#: ../libdiscord.c:4822
 msgid "part:  Leave the channel"
 msgstr ""
 
-#: ../libdiscord.c:4479
-msgid "Protocol"
+#: ../libdiscord.c:4828
+msgid "mute <username>:  Mute someone in channel"
 msgstr ""
 
-#: ../libdiscord.c:4480
-msgid "Discord Protocol Plugins."
+#: ../libdiscord.c:4833
+msgid "unmute <username>:  Un-mute someone in channel"
 msgstr ""
 
-#: ../libdiscord.c:4481
-msgid "Adds Discord protocol support to libpurple."
+#: ../libdiscord.c:4838
+msgid "topic <description>:  Set the channel topic description"
 msgstr ""
