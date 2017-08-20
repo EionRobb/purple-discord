@@ -1260,6 +1260,9 @@ discord_replace_channel(const GMatchInfo *match, GString *result, gpointer user_
 	return FALSE;
 }
 
+#define COLOR_START "<font color=\"#%06X\">"
+#define COLOR_END "</font>"
+
 static gboolean
 discord_replace_role(const GMatchInfo *match, GString *result, gpointer user_data)
 {
@@ -1279,7 +1282,7 @@ discord_replace_role(const GMatchInfo *match, GString *result, gpointer user_dat
 		/* TODO make this a clickable link */
 
 		if (role->color) {
-			g_string_append_printf(result, "<font color=\"#%06X\"><b>@%s</b></font>", role->color, role->name);
+			g_string_append_printf(result, COLOR_START "<b>@%s</b>" COLOR_END, role->color, role->name);
 		} else {
 			g_string_append_printf(result, "<b>@%s</b>", role->name);
 		}
@@ -4494,9 +4497,24 @@ discord_got_info(DiscordAccount *da, JsonNode *node, gpointer user_data)
 	for (i = json_array_get_length(mutual_guilds) - 1; i >= 0; i--) {
 		JsonObject *guild_o = json_array_get_object_element(mutual_guilds, i);
 		guint64 id = to_int(json_object_get_string_member(guild_o, "id"));
-		DiscordGuild *guild = discord_get_guild(da, id);
 
-		purple_notify_user_info_add_pair_html(user_info, NULL, guild->name);
+		DiscordGuild *guild = discord_get_guild(da, id);
+		DiscordGuildMembership *membership = g_hash_table_lookup_int64(user->guild_memberships, id);
+
+		purple_notify_user_info_add_pair_html(user_info, guild->name, NULL);
+
+		if (membership) {
+			GString *role_str = g_string_new(NULL);
+
+			for (guint i = 0; i < membership->roles->len; i++) {
+				guint64 role_id = g_array_index(membership->roles, guint64, i);
+				DiscordGuildRole *role = g_hash_table_lookup_int64(guild->roles, role_id);
+
+				g_string_append_printf(role_str, "[" COLOR_START "%s" COLOR_END "] ", role->color, role->name);
+			}
+
+			purple_notify_user_info_add_pair_html(user_info, NULL, g_string_free(role_str, FALSE));
+		}
 	}
 
 	purple_notify_userinfo(da->pc, buffer->str, user_info, NULL, NULL);
