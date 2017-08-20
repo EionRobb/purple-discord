@@ -26,7 +26,8 @@ LDFLAGS ?= -Wl,-z,relro
 
 CFLAGS  += -std=c99 -DDISCORD_PLUGIN_VERSION='"$(PLUGIN_VERSION)"'
 
-CFLAGS += -DLOCALEDIR=\"./po\"
+# CFLAGS += -DLOCALEDIR=\"$(PIDGIN_DATADIR)/locale\"
+CFLAGS += -DLOCALEDIR=\"/usr/share/locale/\"
 
 # Do some nasty OS and purple version detection
 ifeq ($(OS),Windows_NT)

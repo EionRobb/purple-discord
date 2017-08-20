@@ -36,11 +36,11 @@
 
 #define ENABLE_NLS 1
 #ifdef ENABLE_NLS
-#	define GETTEXT_PACKAGE "purple-discord"
-#	include <glib/gi18n-lib.h>
+#      define GETTEXT_PACKAGE "purple-discord"
+#      include <glib/gi18n-lib.h>
 #else
-#	define _(a) (a)
-#	define N_(a) (a)
+#      define _(a) (a)
+#      define N_(a) (a)
 #endif
 
 #include "glib_compat.h"
@@ -2854,8 +2854,8 @@ discord_login_response(DiscordAccount *da, JsonNode *node, gpointer user_data)
 								 _("Enter Discord auth code"),
 								 _("You can get this token from your two-factor authentication mobile app."),
 								 NULL, FALSE, FALSE, "",
-								 _("_Login"), G_CALLBACK(discord_mfa_text_entry),
-								 _("_Cancel"), G_CALLBACK(discord_mfa_cancel),
+								 _("Login"), G_CALLBACK(discord_mfa_text_entry),
+								 _("Cancel"), G_CALLBACK(discord_mfa_cancel),
 								 purple_request_cpar_from_connection(da->pc),
 								 da);
 			return;
@@ -4875,7 +4875,7 @@ static void
 plugin_init(PurplePlugin *plugin)
 {
 
-#if ENABLE_NLS
+#ifdef ENABLE_NLS
 	bindtextdomain(GETTEXT_PACKAGE, LOCALEDIR);
 	bind_textdomain_codeset(GETTEXT_PACKAGE, "UTF-8");
 #endif
