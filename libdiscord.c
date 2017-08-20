@@ -169,6 +169,7 @@ typedef struct {
 	GHashTable *one_to_ones;		/* A store of known room_id's -> username's */
 	GHashTable *one_to_ones_rev;	/* A store of known usernames's -> room_id's */
 	GHashTable *last_message_id_dm; /* A store of known room_id's -> last_message_id's */
+	GHashTable *read_state;			/* A store of known room_id's -> read_state */
 	GHashTable *sent_message_ids;   /* A store of message id's that we generated from this instance */
 	GHashTable *result_callbacks;   /* Result ID -> Callback function */
 	GQueue *received_message_queue; /* A store of the last 10 received message id's for de-dup */
@@ -599,7 +600,7 @@ discord_upsert_guild(GHashTable *guild_table, JsonObject *json)
 static DiscordChannel *
 discord_get_channel_global_int_guild(DiscordAccount *da, guint64 id, DiscordGuild **o_guild)
 {
-	/* Check for group DM first to avoid iterating guilds */
+	/* Check for DM first to avoid iterating guilds */
 	DiscordChannel *group_dm = g_hash_table_lookup_int64(da->group_dms, id);
 	if(group_dm) return group_dm;
 
@@ -1647,6 +1648,17 @@ bail:
 	return g_strdup(who);
 }
 
+static gboolean
+discord_should_open_chat(DiscordAccount *da, DiscordGuild *guild, gboolean mentioned)
+{
+	if (mentioned) {
+		return TRUE;
+	}
+
+	int head_count = guild ? guild->members->len : 0;
+	return head_count < purple_account_get_int(da->account, "large-channel-count", 20);
+}
+
 static guint64
 discord_process_message(DiscordAccount *da, JsonObject *data)
 {
@@ -1668,7 +1680,9 @@ discord_process_message(DiscordAccount *da, JsonObject *data)
 	gint i;
 
 	DiscordGuild *guild = NULL;
-	discord_get_channel_global_int_guild(da, channel_id, &guild);
+	DiscordChannel *channel = discord_get_channel_global_int_guild(da, channel_id, &guild);
+
+	channel->last_message_id = to_int(json_object_get_string_member(data, "id"));
 
 	if (author->id == da->self_user_id) {
 		flags = PURPLE_MESSAGE_SEND | PURPLE_MESSAGE_REMOTE_SEND | PURPLE_MESSAGE_DELAYED;
@@ -1792,11 +1806,10 @@ discord_process_message(DiscordAccount *da, JsonObject *data)
 		}
 	} else if (!nonce || !g_hash_table_remove(da->sent_message_ids, nonce)) {
 		/* Open the buffer if it's not already */
-		int head_count = guild ? guild->members->len : 0;
 
 		gboolean mentioned = flags & PURPLE_MESSAGE_NICK;
 
-		if (mentioned || (head_count < purple_account_get_int(da->account, "large-channel-count", 20))) {
+		if (discord_should_open_chat(da, guild, mentioned)) {
 			discord_open_chat(da, channel_id, NULL, mentioned);
 		}
 
@@ -1948,7 +1961,7 @@ discord_got_group_dm(DiscordAccount *da, JsonObject *data)
 	if (purple_account_get_bool(da->account, "populate-blist", TRUE)) {
 		GHashTable *components = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
 
-		g_hash_table_replace(components, g_strdup("id"), g_strdup_printf("%" G_GUINT64_FORMAT, channel->id));
+		g_hash_table_replace(components, g_strdup("id"), from_int(channel->id));
 		g_hash_table_replace(components, g_strdup("name"), g_strdup(channel->name));
 
 		PurpleGroup *group = discord_get_or_create_default_group();
@@ -2772,20 +2785,20 @@ discord_got_read_states(DiscordAccount *da, JsonNode *node, gpointer user_data)
 		JsonObject *state = json_array_get_object_element(states, i);
 
 		const gchar *channel = json_object_get_string_member(state, "id");
-		const gchar *last_id = json_object_get_string_member(state, "last_message_id");
+		guint64 last_id = to_int(json_object_get_string_member(state, "last_message_id"));
 		guint mentions = json_object_get_int_member(state, "mention_count");
+		gboolean isDM = g_hash_table_contains(da->one_to_ones, channel);
 
-		if (mentions) {
-			gboolean isDM = g_hash_table_contains(da->one_to_ones, channel);
+		g_hash_table_replace(da->read_state, g_strdup(channel), g_memdup(&last_id, sizeof(last_id)));
 
-			if (isDM) {
-				discord_get_history(da, channel, last_id, mentions * 2);
-			} else {
-				/* TODO: fetch channel history */
-				DiscordChannel *dchannel = discord_get_channel_global(da, channel);
-				if (dchannel != NULL) {
-					purple_debug_misc("discord", "%d unhandled mentions in channel %s\n", mentions, dchannel->name);
-				}
+		DiscordGuild *guild;
+		DiscordChannel *chan = discord_get_channel_global_int_guild(da, to_int(channel), &guild);
+
+		if (mentions && isDM) {
+			discord_get_history(da, channel, from_int(last_id), mentions * 2);
+		} else if (chan && last_id && chan->last_message_id && last_id < chan->last_message_id) {
+			if (purple_account_get_int(da->account, "backlog-maximum", 100)) {
+				discord_open_chat(da, chan->id, NULL, discord_should_open_chat(da, guild, mentions));
 			}
 		}
 	}
@@ -2892,15 +2905,10 @@ discord_login(PurpleAccount *account)
 	da->pc = pc;
 	da->cookie_table = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
 
-	da->last_load_last_message_id = purple_account_get_int(account, "last_message_id_high", 0);
-
-	if (da->last_load_last_message_id != 0) {
-		da->last_load_last_message_id = (da->last_load_last_message_id << 32) | ((guint64) purple_account_get_int(account, "last_message_id_low", 0) & 0xFFFFFFFF);
-	}
-
 	da->one_to_ones = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
 	da->one_to_ones_rev = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
 	da->last_message_id_dm = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
+	da->read_state = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
 	da->sent_message_ids = g_hash_table_new_full(g_str_insensitive_hash, g_str_insensitive_equal, g_free, NULL);
 	da->result_callbacks = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
 	da->received_message_queue = g_queue_new();
@@ -2963,6 +2971,8 @@ discord_close(PurpleConnection *pc)
 	da->one_to_ones_rev = NULL;
 	g_hash_table_unref(da->last_message_id_dm);
 	da->last_message_id_dm = NULL;
+	g_hash_table_unref(da->read_state);
+	da->read_state = NULL;
 	g_hash_table_unref(da->sent_message_ids);
 	da->sent_message_ids = NULL;
 	g_hash_table_unref(da->result_callbacks);
@@ -3592,13 +3602,17 @@ discord_get_chat_name(GHashTable *data)
 	return g_strdup(temp);
 }
 
-static void discord_set_room_last_id(DiscordAccount *da, guint64 channel_id, guint64 last_id);
+typedef struct {
+	DiscordChannel *channel;
+	int remaining_messages;
+} HistoryFetch;
 
 static void
 discord_got_history_of_room(DiscordAccount *da, JsonNode *node, gpointer user_data)
 {
 	JsonArray *messages = json_node_get_array(node);
-	DiscordChannel *channel = user_data;
+	HistoryFetch *fetch = user_data;
+	DiscordChannel *channel = fetch->channel;
 	gint i, len = json_array_get_length(messages);
 	guint64 last_message = channel->last_message_id;
 	guint64 rolling_last_message_id = 0;
@@ -3616,15 +3630,20 @@ discord_got_history_of_room(DiscordAccount *da, JsonNode *node, gpointer user_da
 	}
 
 	if (rolling_last_message_id != 0) {
-		discord_set_room_last_id(da, channel->id, rolling_last_message_id);
-
 		if (rolling_last_message_id < last_message) {
 			/* Request the next 100 messages */
-			gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/v6/channels/%" G_GUINT64_FORMAT "/messages?limit=100&after=%" G_GUINT64_FORMAT, channel->id, rolling_last_message_id);
-			discord_fetch_url(da, url, NULL, discord_got_history_of_room, channel);
-			g_free(url);
+			fetch->remaining_messages -= len;
+
+			if(fetch->remaining_messages > 0) {
+				gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/v6/channels/%" G_GUINT64_FORMAT "/messages?limit=100&after=%" G_GUINT64_FORMAT, channel->id, rolling_last_message_id);
+				discord_fetch_url(da, url, NULL, discord_got_history_of_room, fetch);
+				g_free(url);
+				return;
+			}
 		}
 	}
+
+	g_free(fetch);
 }
 
 /* identical endpoint as above, but not rolling */
@@ -3640,66 +3659,6 @@ discord_got_history_static(DiscordAccount *da, JsonNode *node, gpointer user_dat
 
 		discord_process_message(da, message);
 	}
-}
-
-/* libpurple can't store a 64bit int on a 32bit machine, so convert to
- * something more usable instead (puke). also needs to work cross platform, in
- * case the accounts.xml is being shared (double puke)
- */
-
-static guint64
-discord_get_room_last_id(DiscordAccount *da, guint64 id)
-{
-	guint64 last_message_id = da->last_load_last_message_id;
-	PurpleBlistNode *blistnode = NULL;
-	gchar *channel_id = g_strdup_printf("%" G_GUINT64_FORMAT, id);
-
-	if (g_hash_table_contains(da->one_to_ones, channel_id)) {
-		/* is a direct message */
-		blistnode = PURPLE_BLIST_NODE(purple_blist_find_buddy(da->account, g_hash_table_lookup(da->one_to_ones, channel_id)));
-	} else {
-		/* twas a group chat */
-		blistnode = PURPLE_BLIST_NODE(purple_blist_find_chat(da->account, channel_id));
-	}
-
-	if (blistnode != NULL) {
-		guint64 last_room_id = purple_blist_node_get_int(blistnode, "last_message_id_high");
-
-		if (last_room_id != 0) {
-			last_room_id = (last_room_id << 32) | ((guint64) purple_blist_node_get_int(blistnode, "last_message_id_low") & 0xFFFFFFFF);
-
-			last_message_id = MAX(da->last_message_id, last_room_id);
-		}
-	}
-
-	g_free(channel_id);
-	return last_message_id;
-}
-
-static void
-discord_set_room_last_id(DiscordAccount *da, guint64 id, guint64 last_id)
-{
-	PurpleBlistNode *blistnode = NULL;
-	gchar *channel_id = g_strdup_printf("%" G_GUINT64_FORMAT, id);
-
-	if (g_hash_table_contains(da->one_to_ones, channel_id)) {
-		/* is a direct message */
-		blistnode = PURPLE_BLIST_NODE(purple_blist_find_buddy(da->account, g_hash_table_lookup(da->one_to_ones, channel_id)));
-	} else {
-		/* twas a group chat */
-		blistnode = PURPLE_BLIST_NODE(purple_blist_find_chat(da->account, channel_id));
-	}
-
-	if (blistnode != NULL) {
-		purple_blist_node_set_int(blistnode, "last_message_id_high", last_id >> 32);
-		purple_blist_node_set_int(blistnode, "last_message_id_low", last_id & 0xFFFFFFFF);
-	}
-
-	da->last_message_id = MAX(da->last_message_id, last_id);
-	purple_account_set_int(da->account, "last_message_id_high", last_id >> 32);
-	purple_account_set_int(da->account, "last_message_id_low", last_id & 0xFFFFFFFF);
-
-	g_free(channel_id);
 }
 
 /* TODO: Cache better, sane defaults */
@@ -3890,6 +3849,22 @@ discord_open_chat(DiscordAccount *da, guint64 id, gchar *name, gboolean present)
 	discord_fetch_url(da, url, NULL, discord_got_channel_info, channel);
 	g_free(url);
 
+	/* Get any missing messages */
+	guint64 *last_message_id = g_hash_table_lookup(da->read_state, from_int(id));
+
+	if (last_message_id && *last_message_id != 0 && channel->last_message_id > *last_message_id) {
+		HistoryFetch data = {
+			.channel = channel,
+			.remaining_messages = purple_account_get_int(da->account, "backlog-maximum", 100)
+		};
+
+		if(data.remaining_messages) {
+			gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/v6/channels/%" G_GUINT64_FORMAT "/messages?limit=100&after=%" G_GUINT64_FORMAT, id, *last_message_id);
+			discord_fetch_url(da, url, NULL, discord_got_history_of_room, g_memdup(&data, sizeof(data)));
+			g_free(url);
+		}
+	}
+
 	return channel;
 }
 
@@ -3899,23 +3874,9 @@ discord_join_chat(PurpleConnection *pc, GHashTable *chatdata)
 	DiscordAccount *da = purple_connection_get_protocol_data(pc);
 
 	guint64 id = to_int(g_hash_table_lookup(chatdata, "id"));
-
 	gchar *name = (gchar *) g_hash_table_lookup(chatdata, "name");
 
-	DiscordChannel *channel = discord_open_chat(da, id, name, TRUE);
-
-	if (!channel) {
-		return;
-	}
-
-	/* Get any missing messages */
-	guint64 last_message_id = discord_get_room_last_id(da, id);
-
-	if (last_message_id != 0 && channel->last_message_id > last_message_id) {
-		gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/v6/channels/%" G_GUINT64_FORMAT "/messages?limit=100&after=%" G_GUINT64_FORMAT, id, last_message_id);
-		discord_fetch_url(da, url, NULL, discord_got_history_of_room, channel);
-		g_free(url);
-	}
+	discord_open_chat(da, id, name, TRUE);
 }
 
 static void
@@ -3948,20 +3909,21 @@ discord_mark_room_messages_read(DiscordAccount *da, guint64 channel_id)
 		purple_debug_info("discord", "Won't ack message ID == 0");
 	}
 
-	guint64 known_message_id = discord_get_room_last_id(da, channel_id);
+	gchar *id = from_int(channel_id);
+	guint64 *known_message_id = g_hash_table_lookup(da->read_state, id);
 
-	if (last_message_id == known_message_id) {
+	if (known_message_id && last_message_id == *known_message_id) {
 		/* Up to date */
 		return;
 	}
-
-	discord_set_room_last_id(da, channel_id, last_message_id);
 
 	gchar *url;
 
 	url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/v6/channels/%" G_GUINT64_FORMAT "/messages/%" G_GUINT64_FORMAT "/ack", channel_id, last_message_id);
 	discord_fetch_url(da, url, "{\"token\":null}", NULL, NULL);
 	g_free(url);
+
+	g_hash_table_replace(da->read_state, id, g_memdup(&last_message_id, sizeof(last_message_id)));
 }
 
 static void
@@ -4680,6 +4642,9 @@ discord_add_account_options(GList *account_options)
 	account_options = g_list_append(account_options, option);
 
 	option = purple_account_option_int_new(N_("Number of users in a large channel"), "large-channel-count", 20);
+	account_options = g_list_append(account_options, option);
+
+	option = purple_account_option_int_new(N_("Maximum number of backlog messages to fetch"), "backlog-maximum", 100);
 	account_options = g_list_append(account_options, option);
 
 	return account_options;
