@@ -4445,7 +4445,6 @@ discord_fake_group_rename(PurpleConnection *pc, const char *old_name, PurpleGrou
 	/* Do nothing to stop the remove+add behaviour */
 }
 
-/* TODO can we optimize this out? */
 static void
 discord_got_info(DiscordAccount *da, JsonNode *node, gpointer user_data)
 {
@@ -4474,8 +4473,7 @@ discord_got_info(DiscordAccount *da, JsonNode *node, gpointer user_data)
 	}
 
 	if (json_array_get_length(connected_accounts)) {
-		purple_notify_user_info_add_pair_html(user_info, NULL, NULL);
-		purple_notify_user_info_add_pair_html(user_info, _("Connected Accounts"), NULL);
+		purple_notify_user_info_add_section_break(user_info);
 	}
 
 	for (i = json_array_get_length(connected_accounts) - 1; i >= 0; i--) {
@@ -4490,8 +4488,7 @@ discord_got_info(DiscordAccount *da, JsonNode *node, gpointer user_data)
 	}
 
 	if (json_array_get_length(mutual_guilds)) {
-		purple_notify_user_info_add_pair_html(user_info, NULL, NULL);
-		purple_notify_user_info_add_pair_html(user_info, _("Mutual Servers"), NULL);
+		purple_notify_user_info_add_section_break(user_info);
 	}
 
 	for (i = json_array_get_length(mutual_guilds) - 1; i >= 0; i--) {
@@ -4501,19 +4498,22 @@ discord_got_info(DiscordAccount *da, JsonNode *node, gpointer user_data)
 		DiscordGuild *guild = discord_get_guild(da, id);
 		DiscordGuildMembership *membership = g_hash_table_lookup_int64(user->guild_memberships, id);
 
-		purple_notify_user_info_add_pair_html(user_info, guild->name, NULL);
-
 		if (membership) {
-			GString *role_str = g_string_new(NULL);
+			gchar *name = membership->nick;
+			if (!name || !strlen(name)) {
+				name = user->name;
+			}
+
+			GString *role_str = g_string_new(name);
 
 			for (guint i = 0; i < membership->roles->len; i++) {
 				guint64 role_id = g_array_index(membership->roles, guint64, i);
 				DiscordGuildRole *role = g_hash_table_lookup_int64(guild->roles, role_id);
 
-				g_string_append_printf(role_str, "[" COLOR_START "%s" COLOR_END "] ", role->color, role->name);
+				g_string_append_printf(role_str, " [" COLOR_START "%s" COLOR_END "]", role->color, role->name);
 			}
 
-			purple_notify_user_info_add_pair_html(user_info, NULL, g_string_free(role_str, FALSE));
+			purple_notify_user_info_add_pair_html(user_info, guild->name, g_string_free(role_str, FALSE));
 		}
 	}
 
