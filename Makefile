@@ -26,15 +26,15 @@ LDFLAGS ?= -Wl,-z,relro
 
 CFLAGS  += -std=c99 -DDISCORD_PLUGIN_VERSION='"$(PLUGIN_VERSION)"'
 
+LOCALEDIR = $(shell $(PKG_CONFIG) --variable=datadir purple)/locale
+CFLAGS += -DLOCALEDIR="$(LOCALEDIR)"
 
 # Do some nasty OS and purple version detection
 ifeq ($(OS),Windows_NT)
-  CFLAGS += -DLOCALEDIR="`$(PKG_CONFIG) --variable=datadir purple`/locale"
   DISCORD_TARGET = libdiscord.dll
   DISCORD_DEST = "$(PROGRAMFILES)/Pidgin/plugins"
   DISCORD_ICONS_DEST = "$(PROGRAMFILES)/Pidgin/pixmaps/pidgin/protocols"
 else
-  CFLAGS += -DLOCALEDIR=\"/usr/share/locale/\"
   UNAME_S := $(shell uname -s)
 
   #.. There are special flags we need for OSX
@@ -105,7 +105,7 @@ po/%.po: po/purple-discord.pot
 po/%.mo: po/%.po
 	msgfmt -o $@ $^
 
-install: $(DISCORD_TARGET) install-icons
+install: $(DISCORD_TARGET) install-icons install-locales
 	mkdir -m $(DIR_PERM) -p $(DISCORD_DEST)
 	install -m $(LIB_PERM) -p $(DISCORD_TARGET) $(DISCORD_DEST)
 
@@ -116,6 +116,9 @@ install-icons: discord16.png discord22.png discord48.png
 	install -m $(FILE_PERM) -p discord16.png $(DISCORD_ICONS_DEST)/16/discord.png
 	install -m $(FILE_PERM) -p discord22.png $(DISCORD_ICONS_DEST)/22/discord.png
 	install -m $(FILE_PERM) -p discord48.png $(DISCORD_ICONS_DEST)/48/discord.png
+
+install-locales: po/es.mo
+	install -m $(FILE_PERM) -p po/es.mo $(LOCALEDIR)/es/LC_MESSAGES/purple-discord.mo
 
 FAILNOPURPLE:
 	echo "You need libpurple development headers installed to be able to compile this plugin"
