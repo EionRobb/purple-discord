@@ -80,7 +80,9 @@ C_FILES :=
 PURPLE_COMPAT_FILES := 
 PURPLE_C_FILES := libdiscord.c $(C_FILES)
 
-.PHONY:	all install FAILNOPURPLE clean install-icons
+.PHONY:	all install FAILNOPURPLE clean install-icons install-locales
+
+LOCALES = po/es.mo
 
 all: $(DISCORD_TARGET)
 
@@ -100,7 +102,8 @@ po/purple-discord.pot: libdiscord.c
 	xgettext $^ -k_ --no-location -o $@
 
 po/%.po: po/purple-discord.pot
-	msgmerge $@ po/purple-discord.pot > tmp && mv tmp po/purple-discord.pot
+	msgmerge $@ po/purple-discord.pot > tmp
+	mv -f tmp po/$@
 
 po/%.mo: po/%.po
 	msgfmt -o $@ $^
@@ -117,7 +120,7 @@ install-icons: discord16.png discord22.png discord48.png
 	install -m $(FILE_PERM) -p discord22.png $(DISCORD_ICONS_DEST)/22/discord.png
 	install -m $(FILE_PERM) -p discord48.png $(DISCORD_ICONS_DEST)/48/discord.png
 
-install-locales: po/es.mo
+install-locales: $(LOCALES)
 	install -m $(FILE_PERM) -p po/es.mo $(LOCALEDIR)/es/LC_MESSAGES/purple-discord.mo
 
 FAILNOPURPLE:
