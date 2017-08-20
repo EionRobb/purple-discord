@@ -1948,7 +1948,7 @@ discord_got_group_dm(DiscordAccount *da, JsonObject *data)
 	if (purple_account_get_bool(da->account, "populate-blist", TRUE)) {
 		GHashTable *components = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
 
-		g_hash_table_replace(components, g_strdup("id"), g_strdup_printf("%" G_GUINT64_FORMAT, channel->id));
+		g_hash_table_replace(components, g_strdup("id"), from_int(channel->id));
 		g_hash_table_replace(components, g_strdup("name"), g_strdup(channel->name));
 
 		PurpleGroup *group = discord_get_or_create_default_group();
@@ -2307,7 +2307,7 @@ discord_roomlist_got_list(DiscordAccount *da, DiscordGuild *guild, gpointer user
 		DiscordChannel *channel = value;
 		PurpleRoomlistRoom *room;
 
-		gchar *channel_id = g_strdup_printf("%" G_GUINT64_FORMAT, channel->id);
+		gchar *channel_id = from_int(channel->id);
 		gchar *type_str;
 
 		room = purple_roomlist_room_new(PURPLE_ROOMLIST_ROOMTYPE_ROOM, "", category);
@@ -2686,7 +2686,7 @@ discord_buddy_guild(DiscordAccount *da, DiscordGuild *guild)
 
 		GHashTable *components = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
 
-		g_hash_table_replace(components, g_strdup("id"), g_strdup_printf("%" G_GUINT64_FORMAT, channel->id));
+		g_hash_table_replace(components, g_strdup("id"), from_int(channel->id));
 		g_hash_table_replace(components, g_strdup("name"), g_strdup(channel->name));
 
 		PurpleChat *chat = purple_chat_new(da->account, channel->name, components);
@@ -3562,7 +3562,7 @@ discord_chat_info_defaults(PurpleConnection *pc, const char *chatname)
 
 			if (channel != NULL) {
 				g_hash_table_insert(defaults, "name", g_strdup(channel->name));
-				g_hash_table_insert(defaults, "id", g_strdup_printf("%" G_GUINT64_FORMAT, channel->id));
+				g_hash_table_insert(defaults, "id", from_int(channel->id));
 			}
 		}
 	}
@@ -3652,7 +3652,7 @@ discord_get_room_last_id(DiscordAccount *da, guint64 id)
 {
 	guint64 last_message_id = da->last_load_last_message_id;
 	PurpleBlistNode *blistnode = NULL;
-	gchar *channel_id = g_strdup_printf("%" G_GUINT64_FORMAT, id);
+	gchar *channel_id = from_int(id);
 
 	if (g_hash_table_contains(da->one_to_ones, channel_id)) {
 		/* is a direct message */
@@ -3680,7 +3680,7 @@ static void
 discord_set_room_last_id(DiscordAccount *da, guint64 id, guint64 last_id)
 {
 	PurpleBlistNode *blistnode = NULL;
-	gchar *channel_id = g_strdup_printf("%" G_GUINT64_FORMAT, id);
+	gchar *channel_id = from_int(id);
 
 	if (g_hash_table_contains(da->one_to_ones, channel_id)) {
 		/* is a direct message */
