@@ -80,8 +80,6 @@ C_FILES :=
 PURPLE_COMPAT_FILES := 
 PURPLE_C_FILES := libdiscord.c $(C_FILES)
 
-
-
 .PHONY:	all install FAILNOPURPLE clean install-icons
 
 all: $(DISCORD_TARGET)
@@ -97,6 +95,15 @@ libdiscord.dll: $(PURPLE_C_FILES) $(PURPLE_COMPAT_FILES)
 
 libdiscord3.dll: $(PURPLE_C_FILES) $(PURPLE_COMPAT_FILES)
 	$(WIN32_CC) -O0 -g -ggdb -shared -o $@ $^ $(WIN32_PIDGIN3_CFLAGS) $(WIN32_PIDGIN3_LDFLAGS)
+
+po/purple-discord.pot: libdiscord.c
+	xgettext $^ -k_ --no-location -o $@
+
+po/%.po: po/purple-discord.pot
+	msgmerge $@ po/purple-discord.pot > tmp && mv tmp po/purple-discord.pot
+
+po/%.mo: po/%.po
+	msgfmt -o $@ $^
 
 install: $(DISCORD_TARGET) install-icons
 	mkdir -m $(DIR_PERM) -p $(DISCORD_DEST)
