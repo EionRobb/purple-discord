@@ -29,6 +29,9 @@ CFLAGS  += -std=c99 -DDISCORD_PLUGIN_VERSION='"$(PLUGIN_VERSION)"'
 LOCALEDIR = $(shell $(PKG_CONFIG) --variable=datadir purple)/locale
 CFLAGS += -DLOCALEDIR=\"$(LOCALEDIR)\"
 
+# Comment out to disable localisation
+CFLAGS += -DENABLE_NLS
+
 # Do some nasty OS and purple version detection
 ifeq ($(OS),Windows_NT)
   DISCORD_TARGET = libdiscord.dll

@@ -34,7 +34,6 @@
 #	define PURPLE_PLUGINS
 #endif
 
-#define ENABLE_NLS 1
 #ifdef ENABLE_NLS
 #      define GETTEXT_PACKAGE "purple-discord"
 #      include <glib/gi18n-lib.h>
