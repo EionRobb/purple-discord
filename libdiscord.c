@@ -47,6 +47,7 @@
 #define IGNORE_PRINTS
 
 static GRegex *channel_mentions_regex = NULL;
+static GRegex *role_mentions_regex = NULL;
 static GRegex *emoji_regex = NULL;
 static GRegex *emoji_natural_regex = NULL;
 static GRegex *action_star_regex = NULL;
@@ -181,6 +182,11 @@ typedef struct {
 	GSList *pending_writes;
 	gint roomlist_guild_count;
 } DiscordAccount;
+
+typedef struct {
+	DiscordAccount *account;
+	DiscordGuild *guild;
+} DiscordAccountGuild;
 
 static guint64
 to_int(const gchar *id)
@@ -1255,6 +1261,40 @@ discord_replace_channel(const GMatchInfo *match, GString *result, gpointer user_
 }
 
 static gboolean
+discord_replace_role(const GMatchInfo *match, GString *result, gpointer user_data)
+{
+	DiscordAccountGuild *ag = user_data;
+	/* DiscordAccount *da = ag->account; */
+	DiscordGuild *guild = ag->guild;
+
+	gchar *match_string = g_match_info_fetch(match, 0);
+	gchar *role_id = g_match_info_fetch(match, 1);
+	guint64 rid = to_int(role_id);
+
+	DiscordGuildRole *role = g_hash_table_lookup_int64(guild->roles, rid);
+
+	if (rid == guild->id) {
+		g_string_append(result, "<b>@everyone</b>");
+	} else if (role) {
+		/* TODO make this a clickable link */
+
+		if (role->color) {
+			g_string_append_printf(result, "<font color=\"#%06X\"><b>@%s</b></font>", role->color, role->name);
+		} else {
+			g_string_append_printf(result, "<b>@%s</b>", role->name);
+		}
+	} else {
+		g_string_append(result, match_string);
+	}
+
+	g_free(role_id);
+	g_free(match_string);
+
+	return FALSE;
+}
+
+
+static gboolean
 discord_replace_emoji(const GMatchInfo *match, GString *result, gpointer user_data)
 {
 	gchar *alt_text = g_match_info_fetch(match, 1);
@@ -1268,11 +1308,6 @@ discord_replace_emoji(const GMatchInfo *match, GString *result, gpointer user_da
 
 	return FALSE;
 }
-
-typedef struct {
-	DiscordAccount *account;
-	DiscordGuild *guild;
-} DiscordAccountGuild;
 
 static gboolean
 discord_replace_mention(const GMatchInfo *match, GString *result, gpointer user_data)
@@ -1316,15 +1351,74 @@ discord_replace_mention(const GMatchInfo *match, GString *result, gpointer user_
 static gchar *
 discord_replace_mentions_bare(DiscordAccount *da, DiscordGuild *g, gchar *message)
 {
-	DiscordAccountGuild ag = {.account = da, .guild = g };
+	DiscordAccountGuild ag = { .account = da, .guild = g };
 	gchar *tmp = g_regex_replace_eval(mention_regex, message, -1, 0, 0, discord_replace_mention, &ag, NULL);
 
 	if (tmp != NULL) {
 		g_free(message);
-		return tmp;
+		message = tmp;
+	}
+
+	/* Replace <#channel_id> with channel names */
+	tmp = g_regex_replace_eval(channel_mentions_regex, message, -1, 0, 0, discord_replace_channel, da, NULL);
+
+	if (tmp != NULL) {
+		g_free(message);
+		message = tmp;
+	}
+
+	/* Replace <@&role_id> with role names */
+	if (g) {
+		DiscordAccountGuild ag = { .account = da, .guild = g };
+		tmp = g_regex_replace_eval(role_mentions_regex, message, -1, 0, 0, discord_replace_role, &ag, NULL);
+
+		if (tmp != NULL) {
+			g_free(message);
+			message = tmp;
+		}
 	}
 
 	return message;
+}
+
+static guint64
+discord_find_role_by_name(DiscordGuild *guild, const gchar *name)
+{
+	if (purple_strequal(name, "everyone")) {
+		return guild->id;
+	}
+
+	GHashTableIter iter;
+	gpointer key;
+	gpointer value;
+	g_hash_table_iter_init(&iter, guild->roles);
+
+	while (g_hash_table_iter_next(&iter, (gpointer *) &key, &value)) {
+		DiscordGuildRole *role = value;
+		if (purple_strequal(role->name, name)) {
+			return role->id;
+		}
+	}
+
+	return 0;
+}
+
+static guint64
+discord_find_channel_by_name(DiscordGuild *guild, gchar *name)
+{
+	GHashTableIter iter;
+	gpointer key;
+	gpointer value;
+	g_hash_table_iter_init(&iter, guild->channels);
+
+	while (g_hash_table_iter_next(&iter, (gpointer *) &key, &value)) {
+		DiscordChannel *channel = value;
+		if (purple_strequal(channel->name, name)) {
+			return channel->id;
+		}
+	}
+
+	return 0;
 }
 
 static gboolean
@@ -1373,7 +1467,22 @@ discord_make_mention(const GMatchInfo *match, GString *result, gpointer user_dat
 	if (user) {
 		g_string_append_printf(result, "&lt;@%" G_GUINT64_FORMAT "&gt; ", user->id);
 	} else {
-		g_string_append(result, match_string);
+		/* If that fails, find a role */
+		guint64 role = discord_find_role_by_name(guild, identifier);
+
+		if (role) {
+			g_string_append_printf(result, "&lt;@&amp;%" G_GUINT64_FORMAT "&gt; ", role);
+		} else {
+			/* If that fails, find a channel */
+			guint64 channel = discord_find_channel_by_name(guild, identifier);
+
+			if(channel) {
+				g_string_append_printf(result, "&lt;#%" G_GUINT64_FORMAT "&gt; ", channel);
+			} else {
+				/* If all else fails, trap out */
+				g_string_append(result, match_string);
+			}
+		}
 	}
 
 	g_free(match_string);
@@ -1553,6 +1662,7 @@ discord_process_message(DiscordAccount *da, JsonObject *data)
 	gchar *escaped_content = purple_markup_escape_text(content, -1);
 	JsonArray *attachments = json_object_get_array_member(data, "attachments");
 	JsonArray *mentions = json_object_get_array_member(data, "mentions");
+	JsonArray *mention_roles = json_object_get_array_member(data, "mention_roles");
 	PurpleMessageFlags flags;
 	gchar *tmp;
 	gint i;
@@ -1566,7 +1676,6 @@ discord_process_message(DiscordAccount *da, JsonObject *data)
 		flags = PURPLE_MESSAGE_RECV;
 	}
 
-	/* Replace <@user_id> and <@!user_id> with usernames */
 	if (mentions) {
 		for (i = json_array_get_length(mentions) - 1; i >= 0; i--) {
 			JsonObject *user = json_array_get_object_element(mentions, i);
@@ -1576,20 +1685,32 @@ discord_process_message(DiscordAccount *da, JsonObject *data)
 				flags |= PURPLE_MESSAGE_NICK;
 			}
 		}
+	}
 
+	if (mention_roles) {
+		DiscordUser *self = discord_get_user_int(da, da->self_user_id);
+		DiscordGuildMembership *membership = g_hash_table_lookup_int64(self->guild_memberships, guild->id);
+
+		for (i = json_array_get_length(mention_roles) - 1; i >= 0; i--) {
+			guint64 id = to_int(json_array_get_string_element(mention_roles, i));
+
+			for (guint i = 0; i < membership->roles->len; i++) {
+				guint64 role_id = g_array_index(membership->roles, guint64, i);
+
+				if (role_id == id) {
+					flags |= PURPLE_MESSAGE_NICK;
+					break;
+				}
+			}
+		}
+	}
+
+	if (mentions || mention_roles) {
 		escaped_content = discord_replace_mentions_bare(da, guild, escaped_content);
 	}
 
 	if (json_object_get_boolean_member(data, "mention_everyone")) {
 		flags |= PURPLE_MESSAGE_NICK;
-	}
-
-	/* Replace <#channel_id> with channel names */
-	tmp = g_regex_replace_eval(channel_mentions_regex, escaped_content, -1, 0, 0, discord_replace_channel, da, NULL);
-
-	if (tmp != NULL) {
-		g_free(escaped_content);
-		escaped_content = tmp;
 	}
 
 	/* Replace <:emoji:id> with emojis */
@@ -4657,6 +4778,7 @@ plugin_load(PurplePlugin *plugin, GError **error)
 {
 
 	channel_mentions_regex = g_regex_new("&lt;#(\\d+)&gt;", G_REGEX_OPTIMIZE, 0, NULL);
+	role_mentions_regex = g_regex_new("&lt;@&amp;(\\d+)&gt;", G_REGEX_OPTIMIZE, 0, NULL);
 	emoji_regex = g_regex_new("&lt;:([^:]+):(\\d+)&gt;", G_REGEX_OPTIMIZE, 0, NULL);
 	emoji_natural_regex = g_regex_new(":([^:]+):", G_REGEX_OPTIMIZE, 0, NULL);
 	action_star_regex = g_regex_new("^_([^\\*]+)_$", G_REGEX_OPTIMIZE, 0, NULL);
@@ -4711,6 +4833,7 @@ plugin_unload(PurplePlugin *plugin, GError **error)
 	purple_signals_disconnect_by_handle(plugin);
 
 	g_regex_unref(channel_mentions_regex);
+	g_regex_unref(role_mentions_regex);
 	g_regex_unref(emoji_regex);
 	g_regex_unref(emoji_natural_regex);
 	g_regex_unref(action_star_regex);
