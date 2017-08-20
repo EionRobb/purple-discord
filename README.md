@@ -9,20 +9,36 @@ Windows nightly builds from [here](https://eion.robbmob.com/libdiscord.dll)
 
 The plugin requires libjson-glib which can be downloaded [from github](https://github.com/EionRobb/skype4pidgin/raw/master/skypeweb/libjson-glib-1.0.dll) and copied to the Program Files\Pidgin folder (not the plugins subfolder)
 
-Fedora
+Fedora/CentOS/RHEL
 ---------
 On Fedora you can install [package](https://apps.fedoraproject.org/packages/purple-discord) from Fedora's main repository:
+
 ```bash
 	sudo dnf install purple-discord pidgin-discord
 ```
 
-CentOS/RHEL
----------
 On CentOS/RHEL you can install [package](https://apps.fedoraproject.org/packages/purple-discord) from Fedora's [EPEL7](http://fedoraproject.org/wiki/EPEL) repository:
 
 ```bash
 	sudo yum install purple-discord pidgin-discord
 ```
+
+Thank you to Vitaly Zaitsev for this package.
+
+Gentoo
+--------
+
+Copy purple-discord-9999.ebuild to `/usr/local/portage/x11-plugins/purple-discord` with folders created as necessary.
+
+```bash
+    mkdir -p /usr/local/portage/x11-plugins/purple-discord
+	cp purple-discord-9999.ebuild /usr/local/portage/x11-plugins/purple-discord
+	ebuild purple-discord-9999.ebuild manifest
+	eix-update; eix-diff # only if eix is installed
+	emerge purple-discord
+```
+
+Thank you to Penaz for this package.
 
 Compiling
 ---------
