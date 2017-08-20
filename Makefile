@@ -27,7 +27,7 @@ LDFLAGS ?= -Wl,-z,relro
 CFLAGS  += -std=c99 -DDISCORD_PLUGIN_VERSION='"$(PLUGIN_VERSION)"'
 
 LOCALEDIR = $(shell $(PKG_CONFIG) --variable=datadir purple)/locale
-CFLAGS += -DLOCALEDIR="$(LOCALEDIR)"
+CFLAGS += -DLOCALEDIR=\"$(LOCALEDIR)\"
 
 # Do some nasty OS and purple version detection
 ifeq ($(OS),Windows_NT)
