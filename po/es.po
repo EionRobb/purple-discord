@@ -6,14 +6,14 @@ msgstr ""
 "Project-Id-Version: 0.9\n"
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2017-08-20 12:12-0700\n"
-"PO-Revision-Date: 2017-08-11 10:24-0700\n"
+"PO-Revision-Date: 2017-08-20 12:23-0700\n"
 "Last-Translator: Alyssa Rosenzweig <alyssa@rosenzweig.io>\n"
 "Language-Team: es <LL@li.org>\n"
 "Language: es\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"X-Generator: Gtranslator 2.91.7\n"
+"X-Generator: Poedit 2.0.3\n"
 
 #: ../libdiscord.c:997
 #, c-format
@@ -34,7 +34,7 @@ msgstr "Tipo de sala"
 
 #: ../libdiscord.c:2830
 msgid "Cancelled 2FA auth"
-msgstr ""
+msgstr "Autenticación de dos factores cancelada"
 
 #: ../libdiscord.c:2853
 msgid "Two-factor authentication"
@@ -62,23 +62,23 @@ msgstr "Cancelar"
 
 #: ../libdiscord.c:2877
 msgid "Bad username/password"
-msgstr ""
+msgstr "Nombre de usuario o contraseña incorrecto "
 
 #: ../libdiscord.c:2888
 msgid "Username needs to be an email address"
-msgstr ""
+msgstr "Nombre de usuario tiene que ser una dirección de correo electrónico"
 
 #: ../libdiscord.c:3241
 msgid "Reauthentication required"
-msgstr ""
+msgstr "Hay que autenticar otra vez"
 
 #: ../libdiscord.c:3339
 msgid "Lost connection to server"
-msgstr ""
+msgstr "Conexión al servidor perdida"
 
 #: ../libdiscord.c:3383
 msgid "Couldn't connect to gateway"
-msgstr ""
+msgstr "No se puede conectar al gateway"
 
 #: ../libdiscord.c:3528
 msgid "Channel ID"
@@ -106,15 +106,15 @@ msgstr "Nombre de usuario"
 
 #: ../libdiscord.c:4479 ../libdiscord.c:4552 ../libdiscord.c:4568
 msgid "Online"
-msgstr "En línea"
+msgstr "Disponsible"
 
 #: ../libdiscord.c:4480 ../libdiscord.c:4555 ../libdiscord.c:4571
 msgid "Idle"
-msgstr "Ocios@"
+msgstr "Ocioso"
 
 #: ../libdiscord.c:4481 ../libdiscord.c:4564 ../libdiscord.c:4577
 msgid "Offline"
-msgstr "Desconectad@"
+msgstr "Desconectado"
 
 #: ../libdiscord.c:4482 ../libdiscord.c:4558 ../libdiscord.c:4574
 msgid "Do Not Disturb"
@@ -160,11 +160,11 @@ msgstr "Usar el mensaje de status como la información del juego."
 
 #: ../libdiscord.c:4695
 msgid "Auto-create rooms on buddy list"
-msgstr ""
+msgstr "Automáticamente crear salas en la lista de amigos"
 
 #: ../libdiscord.c:4698
 msgid "Number of users in a large channel"
-msgstr ""
+msgstr "Número de usuarios en un gran canal"
 
 #: ../libdiscord.c:4732 ../libdiscord.c:4733
 msgid "Join a server"
@@ -188,31 +188,31 @@ msgstr "Entrar un servidor..."
 
 #: ../libdiscord.c:4805
 msgid "nick <new nickname>:  Changes nickname on a server"
-msgstr ""
+msgstr "nick <nombre nuevo>:  Cambiar el nombre en un servidor"
 
 #: ../libdiscord.c:4811
 msgid "kick <username>:  Remove someone from channel"
-msgstr ""
+msgstr "kick <nombre>:  Quitar alguien del canal"
 
 #: ../libdiscord.c:4817
 msgid "leave:  Leave the channel"
-msgstr "salir: Salir el canál"
+msgstr "salir: Salir el canal"
 
 #: ../libdiscord.c:4822
 msgid "part:  Leave the channel"
-msgstr "salir: Salir el canál"
+msgstr "salir: Salir el canal"
 
 #: ../libdiscord.c:4828
 msgid "mute <username>:  Mute someone in channel"
-msgstr ""
+msgstr "mute <nombre>:  Enmudecer alguien del canal"
 
 #: ../libdiscord.c:4833
 msgid "unmute <username>:  Un-mute someone in channel"
-msgstr ""
+msgstr "unmute <nombre>: Desenmudecer alguien del canal"
 
 #: ../libdiscord.c:4838
 msgid "topic <description>:  Set the channel topic description"
-msgstr ""
+msgstr "topic <descripción>:  Cambiar la descripción del tópico del canal"
 
 #: ../libdiscord.c:5129
 msgid "Protocol"
