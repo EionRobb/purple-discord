@@ -36,6 +36,8 @@
 #define DISCORD_PLUGIN_WEBSITE "https://github.com/EionRobb/discord-libpurple"
 
 #define DISCORD_USERAGENT "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/51.0.2704.103 Safari/537.36"
+#define DISCORD_OS "Windows"
+#define DISCORD_BROWSER "Chrome"
 
 #define DISCORD_BUFFER_DEFAULT_SIZE 40960
 
@@ -1172,16 +1174,8 @@ discord_send_auth(DiscordAccount *da)
 		json_object_set_boolean_member(data, "compress", FALSE);
 		json_object_set_int_member(data, "large_threshold", 25000);
 
-		json_object_set_string_member(properties, "os",
-#if defined(_WIN32)
-									  "Windows"
-#elif defined(__APPLE__)
-									  "OSX"
-#else
-									  "Linux"
-#endif
-									  );
-		json_object_set_string_member(properties, "browser", "Pidgin");
+		json_object_set_string_member(properties, "os", DISCORD_OS);
+		json_object_set_string_member(properties, "browser", DISCORD_BROWSER);
 		json_object_set_object_member(data, "properties", properties);
 
 		/* TODO real presense */
