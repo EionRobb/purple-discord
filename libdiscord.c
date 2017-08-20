@@ -2854,8 +2854,8 @@ discord_login_response(DiscordAccount *da, JsonNode *node, gpointer user_data)
 								 _("Enter Discord auth code"),
 								 _("You can get this token from your two-factor authentication mobile app."),
 								 NULL, FALSE, FALSE, "",
-								 _("Login"), G_CALLBACK(discord_mfa_text_entry),
-								 _("Cancel"), G_CALLBACK(discord_mfa_cancel),
+								 _("_Login"), G_CALLBACK(discord_mfa_text_entry),
+								 _("_Cancel"), G_CALLBACK(discord_mfa_cancel),
 								 purple_request_cpar_from_connection(da->pc),
 								 da);
 			return;
