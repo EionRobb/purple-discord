@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: 0.9\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2017-08-20 12:12-0700\n"
+"POT-Creation-Date: 2017-08-20 12:50-0700\n"
 "PO-Revision-Date: 2017-08-20 12:23-0700\n"
 "Last-Translator: Alyssa Rosenzweig <alyssa@rosenzweig.io>\n"
 "Language-Team: es <LL@li.org>\n"
@@ -15,213 +15,161 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "X-Generator: Poedit 2.0.3\n"
 
-#: ../libdiscord.c:997
 #, c-format
 msgid "Connection error: %s."
 msgstr "Error de conexión: %s"
 
-#: ../libdiscord.c:2367 ../libdiscord.c:4472
 msgid "ID"
 msgstr "identificación"
 
-#: ../libdiscord.c:2370 ../libdiscord.c:3533
 msgid "Name"
 msgstr "Nombre"
 
-#: ../libdiscord.c:2373
 msgid "Room Type"
 msgstr "Tipo de sala"
 
-#: ../libdiscord.c:2830
 msgid "Cancelled 2FA auth"
 msgstr "Autenticación de dos factores cancelada"
 
-#: ../libdiscord.c:2853
 msgid "Two-factor authentication"
 msgstr "Autenticación de dos factores"
 
-#: ../libdiscord.c:2854
 msgid "Enter Discord auth code"
 msgstr "Poner código de autorización de Discord"
 
-#: ../libdiscord.c:2855
 msgid "You can get this token from your two-factor authentication mobile app."
 msgstr ""
 "Puede encontrar este código de su aplicación de autenticación de dos "
 "factores."
 
-#: ../libdiscord.c:2857
 #, fuzzy
-msgid "_Login"
+msgid "Login"
 msgstr "Iniciar sesión"
 
-#: ../libdiscord.c:2858
-#, fuzzy
-msgid "_Cancel"
+msgid "Cancel"
 msgstr "Cancelar"
 
-#: ../libdiscord.c:2877
 msgid "Bad username/password"
 msgstr "Nombre de usuario o contraseña incorrecto "
 
-#: ../libdiscord.c:2888
 msgid "Username needs to be an email address"
 msgstr "Nombre de usuario tiene que ser una dirección de correo electrónico"
 
-#: ../libdiscord.c:3241
 msgid "Reauthentication required"
 msgstr "Hay que autenticar otra vez"
 
-#: ../libdiscord.c:3339
 msgid "Lost connection to server"
 msgstr "Conexión al servidor perdida"
 
-#: ../libdiscord.c:3383
 msgid "Couldn't connect to gateway"
 msgstr "No se puede conectar al gateway"
 
-#: ../libdiscord.c:3528
 msgid "Channel ID"
 msgstr "Identificación del canál"
 
-#: ../libdiscord.c:3873
 msgid "Bad channel type"
 msgstr "Mal tipo de canál"
 
-#: ../libdiscord.c:3873
 msgid "Cannot join a voice channel as text"
 msgstr "No se puede entrar un canál de voz como texto"
 
-#: ../libdiscord.c:4279
 msgid "Could not create conversation"
 msgstr "No pudo construir la conversación"
 
-#: ../libdiscord.c:4474
 msgid "Full Username"
 msgstr "Nombre de usuario completo"
 
-#: ../libdiscord.c:4475
 msgid "Username"
 msgstr "Nombre de usuario"
 
-#: ../libdiscord.c:4479 ../libdiscord.c:4552 ../libdiscord.c:4568
 msgid "Online"
 msgstr "Disponsible"
 
-#: ../libdiscord.c:4480 ../libdiscord.c:4555 ../libdiscord.c:4571
 msgid "Idle"
 msgstr "Ocioso"
 
-#: ../libdiscord.c:4481 ../libdiscord.c:4564 ../libdiscord.c:4577
 msgid "Offline"
 msgstr "Desconectado"
 
-#: ../libdiscord.c:4482 ../libdiscord.c:4558 ../libdiscord.c:4574
 msgid "Do Not Disturb"
 msgstr "No interrumpir"
 
-#: ../libdiscord.c:4485 ../libdiscord.c:4664
 msgid "Status"
 msgstr "Status"
 
-#: ../libdiscord.c:4488 ../libdiscord.c:4568 ../libdiscord.c:4571
-#: ../libdiscord.c:4574 ../libdiscord.c:4577
 msgid "In-Game"
 msgstr "En juego"
 
-#: ../libdiscord.c:4492
 msgid "Connected Accounts"
 msgstr "Cuentas conectadas"
 
-#: ../libdiscord.c:4506
 msgid "Mutual Servers"
 msgstr "Servidores mutuales"
 
-#: ../libdiscord.c:4561
 msgid "Invisible"
 msgstr "Invisible"
 
-#: ../libdiscord.c:4597
 #, c-format
 msgid "Playing %s"
 msgstr "Jugando %s"
 
-#: ../libdiscord.c:4669
 msgid "Playing"
 msgstr "Jugando"
 
-#: ../libdiscord.c:4682
 msgid "Email address..."
 msgstr "Dirección de correo electrónico"
 
-#: ../libdiscord.c:4692
 msgid "Use status message as in-game info"
 msgstr "Usar el mensaje de status como la información del juego."
 
-#: ../libdiscord.c:4695
 msgid "Auto-create rooms on buddy list"
 msgstr "Automáticamente crear salas en la lista de amigos"
 
-#: ../libdiscord.c:4698
 msgid "Number of users in a large channel"
 msgstr "Número de usuarios en un gran canal"
 
-#: ../libdiscord.c:4732 ../libdiscord.c:4733
 msgid "Join a server"
 msgstr "Entrar un servidor"
 
-#: ../libdiscord.c:4734
 msgid "Enter the join URL here"
 msgstr "Poner el URL de entrada aquí"
 
-#: ../libdiscord.c:4736
 msgid "Join"
 msgstr "Entrar"
 
-#: ../libdiscord.c:4737
-msgid "Cancel"
-msgstr "Cancelar"
-
-#: ../libdiscord.c:4754
 msgid "Join a server..."
 msgstr "Entrar un servidor..."
 
-#: ../libdiscord.c:4805
 msgid "nick <new nickname>:  Changes nickname on a server"
 msgstr "nick <nombre nuevo>:  Cambiar el nombre en un servidor"
 
-#: ../libdiscord.c:4811
 msgid "kick <username>:  Remove someone from channel"
 msgstr "kick <nombre>:  Quitar alguien del canal"
 
-#: ../libdiscord.c:4817
 msgid "leave:  Leave the channel"
 msgstr "salir: Salir el canal"
 
-#: ../libdiscord.c:4822
 msgid "part:  Leave the channel"
 msgstr "salir: Salir el canal"
 
-#: ../libdiscord.c:4828
 msgid "mute <username>:  Mute someone in channel"
 msgstr "mute <nombre>:  Enmudecer alguien del canal"
 
-#: ../libdiscord.c:4833
 msgid "unmute <username>:  Un-mute someone in channel"
 msgstr "unmute <nombre>: Desenmudecer alguien del canal"
 
-#: ../libdiscord.c:4838
 msgid "topic <description>:  Set the channel topic description"
 msgstr "topic <descripción>:  Cambiar la descripción del tópico del canal"
 
-#: ../libdiscord.c:5129
 msgid "Protocol"
 msgstr "Protocolo"
 
-#: ../libdiscord.c:5130
 msgid "Discord Protocol Plugins."
 msgstr "Plug-in del Protocolo de Discord"
 
-#: ../libdiscord.c:5131
 msgid "Adds Discord protocol support to libpurple."
 msgstr "Le añade el protocolo de Discord a libpurple."
+
+#, fuzzy
+#~ msgid "_Cancel"
+#~ msgstr "Cancelar"
