@@ -1688,7 +1688,7 @@ discord_process_message(DiscordAccount *da, JsonObject *data)
 	}
 
 	if (mention_roles) {
-		DiscordUser *self = discord_get_user_int(da, da->self_user_id);
+		DiscordUser *self = discord_get_user(da, da->self_user_id);
 		DiscordGuildMembership *membership = g_hash_table_lookup_int64(self->guild_memberships, guild->id);
 
 		for (i = json_array_get_length(mention_roles) - 1; i >= 0; i--) {
