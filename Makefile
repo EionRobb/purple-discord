@@ -26,16 +26,15 @@ LDFLAGS ?= -Wl,-z,relro
 
 CFLAGS  += -std=c99 -DDISCORD_PLUGIN_VERSION='"$(PLUGIN_VERSION)"'
 
-# CFLAGS += -DLOCALEDIR=\"$(PIDGIN_DATADIR)/locale\"
-CFLAGS += -DLOCALEDIR=\"/usr/share/locale/\"
 
 # Do some nasty OS and purple version detection
 ifeq ($(OS),Windows_NT)
+  CFLAGS += -DLOCALEDIR="`$(PKG_CONFIG) --variable=datadir purple`/locale"
   DISCORD_TARGET = libdiscord.dll
   DISCORD_DEST = "$(PROGRAMFILES)/Pidgin/plugins"
   DISCORD_ICONS_DEST = "$(PROGRAMFILES)/Pidgin/pixmaps/pidgin/protocols"
 else
-
+  CFLAGS += -DLOCALEDIR=\"/usr/share/locale/\"
   UNAME_S := $(shell uname -s)
 
   #.. There are special flags we need for OSX
