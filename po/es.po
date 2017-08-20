@@ -151,10 +151,10 @@ msgid "kick <username>:  Remove someone from channel"
 msgstr "kick <nombre>:  Quitar alguien del canal"
 
 msgid "leave:  Leave the channel"
-msgstr "salir: Salir el canal"
+msgstr "leave: Salir el canal"
 
 msgid "part:  Leave the channel"
-msgstr "salir: Salir el canal"
+msgstr "part: Salir el canal"
 
 msgid "mute <username>:  Mute someone in channel"
 msgstr "mute <nombre>:  Enmudecer alguien del canal"
