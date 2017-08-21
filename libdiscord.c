@@ -4582,7 +4582,7 @@ discord_status_text(PurpleBuddy *buddy)
 			return NULL;
 		}
 
-		return g_markup_printf_escaped(_("Playing %s"), user->game);
+		return g_markup_printf_escaped("%s %s", _("Playing"), user->game);
 	}
 
 	return NULL;
