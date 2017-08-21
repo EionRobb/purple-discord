@@ -106,7 +106,7 @@ po/purple-discord.pot: libdiscord.c
 
 po/%.po: po/purple-discord.pot
 	msgmerge $@ po/purple-discord.pot > tmp
-	mv -f tmp po/$@
+	mv -f tmp $@
 
 po/%.mo: po/%.po
 	msgfmt -o $@ $^
