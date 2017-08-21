@@ -28,6 +28,12 @@
 #ifdef ENABLE_NLS
 #      define GETTEXT_PACKAGE "purple-discord"
 #      include <glib/gi18n-lib.h>
+#	ifdef _WIN32
+#		ifdef LOCALEDIR
+#			unset LOCALEDIR
+#		endif
+#		define LOCALEDIR  wpurple_locale_dir()
+#	endif
 #else
 #      define _(a) (a)
 #      define N_(a) (a)
@@ -5112,6 +5118,11 @@ libpurple3_plugin_unload(PurplePlugin *plugin, GError **error)
 static PurplePluginInfo *
 plugin_query(GError **error)
 {
+#ifdef ENABLE_NLS
+	bindtextdomain(GETTEXT_PACKAGE, LOCALEDIR);
+	bind_textdomain_codeset(GETTEXT_PACKAGE, "UTF-8");
+#endif
+	
 	return purple_plugin_info_new(
 	  "id", DISCORD_PLUGIN_ID,
 	  "name", "Discord",

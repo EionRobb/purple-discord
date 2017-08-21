@@ -25,6 +25,10 @@
 #define PURPLE_PLUGINS
 #endif
 
+#ifdef _WIN32
+#include <win32/win32dep.h>
+#endif
+
 // Purple2 compat functions
 #if !PURPLE_VERSION_CHECK(3, 0, 0)
 

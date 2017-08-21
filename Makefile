@@ -34,8 +34,8 @@ ifeq ($(OS),Windows_NT)
   DISCORD_TARGET = libdiscord.dll
   DISCORD_DEST = "$(PROGRAMFILES)/Pidgin/plugins"
   DISCORD_ICONS_DEST = "$(PROGRAMFILES)/Pidgin/pixmaps/pidgin/protocols"
+  LOCALEDIR = "$(PROGRAMFILES)/Pidgin/locale"
 else
-  LOCALEDIR = $(shell $(PKG_CONFIG) --variable=datadir purple)/locale
   UNAME_S := $(shell uname -s)
 
   #.. There are special flags we need for OSX
@@ -57,20 +57,22 @@ else
     ifeq ($(shell $(PKG_CONFIG) --exists purple 2>/dev/null && echo "true"),)
       DISCORD_TARGET = FAILNOPURPLE
       DISCORD_DEST =
-	  DISCORD_ICONS_DEST =
+      DISCORD_ICONS_DEST =
     else
       DISCORD_TARGET = libdiscord.so
       DISCORD_DEST = $(DESTDIR)`$(PKG_CONFIG) --variable=plugindir purple`
-	  DISCORD_ICONS_DEST = $(DESTDIR)`$(PKG_CONFIG) --variable=datadir purple`/pixmaps/pidgin/protocols
+      DISCORD_ICONS_DEST = $(DESTDIR)`$(PKG_CONFIG) --variable=datadir purple`/pixmaps/pidgin/protocols
+      LOCALEDIR = $(shell $(PKG_CONFIG) --variable=datadir purple)/locale
     endif
   else
     DISCORD_TARGET = libdiscord3.so
     DISCORD_DEST = $(DESTDIR)`$(PKG_CONFIG) --variable=plugindir purple-3`
-	DISCORD_ICONS_DEST = $(DESTDIR)`$(PKG_CONFIG) --variable=datadir purple-3`/pixmaps/pidgin/protocols
+    DISCORD_ICONS_DEST = $(DESTDIR)`$(PKG_CONFIG) --variable=datadir purple-3`/pixmaps/pidgin/protocols
+    LOCALEDIR = $(shell $(PKG_CONFIG) --variable=datadir purple-3)/locale
   endif
 endif
 
-WIN32_CFLAGS = -std=c99 -I$(WIN32_DEV_TOP)/glib-2.28.8/include -I$(WIN32_DEV_TOP)/glib-2.28.8/include/glib-2.0 -I$(WIN32_DEV_TOP)/glib-2.28.8/lib/glib-2.0/include -I$(WIN32_DEV_TOP)/json-glib-0.14/include/json-glib-1.0 -DENABLE_NLS -DDISCORD_PLUGIN_VERSION='"$(PLUGIN_VERSION)"' -Wall -Wextra -Werror -Wno-deprecated-declarations -Wno-unused-parameter -fno-strict-aliasing -Wformat
+WIN32_CFLAGS = -std=c99 -I$(WIN32_DEV_TOP)/glib-2.28.8/include -I$(WIN32_DEV_TOP)/glib-2.28.8/include/glib-2.0 -I$(WIN32_DEV_TOP)/glib-2.28.8/lib/glib-2.0/include -I$(WIN32_DEV_TOP)/json-glib-0.14/include/json-glib-1.0 -DENABLE_NLS -DDISCORD_PLUGIN_VERSION='"$(PLUGIN_VERSION)"' -Wall -Wextra -Werror -Wno-deprecated-declarations -Wno-unused-parameter -fno-strict-aliasing -Wformat 
 WIN32_LDFLAGS = -L$(WIN32_DEV_TOP)/glib-2.28.8/lib -L$(WIN32_DEV_TOP)/json-glib-0.14/lib -lpurple -lintl -lglib-2.0 -lgobject-2.0 -ljson-glib-1.0 -g -ggdb -static-libgcc -lz
 WIN32_PIDGIN2_CFLAGS = -I$(PIDGIN_TREE_TOP)/libpurple -I$(PIDGIN_TREE_TOP) $(WIN32_CFLAGS)
 WIN32_PIDGIN3_CFLAGS = -I$(PIDGIN3_TREE_TOP)/libpurple -I$(PIDGIN3_TREE_TOP) -I$(WIN32_DEV_TOP)/gplugin-dev/gplugin $(WIN32_CFLAGS)
@@ -85,7 +87,7 @@ PURPLE_C_FILES := libdiscord.c $(C_FILES)
 
 .PHONY:	all install FAILNOPURPLE clean install-icons install-locales
 
-LOCALES = po/es.mo
+LOCALES = $(patsubst %.po, %.mo, $(wildcard po/*.po))
 
 all: $(DISCORD_TARGET)
 
