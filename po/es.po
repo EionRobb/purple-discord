@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: 0.9\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2017-08-20 17:24-0700\n"
+"POT-Creation-Date: 2017-08-20 17:26-0700\n"
 "PO-Revision-Date: 2017-08-20 12:23-0700\n"
 "Last-Translator: Alyssa Rosenzweig <alyssa@rosenzweig.io>\n"
 "Language-Team: es <LL@li.org>\n"
@@ -73,9 +73,6 @@ msgstr "No se puede entrar un canal de voz como texto"
 
 msgid "Could not create conversation"
 msgstr "No pudo construir la conversación"
-
-msgid "Full Username"
-msgstr "Nombre de usuario completo"
 
 msgid "Username"
 msgstr "Nombre de usuario"
@@ -167,6 +164,9 @@ msgstr "Plug-in del Protocolo de Discord."
 
 msgid "Adds Discord protocol support to libpurple."
 msgstr "Añadir el protocolo de Discord a libpurple."
+
+#~ msgid "Full Username"
+#~ msgstr "Nombre de usuario completo"
 
 #~ msgid "Channel ID"
 #~ msgstr "Identificación del canal"

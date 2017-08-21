@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2017-08-20 17:24-0700\n"
+"POT-Creation-Date: 2017-08-20 17:26-0700\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -70,9 +70,6 @@ msgid "Cannot join a voice channel as text"
 msgstr ""
 
 msgid "Could not create conversation"
-msgstr ""
-
-msgid "Full Username"
 msgstr ""
 
 msgid "Username"

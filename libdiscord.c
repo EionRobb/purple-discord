@@ -4460,8 +4460,6 @@ discord_got_info(DiscordAccount *da, JsonNode *node, gpointer user_data)
 	GString *buffer = g_string_new("");
 	g_string_printf(buffer, "%" G_GUINT64_FORMAT, user->id);
 	purple_notify_user_info_add_pair_html(user_info, _("ID"), buffer->str);
-	g_string_printf(buffer, "%s#%04d", user->name, user->discriminator);
-	purple_notify_user_info_add_pair_html(user_info, _("Full Username"), buffer->str);
 	purple_notify_user_info_add_pair_html(user_info, _("Username"), user->name);
 
 	/* Display other non-profile info that we know about this buddy */
