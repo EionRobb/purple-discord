@@ -1655,8 +1655,16 @@ bail:
 }
 
 static guint64
-discord_process_message(DiscordAccount *da, JsonObject *data)
+discord_process_message(DiscordAccount *da, JsonObject *data, gboolean edited)
 {
+	guint64 msg_id = to_int(json_object_get_string_member(data, "id"));
+
+	if (!json_object_get_object_member(data, "author")) {
+		/* Possibly edited message? */
+		purple_debug_info("discord", "No author in message processed");
+		return msg_id;
+	}
+
 	DiscordUser *author = discord_upsert_user(da->new_users, json_object_get_object_member(data, "author"));
 
 	const gchar *channel_id_s = json_object_get_string_member(data, "channel_id");
@@ -1741,6 +1749,13 @@ discord_process_message(DiscordAccount *da, JsonObject *data)
 	tmp = discord_convert_markdown(escaped_content);
 	g_free(escaped_content);
 	escaped_content = tmp;
+
+	/* Add prefix for edited messages */
+	if (edited) {
+		tmp = g_strconcat("EDIT: ", escaped_content, NULL);
+		g_free(escaped_content);
+		escaped_content = tmp;
+	}
 
 	if (g_hash_table_contains(da->one_to_ones, channel_id_s)) {
 		/* private message */
@@ -1827,7 +1842,7 @@ discord_process_message(DiscordAccount *da, JsonObject *data)
 
 	g_free(escaped_content);
 
-	return to_int(json_object_get_string_member(data, "id"));
+	return msg_id;
 }
 
 struct discord_group_typing_data {
@@ -2004,8 +2019,8 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		}
 
 		g_free(username);
-	} else if (purple_strequal(type, "MESSAGE_CREATE") /* || purple_strequal(type, "MESSAGE_UPDATE")*/) { /* TODO */
-		discord_process_message(da, data);
+	} else if (purple_strequal(type, "MESSAGE_CREATE") || purple_strequal(type, "MESSAGE_UPDATE")) { /* TODO */
+		discord_process_message(da, data, purple_strequal(type, "MESSAGE_UPDATE"));
 
 		const gchar *channel_id = json_object_get_string_member(data, "channel_id");
 
@@ -3619,7 +3634,7 @@ discord_got_history_of_room(DiscordAccount *da, JsonNode *node, gpointer user_da
 			break;
 		}
 
-		rolling_last_message_id = discord_process_message(da, message);
+		rolling_last_message_id = discord_process_message(da, message, FALSE);
 	}
 
 	if (rolling_last_message_id != 0) {
@@ -3645,7 +3660,7 @@ discord_got_history_static(DiscordAccount *da, JsonNode *node, gpointer user_dat
 	for (i = len - 1; i >= 0; i--) {
 		JsonObject *message = json_array_get_object_element(messages, i);
 
-		discord_process_message(da, message);
+		discord_process_message(da, message, FALSE);
 	}
 }
 
