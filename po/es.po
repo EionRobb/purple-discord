@@ -66,10 +66,10 @@ msgid "Couldn't connect to gateway"
 msgstr "No se puede conectar al gateway"
 
 msgid "Bad channel type"
-msgstr "Mal tipo de canál"
+msgstr "Mal tipo de canal"
 
 msgid "Cannot join a voice channel as text"
-msgstr "No se puede entrar un canál de voz como texto"
+msgstr "No se puede entrar un canal de voz como texto"
 
 msgid "Could not create conversation"
 msgstr "No pudo construir la conversación"
@@ -169,7 +169,7 @@ msgid "Adds Discord protocol support to libpurple."
 msgstr "Añadir el protocolo de Discord a libpurple."
 
 #~ msgid "Channel ID"
-#~ msgstr "Identificación del canál"
+#~ msgstr "Identificación del canal"
 
 #~ msgid "Cancel"
 #~ msgstr "Cancelar"
