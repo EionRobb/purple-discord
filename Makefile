@@ -26,9 +26,6 @@ LDFLAGS ?= -Wl,-z,relro
 
 CFLAGS  += -std=c99 -DDISCORD_PLUGIN_VERSION='"$(PLUGIN_VERSION)"'
 
-LOCALEDIR = $(shell $(PKG_CONFIG) --variable=datadir purple)/locale
-CFLAGS += -DLOCALEDIR=\"$(LOCALEDIR)\"
-
 # Comment out to disable localisation
 CFLAGS += -DENABLE_NLS
 
@@ -38,6 +35,7 @@ ifeq ($(OS),Windows_NT)
   DISCORD_DEST = "$(PROGRAMFILES)/Pidgin/plugins"
   DISCORD_ICONS_DEST = "$(PROGRAMFILES)/Pidgin/pixmaps/pidgin/protocols"
 else
+  LOCALEDIR = $(shell $(PKG_CONFIG) --variable=datadir purple)/locale
   UNAME_S := $(shell uname -s)
 
   #.. There are special flags we need for OSX
@@ -78,6 +76,8 @@ WIN32_PIDGIN2_CFLAGS = -I$(PIDGIN_TREE_TOP)/libpurple -I$(PIDGIN_TREE_TOP) $(WIN
 WIN32_PIDGIN3_CFLAGS = -I$(PIDGIN3_TREE_TOP)/libpurple -I$(PIDGIN3_TREE_TOP) -I$(WIN32_DEV_TOP)/gplugin-dev/gplugin $(WIN32_CFLAGS)
 WIN32_PIDGIN2_LDFLAGS = -L$(PIDGIN_TREE_TOP)/libpurple $(WIN32_LDFLAGS)
 WIN32_PIDGIN3_LDFLAGS = -L$(PIDGIN3_TREE_TOP)/libpurple -L$(WIN32_DEV_TOP)/gplugin-dev/gplugin $(WIN32_LDFLAGS) -lgplugin
+
+CFLAGS += -DLOCALEDIR=\"$(LOCALEDIR)\"
 
 C_FILES := 
 PURPLE_COMPAT_FILES := 
