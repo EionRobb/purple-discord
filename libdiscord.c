@@ -25,15 +25,6 @@
 #endif
 #include <errno.h>
 
-#include <purple.h>
-#if PURPLE_VERSION_CHECK(3, 0, 0)
-#include <http.h>
-#endif
-
-#ifndef PURPLE_PLUGINS
-#	define PURPLE_PLUGINS
-#endif
-
 #ifdef ENABLE_NLS
 #      define GETTEXT_PACKAGE "purple-discord"
 #      include <glib/gi18n-lib.h>

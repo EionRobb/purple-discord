@@ -25,11 +25,6 @@
 #define PURPLE_PLUGINS
 #endif
 
-#ifndef _
-#define _(a) (a)
-#define N_(a) (a)
-#endif
-
 // Purple2 compat functions
 #if !PURPLE_VERSION_CHECK(3, 0, 0)
 
