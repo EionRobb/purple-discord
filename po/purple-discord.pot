@@ -1,0 +1,164 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the PACKAGE package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PACKAGE VERSION\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2017-08-20 17:26-0700\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=CHARSET\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#, c-format
+msgid "Connection error: %s."
+msgstr ""
+
+msgid "ID"
+msgstr ""
+
+msgid "Name"
+msgstr ""
+
+msgid "Room Type"
+msgstr ""
+
+msgid "Cancelled 2FA auth"
+msgstr ""
+
+msgid "Two-factor authentication"
+msgstr ""
+
+msgid "Enter Discord auth code"
+msgstr ""
+
+msgid "You can get this token from your two-factor authentication mobile app."
+msgstr ""
+
+msgid "_Login"
+msgstr ""
+
+msgid "_Cancel"
+msgstr ""
+
+msgid "Bad username/password"
+msgstr ""
+
+msgid "Username needs to be an email address"
+msgstr ""
+
+msgid "Reauthentication required"
+msgstr ""
+
+msgid "Lost connection to server"
+msgstr ""
+
+msgid "Couldn't connect to gateway"
+msgstr ""
+
+msgid "Bad channel type"
+msgstr ""
+
+msgid "Cannot join a voice channel as text"
+msgstr ""
+
+msgid "Could not create conversation"
+msgstr ""
+
+msgid "Username"
+msgstr ""
+
+msgid "Online"
+msgstr ""
+
+msgid "Idle"
+msgstr ""
+
+msgid "Offline"
+msgstr ""
+
+msgid "Do Not Disturb"
+msgstr ""
+
+msgid "Status"
+msgstr ""
+
+msgid "In-Game"
+msgstr ""
+
+msgid "Connected Accounts"
+msgstr ""
+
+msgid "Mutual Servers"
+msgstr ""
+
+msgid "Invisible"
+msgstr ""
+
+#, c-format
+msgid "Playing %s"
+msgstr ""
+
+msgid "Playing"
+msgstr ""
+
+msgid "Email address..."
+msgstr ""
+
+msgid "Use status message as in-game info"
+msgstr ""
+
+msgid "Auto-create rooms on buddy list"
+msgstr ""
+
+msgid "Number of users in a large channel"
+msgstr ""
+
+msgid "Join a server"
+msgstr ""
+
+msgid "Enter the join URL here"
+msgstr ""
+
+msgid "_Join"
+msgstr ""
+
+msgid "Join a server..."
+msgstr ""
+
+msgid "nick <new nickname>:  Changes nickname on a server"
+msgstr ""
+
+msgid "kick <username>:  Remove someone from channel"
+msgstr ""
+
+msgid "leave:  Leave the channel"
+msgstr ""
+
+msgid "part:  Leave the channel"
+msgstr ""
+
+msgid "mute <username>:  Mute someone in channel"
+msgstr ""
+
+msgid "unmute <username>:  Un-mute someone in channel"
+msgstr ""
+
+msgid "topic <description>:  Set the channel topic description"
+msgstr ""
+
+msgid "Protocol"
+msgstr ""
+
+msgid "Discord Protocol Plugins."
+msgstr ""
+
+msgid "Adds Discord protocol support to libpurple."
+msgstr ""

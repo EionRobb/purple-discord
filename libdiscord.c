@@ -25,6 +25,14 @@
 #endif
 #include <errno.h>
 
+#ifdef ENABLE_NLS
+#      define GETTEXT_PACKAGE "purple-discord"
+#      include <glib/gi18n-lib.h>
+#else
+#      define _(a) (a)
+#      define N_(a) (a)
+#endif
+
 #include "glib_compat.h"
 #include "json_compat.h"
 #include "purple_compat.h"
@@ -60,13 +68,6 @@ typedef enum {
 	USER_OFFLINE,
 	USER_DND
 } DiscordStatus;
-
-gchar *status_strings[4] = {
-	"Online",
-	"Idle",
-	"Offline",
-	"Do Not Disturb"
-};
 
 typedef enum {
 	CHANNEL_GUILD_TEXT = 0,
@@ -2267,10 +2268,10 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 PurpleGroup *
 discord_get_or_create_default_group()
 {
-	PurpleGroup *discord_group = purple_blist_find_group(_("Discord"));
+	PurpleGroup *discord_group = purple_blist_find_group("Discord");
 
 	if (!discord_group) {
-		discord_group = purple_group_new(_("Discord"));
+		discord_group = purple_group_new("Discord");
 		purple_blist_add_group(discord_group, NULL);
 	}
 
@@ -2818,7 +2819,7 @@ discord_mfa_cancel(gpointer user_data)
 {
 	DiscordAccount *da = user_data;
 
-	purple_connection_error(da->pc, PURPLE_CONNECTION_ERROR_AUTHENTICATION_FAILED, "Cancelled 2FA auth");
+	purple_connection_error(da->pc, PURPLE_CONNECTION_ERROR_AUTHENTICATION_FAILED, _("Cancelled 2FA auth"));
 }
 
 static void
@@ -2865,7 +2866,7 @@ discord_login_response(DiscordAccount *da, JsonNode *node, gpointer user_data)
 		}
 	}
 
-	purple_connection_error(da->pc, PURPLE_CONNECTION_ERROR_AUTHENTICATION_FAILED, "Bad username/password");
+	purple_connection_error(da->pc, PURPLE_CONNECTION_ERROR_AUTHENTICATION_FAILED, _("Bad username/password"));
 }
 
 void
@@ -2876,7 +2877,7 @@ discord_login(PurpleAccount *account)
 	PurpleConnectionFlags pc_flags;
 
 	if (!strchr(purple_account_get_username(account), '@')) {
-		purple_connection_error(pc, PURPLE_CONNECTION_ERROR_INVALID_USERNAME, "Username needs to be an email address");
+		purple_connection_error(pc, PURPLE_CONNECTION_ERROR_INVALID_USERNAME, _("Username needs to be an email address"));
 		return;
 	}
 
@@ -3229,7 +3230,7 @@ discord_socket_got_data(gpointer userdata, PurpleSslConnection *conn, PurpleInpu
 								/* bad auth token, clear and reset */
 								purple_account_set_string(ya->account, "token", NULL);
 
-								purple_connection_error(ya->pc, PURPLE_CONNECTION_ERROR_NETWORK_ERROR, "Reauthentication required");
+								purple_connection_error(ya->pc, PURPLE_CONNECTION_ERROR_NETWORK_ERROR, _("Reauthentication required"));
 								return;
 							}
 						}
@@ -3327,7 +3328,7 @@ discord_socket_got_data(gpointer userdata, PurpleSslConnection *conn, PurpleInpu
 		purple_debug_error("discord", "got errno %d, read_len %d from websocket thread\n", errno, read_len);
 
 		if (ya->frames_since_reconnect < 2) {
-			purple_connection_error(ya->pc, PURPLE_CONNECTION_ERROR_NETWORK_ERROR, "Lost connection to server");
+			purple_connection_error(ya->pc, PURPLE_CONNECTION_ERROR_NETWORK_ERROR, _("Lost connection to server"));
 		} else {
 			/* Try reconnect */
 			discord_start_socket(ya);
@@ -3371,7 +3372,7 @@ discord_socket_failed(PurpleSslConnection *conn, PurpleSslErrorType errortype, g
 	da->websocket_header_received = FALSE;
 
 	if (da->frames_since_reconnect < 1) {
-		purple_connection_error(da->pc, PURPLE_CONNECTION_ERROR_NETWORK_ERROR, "Couldn't connect to gateway");
+		purple_connection_error(da->pc, PURPLE_CONNECTION_ERROR_NETWORK_ERROR, _("Couldn't connect to gateway"));
 	} else {
 		discord_restart_channel(da);
 	}
@@ -3516,7 +3517,7 @@ discord_chat_info(PurpleConnection *pc)
 	PurpleProtocolChatEntry *pce;
 
 	pce = g_new0(PurpleProtocolChatEntry, 1);
-	pce->label = _("Channel ID");
+	pce->label = _("ID");
 	pce->identifier = "id";
 	m = g_list_append(m, pce);
 
@@ -4461,15 +4462,20 @@ discord_got_info(DiscordAccount *da, JsonNode *node, gpointer user_data)
 	GString *buffer = g_string_new("");
 	g_string_printf(buffer, "%" G_GUINT64_FORMAT, user->id);
 	purple_notify_user_info_add_pair_html(user_info, _("ID"), buffer->str);
-	g_string_printf(buffer, "%s#%04d", user->name, user->discriminator);
-	purple_notify_user_info_add_pair_html(user_info, _("Full Username"), buffer->str);
 	purple_notify_user_info_add_pair_html(user_info, _("Username"), user->name);
 
 	/* Display other non-profile info that we know about this buddy */
+	gchar *status_strings[4] = {
+		_("Online"),
+		_("Idle"),
+		_("Offline"),
+		_("Do Not Disturb")
+	};
+
 	purple_notify_user_info_add_pair_html(user_info, _("Status"), status_strings[user->status]);
 
 	if (user->game != NULL) {
-		purple_notify_user_info_add_pair_html(user_info, _("In-Game"), user->game);
+		purple_notify_user_info_add_pair_html(user_info, _("Playing"), user->game);
 	}
 
 	purple_notify_user_info_add_pair_html(user_info, NULL, NULL);
@@ -4549,16 +4555,16 @@ discord_status_types(PurpleAccount *account)
 	types = g_list_append(types, status);
 
 	/* Other people can have an in-game display */
-	status = purple_status_type_new_with_attrs(PURPLE_STATUS_AVAILABLE, "online", _("Online"), TRUE, use_status_as_game, FALSE, "message", "In-Game", purple_value_new(PURPLE_TYPE_STRING), NULL);
+	status = purple_status_type_new_with_attrs(PURPLE_STATUS_AVAILABLE, "online", _("Online"), TRUE, use_status_as_game, FALSE, "message", _("Playing"), purple_value_new(PURPLE_TYPE_STRING), NULL);
 	types = g_list_append(types, status);
 
-	status = purple_status_type_new_with_attrs(PURPLE_STATUS_AWAY, "idle", _("Idle"), TRUE, use_status_as_game, FALSE, "message", "In-Game", purple_value_new(PURPLE_TYPE_STRING), NULL);
+	status = purple_status_type_new_with_attrs(PURPLE_STATUS_AWAY, "idle", _("Idle"), TRUE, use_status_as_game, FALSE, "message", _("Playing"), purple_value_new(PURPLE_TYPE_STRING), NULL);
 	types = g_list_append(types, status);
 
-	status = purple_status_type_new_with_attrs(PURPLE_STATUS_UNAVAILABLE, "dnd", _("Do Not Disturb"), TRUE, use_status_as_game, FALSE, "message", "In-Game", purple_value_new(PURPLE_TYPE_STRING), NULL);
+	status = purple_status_type_new_with_attrs(PURPLE_STATUS_UNAVAILABLE, "dnd", _("Do Not Disturb"), TRUE, use_status_as_game, FALSE, "message", _("Playing"), purple_value_new(PURPLE_TYPE_STRING), NULL);
 	types = g_list_append(types, status);
 
-	status = purple_status_type_new_with_attrs(PURPLE_STATUS_OFFLINE, "offline", _("Offline"), TRUE, FALSE, FALSE, "message", "In-Game", purple_value_new(PURPLE_TYPE_STRING), NULL);
+	status = purple_status_type_new_with_attrs(PURPLE_STATUS_OFFLINE, "offline", _("Offline"), TRUE, FALSE, FALSE, "message", _("Playing"), purple_value_new(PURPLE_TYPE_STRING), NULL);
 	types = g_list_append(types, status);
 
 	return types;
@@ -4673,13 +4679,13 @@ discord_add_account_options(GList *account_options)
 {
 	PurpleAccountOption *option;
 
-	option = purple_account_option_bool_new(N_("Use status message as in-game info"), "use-status-as-game", FALSE);
+	option = purple_account_option_bool_new(_("Use status message as in-game info"), "use-status-as-game", FALSE);
 	account_options = g_list_append(account_options, option);
 
-	option = purple_account_option_bool_new(N_("Auto-create rooms on buddy list"), "populate-blist", TRUE);
+	option = purple_account_option_bool_new(_("Auto-create rooms on buddy list"), "populate-blist", TRUE);
 	account_options = g_list_append(account_options, option);
 
-	option = purple_account_option_int_new(N_("Number of users in a large channel"), "large-channel-count", 20);
+	option = purple_account_option_int_new(_("Number of users in a large channel"), "large-channel-count", 20);
 	account_options = g_list_append(account_options, option);
 
 	return account_options;
@@ -4858,6 +4864,12 @@ libpurple2_plugin_unload(PurplePlugin *plugin)
 static void
 plugin_init(PurplePlugin *plugin)
 {
+
+#ifdef ENABLE_NLS
+	bindtextdomain(GETTEXT_PACKAGE, LOCALEDIR);
+	bind_textdomain_codeset(GETTEXT_PACKAGE, "UTF-8");
+#endif
+
 	PurplePluginInfo *info;
 	PurplePluginProtocolInfo *prpl_info = g_new0(PurplePluginProtocolInfo, 1);
 
@@ -5104,9 +5116,9 @@ plugin_query(GError **error)
 	  "id", DISCORD_PLUGIN_ID,
 	  "name", "Discord",
 	  "version", DISCORD_PLUGIN_VERSION,
-	  "category", N_("Protocol"),
-	  "summary", N_("Discord Protocol Plugins."),
-	  "description", N_("Adds Discord protocol support to libpurple."),
+	  "category", _("Protocol"),
+	  "summary", _("Discord Protocol Plugins."),
+	  "description", _("Adds Discord protocol support to libpurple."),
 	  "website", DISCORD_PLUGIN_WEBSITE,
 	  "abi-version", PURPLE_ABI_VERSION,
 	  "flags", PURPLE_PLUGIN_INFO_FLAGS_INTERNAL |
