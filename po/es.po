@@ -44,11 +44,11 @@ msgstr ""
 
 #, fuzzy
 msgid "_Login"
-msgstr "Iniciar sesión"
+msgstr "_Iniciar sesión"
 
 #, fuzzy
 msgid "_Cancel"
-msgstr "Cancelar"
+msgstr "_Cancelar"
 
 msgid "Bad username/password"
 msgstr "Nombre de usuario o contraseña incorrecto "
