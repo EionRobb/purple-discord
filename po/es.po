@@ -20,7 +20,7 @@ msgid "Connection error: %s."
 msgstr "Error de conexión: %s."
 
 msgid "ID"
-msgstr "identificación"
+msgstr "Identificación"
 
 msgid "Name"
 msgstr "Nombre"
