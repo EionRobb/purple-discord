@@ -17,7 +17,7 @@ msgstr ""
 
 #, c-format
 msgid "Connection error: %s."
-msgstr "Error de conexión: %s"
+msgstr "Error de conexión: %s."
 
 msgid "ID"
 msgstr "identificación"
@@ -51,7 +51,7 @@ msgid "_Cancel"
 msgstr "_Cancelar"
 
 msgid "Bad username/password"
-msgstr "Nombre de usuario o contraseña incorrecto "
+msgstr "Nombre de usuario o contraseña incorrecto"
 
 msgid "Username needs to be an email address"
 msgstr "Nombre de usuario tiene que ser una dirección de correo electrónico"
@@ -118,10 +118,10 @@ msgid "Playing"
 msgstr "Jugando"
 
 msgid "Email address..."
-msgstr "Dirección de correo electrónico"
+msgstr "Dirección de correo electrónico..."
 
 msgid "Use status message as in-game info"
-msgstr "Usar el mensaje de status como la información del juego."
+msgstr "Usar el mensaje de status como la información del juego"
 
 msgid "Auto-create rooms on buddy list"
 msgstr "Automáticamente crear salas en la lista de amigos"
@@ -169,7 +169,7 @@ msgid "Protocol"
 msgstr "Protocolo"
 
 msgid "Discord Protocol Plugins."
-msgstr "Plug-in del Protocolo de Discord"
+msgstr "Plug-in del Protocolo de Discord."
 
 msgid "Adds Discord protocol support to libpurple."
-msgstr "Le añade el protocolo de Discord a libpurple."
+msgstr "Añadir el protocolo de Discord a libpurple."
