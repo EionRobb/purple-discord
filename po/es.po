@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: 0.9\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2017-08-20 16:36-0700\n"
+"POT-Creation-Date: 2017-08-20 17:24-0700\n"
 "PO-Revision-Date: 2017-08-20 12:23-0700\n"
 "Last-Translator: Alyssa Rosenzweig <alyssa@rosenzweig.io>\n"
 "Language-Team: es <LL@li.org>\n"
@@ -64,9 +64,6 @@ msgstr "Conexión al servidor perdida"
 
 msgid "Couldn't connect to gateway"
 msgstr "No se puede conectar al gateway"
-
-msgid "Channel ID"
-msgstr "Identificación del canál"
 
 msgid "Bad channel type"
 msgstr "Mal tipo de canál"
@@ -138,9 +135,6 @@ msgstr "Poner el URL de entrada aquí"
 msgid "_Join"
 msgstr "_Entrar"
 
-msgid "Cancel"
-msgstr "Cancelar"
-
 msgid "Join a server..."
 msgstr "Entrar un servidor..."
 
@@ -173,3 +167,9 @@ msgstr "Plug-in del Protocolo de Discord."
 
 msgid "Adds Discord protocol support to libpurple."
 msgstr "Añadir el protocolo de Discord a libpurple."
+
+#~ msgid "Channel ID"
+#~ msgstr "Identificación del canál"
+
+#~ msgid "Cancel"
+#~ msgstr "Cancelar"
