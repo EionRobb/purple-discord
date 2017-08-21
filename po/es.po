@@ -87,7 +87,7 @@ msgid "Offline"
 msgstr "Desconectado"
 
 msgid "Do Not Disturb"
-msgstr "No interrumpir"
+msgstr "No molestar"
 
 msgid "Status"
 msgstr "Status"
