@@ -135,8 +135,8 @@ msgstr "Entrar un servidor"
 msgid "Enter the join URL here"
 msgstr "Poner el URL de entrada aquí"
 
-msgid "Join"
-msgstr "Entrar"
+msgid "_Join"
+msgstr "_Entrar"
 
 msgid "Cancel"
 msgstr "Cancelar"

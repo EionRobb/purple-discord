@@ -4723,8 +4723,8 @@ discord_join_server(PurpleProtocolAction *action)
 						 _("Join a server"),
 						 _("Enter the join URL here"),
 						 NULL, FALSE, FALSE, "https://discord.gg/ABC123",
-						 _("Join"), G_CALLBACK(discord_join_server_text),
-						 _("Cancel"), NULL,
+						 _("_Join"), G_CALLBACK(discord_join_server_text),
+						 _("_Cancel"), NULL,
 						 purple_request_cpar_from_connection(pc),
 						 da);
 }
