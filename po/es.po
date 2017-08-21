@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: 0.9\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2017-08-20 17:29-0700\n"
+"POT-Creation-Date: 2017-08-20 17:26-0700\n"
 "PO-Revision-Date: 2017-08-20 12:23-0700\n"
 "Last-Translator: Alyssa Rosenzweig <alyssa@rosenzweig.io>\n"
 "Language-Team: es <LL@li.org>\n"
@@ -104,6 +104,10 @@ msgstr "Servidores mutuales"
 msgid "Invisible"
 msgstr "Invisible"
 
+#, c-format
+msgid "Playing %s"
+msgstr "Jugando %s"
+
 msgid "Playing"
 msgstr "Jugando"
 
@@ -160,9 +164,6 @@ msgstr "Plug-in del Protocolo de Discord."
 
 msgid "Adds Discord protocol support to libpurple."
 msgstr "Añadir el protocolo de Discord a libpurple."
-
-#~ msgid "Playing %s"
-#~ msgstr "Jugando %s"
 
 #~ msgid "Full Username"
 #~ msgstr "Nombre de usuario completo"
