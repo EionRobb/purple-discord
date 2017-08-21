@@ -3515,7 +3515,7 @@ discord_chat_info(PurpleConnection *pc)
 	PurpleProtocolChatEntry *pce;
 
 	pce = g_new0(PurpleProtocolChatEntry, 1);
-	pce->label = _("Channel ID");
+	pce->label = _("ID");
 	pce->identifier = "id";
 	m = g_list_append(m, pce);
 
