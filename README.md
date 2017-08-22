@@ -28,11 +28,12 @@ Thank you to Vitaly Zaitsev for this package.
 Gentoo
 --------
 
-Copy purple-discord-9999.ebuild to `/usr/local/portage/x11-plugins/purple-discord` with folders created as necessary.
+Extract [purple-discord-9999.ebuild](https://github.com/EionRobb/purple-discord/files/994369/ebuild.zip) and copy it to `/usr/local/portage/x11-plugins/purple-discord` with folders created as necessary.
 
 ```bash
     mkdir -p /usr/local/portage/x11-plugins/purple-discord
 	cp purple-discord-9999.ebuild /usr/local/portage/x11-plugins/purple-discord
+	cd /usr/local/portage/x11-plugins/purple-discord
 	ebuild purple-discord-9999.ebuild manifest
 	eix-update; eix-diff # only if eix is installed
 	emerge purple-discord
