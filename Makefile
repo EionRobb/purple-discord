@@ -126,8 +126,7 @@ install-icons: discord16.png discord22.png discord48.png
 	install -m $(FILE_PERM) -p discord48.png $(DISCORD_ICONS_DEST)/48/discord.png
 
 install-locales: $(LOCALES)
-	mkdir -m $(DIR_PERM) -p $(LOCALEDIR)/es/LC_MESSAGES
-	install -m $(FILE_PERM) -p po/es.mo $(LOCALEDIR)/es/LC_MESSAGES/purple-discord.mo
+	install -D -m $(FILE_PERM) -p po/es.mo $(LOCALEDIR)/es/LC_MESSAGES/purple-discord.mo
 
 FAILNOPURPLE:
 	echo "You need libpurple development headers installed to be able to compile this plugin"
