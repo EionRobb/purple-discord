@@ -22,7 +22,7 @@ PLUGIN_VERSION ?= 0.9.$(shell date +%Y.%m.%d)
 endif
 
 CFLAGS	?= -O2 -g -pipe -Wall
-LDFLAGS ?= -Wl,-z,relro 
+LDFLAGS ?= -Wl,-z,relro
 
 CFLAGS  += -std=c99 -DDISCORD_PLUGIN_VERSION='"$(PLUGIN_VERSION)"'
 
@@ -72,7 +72,7 @@ else
   endif
 endif
 
-WIN32_CFLAGS = -std=c99 -I$(WIN32_DEV_TOP)/glib-2.28.8/include -I$(WIN32_DEV_TOP)/glib-2.28.8/include/glib-2.0 -I$(WIN32_DEV_TOP)/glib-2.28.8/lib/glib-2.0/include -I$(WIN32_DEV_TOP)/json-glib-0.14/include/json-glib-1.0 -DENABLE_NLS -DDISCORD_PLUGIN_VERSION='"$(PLUGIN_VERSION)"' -Wall -Wextra -Werror -Wno-deprecated-declarations -Wno-unused-parameter -fno-strict-aliasing -Wformat 
+WIN32_CFLAGS = -std=c99 -I$(WIN32_DEV_TOP)/glib-2.28.8/include -I$(WIN32_DEV_TOP)/glib-2.28.8/include/glib-2.0 -I$(WIN32_DEV_TOP)/glib-2.28.8/lib/glib-2.0/include -I$(WIN32_DEV_TOP)/json-glib-0.14/include/json-glib-1.0 -DENABLE_NLS -DDISCORD_PLUGIN_VERSION='"$(PLUGIN_VERSION)"' -Wall -Wextra -Werror -Wno-deprecated-declarations -Wno-unused-parameter -fno-strict-aliasing -Wformat
 WIN32_LDFLAGS = -L$(WIN32_DEV_TOP)/glib-2.28.8/lib -L$(WIN32_DEV_TOP)/json-glib-0.14/lib -lpurple -lintl -lglib-2.0 -lgobject-2.0 -ljson-glib-1.0 -g -ggdb -static-libgcc -lz
 WIN32_PIDGIN2_CFLAGS = -I$(PIDGIN_TREE_TOP)/libpurple -I$(PIDGIN_TREE_TOP) $(WIN32_CFLAGS)
 WIN32_PIDGIN3_CFLAGS = -I$(PIDGIN3_TREE_TOP)/libpurple -I$(PIDGIN3_TREE_TOP) -I$(WIN32_DEV_TOP)/gplugin-dev/gplugin $(WIN32_CFLAGS)
@@ -81,8 +81,8 @@ WIN32_PIDGIN3_LDFLAGS = -L$(PIDGIN3_TREE_TOP)/libpurple -L$(WIN32_DEV_TOP)/gplug
 
 CFLAGS += -DLOCALEDIR=\"$(LOCALEDIR)\"
 
-C_FILES := 
-PURPLE_COMPAT_FILES := 
+C_FILES :=
+PURPLE_COMPAT_FILES :=
 PURPLE_C_FILES := libdiscord.c $(C_FILES)
 
 .PHONY:	all install FAILNOPURPLE clean install-icons install-locales
@@ -127,12 +127,13 @@ install-icons: discord16.png discord22.png discord48.png
 
 install-locales: $(LOCALES)
 	install -D -m $(FILE_PERM) -p po/es.mo $(LOCALEDIR)/es/LC_MESSAGES/purple-discord.mo
+	install -D -m $(FILE_PERM) -p po/it.mo $(LOCALEDIR)/it/LC_MESSAGES/purple-discord.mo
 
 FAILNOPURPLE:
 	echo "You need libpurple development headers installed to be able to compile this plugin"
 
 clean:
-	rm -f $(DISCORD_TARGET) 
+	rm -f $(DISCORD_TARGET)
 
 gdb:
 	gdb --args pidgin -c ~/.fake_purple -n -m
