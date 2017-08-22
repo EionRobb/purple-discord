@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: 0.9\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2017-08-20 17:26-0700\n"
+"POT-Creation-Date: 2017-08-22 12:59-0700\n"
 "PO-Revision-Date: 2017-08-20 12:23-0700\n"
 "Last-Translator: Alyssa Rosenzweig <alyssa@rosenzweig.io>\n"
 "Language-Team: es <LL@li.org>\n"
@@ -92,8 +92,8 @@ msgstr "No molestar"
 msgid "Status"
 msgstr "Status"
 
-msgid "In-Game"
-msgstr "En juego"
+msgid "Playing"
+msgstr "Jugando"
 
 msgid "Connected Accounts"
 msgstr "Cuentas conectadas"
@@ -108,9 +108,6 @@ msgstr "Invisible"
 msgid "Playing %s"
 msgstr "Jugando %s"
 
-msgid "Playing"
-msgstr "Jugando"
-
 msgid "Email address..."
 msgstr "Dirección de correo electrónico..."
 
@@ -124,7 +121,7 @@ msgid "Number of users in a large channel"
 msgstr "Número de usuarios en un gran canal"
 
 msgid "Join a server"
-msgstr "Entrar un servidor"
+msgstr "Entrar a un servidor"
 
 msgid "Enter the join URL here"
 msgstr "Poner el URL de entrada aquí"
@@ -164,6 +161,9 @@ msgstr "Plug-in del Protocolo de Discord."
 
 msgid "Adds Discord protocol support to libpurple."
 msgstr "Añadir el protocolo de Discord a libpurple."
+
+#~ msgid "In-Game"
+#~ msgstr "En juego"
 
 #~ msgid "Full Username"
 #~ msgstr "Nombre de usuario completo"

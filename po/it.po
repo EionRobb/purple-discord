@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: 0.9\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2017-08-20 17:26-0700\n"
+"POT-Creation-Date: 2017-08-22 12:59-0700\n"
 "PO-Revision-Date: 2017-08-22 21:01+0200\n"
 "Last-Translator: Penaz <penazarea@altervista.org>\n"
 "Language-Team: Italian <>\n"
@@ -91,8 +91,8 @@ msgstr "Non Disturbare"
 msgid "Status"
 msgstr "Stato"
 
-msgid "In-Game"
-msgstr "In gioco"
+msgid "Playing"
+msgstr "In Gioco"
 
 msgid "Connected Accounts"
 msgstr "Account Connessi"
@@ -106,9 +106,6 @@ msgstr "Invisibile"
 #, c-format
 msgid "Playing %s"
 msgstr "In gioco: %s"
-
-msgid "Playing"
-msgstr "In Gioco"
 
 msgid "Email address..."
 msgstr "Indirizzo email..."
@@ -163,6 +160,9 @@ msgstr "Plug-in del Protocollo di Discord."
 
 msgid "Adds Discord protocol support to libpurple."
 msgstr "Aggiunge il supporto per il protocollo Discord a LibPurple"
+
+#~ msgid "In-Game"
+#~ msgstr "In gioco"
 
 #~ msgid "Full Username"
 #~ msgstr "Nombre de usuario completo"
