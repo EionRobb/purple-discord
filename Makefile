@@ -62,13 +62,13 @@ else
       DISCORD_TARGET = libdiscord.so
       DISCORD_DEST = $(DESTDIR)`$(PKG_CONFIG) --variable=plugindir purple`
       DISCORD_ICONS_DEST = $(DESTDIR)`$(PKG_CONFIG) --variable=datadir purple`/pixmaps/pidgin/protocols
-      LOCALEDIR = $(shell $(PKG_CONFIG) --variable=datadir purple)/locale
+      LOCALEDIR = $(DESTDIR)$(shell $(PKG_CONFIG) --variable=datadir purple)/locale
     endif
   else
     DISCORD_TARGET = libdiscord3.so
     DISCORD_DEST = $(DESTDIR)`$(PKG_CONFIG) --variable=plugindir purple-3`
     DISCORD_ICONS_DEST = $(DESTDIR)`$(PKG_CONFIG) --variable=datadir purple-3`/pixmaps/pidgin/protocols
-    LOCALEDIR = $(shell $(PKG_CONFIG) --variable=datadir purple-3)/locale
+    LOCALEDIR = $(DESTDIR)$(shell $(PKG_CONFIG) --variable=datadir purple-3)/locale
   endif
 endif
 
@@ -126,7 +126,7 @@ install-icons: discord16.png discord22.png discord48.png
 	install -m $(FILE_PERM) -p discord48.png $(DISCORD_ICONS_DEST)/48/discord.png
 
 install-locales: $(LOCALES)
-	install -m $(FILE_PERM) -p po/es.mo $(LOCALEDIR)/es/LC_MESSAGES/purple-discord.mo
+	install -D -m $(FILE_PERM) -p po/es.mo $(LOCALEDIR)/es/LC_MESSAGES/purple-discord.mo
 
 FAILNOPURPLE:
 	echo "You need libpurple development headers installed to be able to compile this plugin"
