@@ -1267,6 +1267,9 @@ discord_replace_channel(const GMatchInfo *match, GString *result, gpointer user_
 	return FALSE;
 }
 
+#define COLOR_START "<font color=\"#%06X\">"
+#define COLOR_END "</font>"
+
 static gboolean
 discord_replace_role(const GMatchInfo *match, GString *result, gpointer user_data)
 {
@@ -1286,7 +1289,7 @@ discord_replace_role(const GMatchInfo *match, GString *result, gpointer user_dat
 		/* TODO make this a clickable link */
 
 		if (role->color) {
-			g_string_append_printf(result, "<font color=\"#%06X\"><b>@%s</b></font>", role->color, role->name);
+			g_string_append_printf(result, COLOR_START "<b>@%s</b>" COLOR_END, role->color, role->name);
 		} else {
 			g_string_append_printf(result, "<b>@%s</b>", role->name);
 		}
@@ -4471,7 +4474,6 @@ discord_fake_group_rename(PurpleConnection *pc, const char *old_name, PurpleGrou
 	/* Do nothing to stop the remove+add behaviour */
 }
 
-/* TODO can we optimize this out? */
 static void
 discord_got_info(DiscordAccount *da, JsonNode *node, gpointer user_data)
 {
@@ -4504,8 +4506,10 @@ discord_got_info(DiscordAccount *da, JsonNode *node, gpointer user_data)
 		purple_notify_user_info_add_pair_html(user_info, _("Playing"), user->game);
 	}
 
-	purple_notify_user_info_add_pair_html(user_info, NULL, NULL);
-	purple_notify_user_info_add_pair_html(user_info, _("Connected Accounts"), NULL);
+	if (json_array_get_length(connected_accounts)) {
+		purple_notify_user_info_add_section_break(user_info);
+		purple_notify_user_info_add_pair_html(user_info, _("Connected Accunts"), user->game);
+	}
 
 	for (i = json_array_get_length(connected_accounts) - 1; i >= 0; i--) {
 		JsonObject *account = json_array_get_object_element(connected_accounts, i);
@@ -4518,15 +4522,35 @@ discord_got_info(DiscordAccount *da, JsonNode *node, gpointer user_data)
 		purple_notify_user_info_add_pair_html(user_info, type, name);
 	}
 
-	purple_notify_user_info_add_pair_html(user_info, NULL, NULL);
-	purple_notify_user_info_add_pair_html(user_info, _("Mutual Servers"), NULL);
+	if (json_array_get_length(mutual_guilds)) {
+		purple_notify_user_info_add_section_break(user_info);
+		purple_notify_user_info_add_pair_html(user_info, _("Mutual Servers"), user->game);
+	}
 
 	for (i = json_array_get_length(mutual_guilds) - 1; i >= 0; i--) {
-		JsonObject *guild = json_array_get_object_element(mutual_guilds, i);
-		guint64 id = to_int(json_object_get_string_member(guild, "id"));
-		const gchar *name = discord_get_guild(da, id)->name;
+		JsonObject *guild_o = json_array_get_object_element(mutual_guilds, i);
+		guint64 id = to_int(json_object_get_string_member(guild_o, "id"));
 
-		purple_notify_user_info_add_pair_html(user_info, NULL, name);
+		DiscordGuild *guild = discord_get_guild(da, id);
+		DiscordGuildMembership *membership = g_hash_table_lookup_int64(user->guild_memberships, id);
+
+		if (membership) {
+			gchar *name = membership->nick;
+			if (!name || !strlen(name)) {
+				name = user->name;
+			}
+
+			GString *role_str = g_string_new(name);
+
+			for (guint i = 0; i < membership->roles->len; i++) {
+				guint64 role_id = g_array_index(membership->roles, guint64, i);
+				DiscordGuildRole *role = g_hash_table_lookup_int64(guild->roles, role_id);
+
+				g_string_append_printf(role_str, " [" COLOR_START "%s" COLOR_END "]", role->color, role->name);
+			}
+
+			purple_notify_user_info_add_pair_html(user_info, guild->name, g_string_free(role_str, FALSE));
+		}
 	}
 
 	purple_notify_userinfo(da->pc, buffer->str, user_info, NULL, NULL);
