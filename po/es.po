@@ -1,0 +1,175 @@
+#
+# Alyssa Rosenzweig <alyssa@rosenzweig.io>, 2017.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: 0.9\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2017-08-22 12:59-0700\n"
+"PO-Revision-Date: 2017-08-20 12:23-0700\n"
+"Last-Translator: Alyssa Rosenzweig <alyssa@rosenzweig.io>\n"
+"Language-Team: es <LL@li.org>\n"
+"Language: es\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Generator: Poedit 2.0.3\n"
+
+#, c-format
+msgid "Connection error: %s."
+msgstr "Error de conexión: %s."
+
+msgid "ID"
+msgstr "Identificación"
+
+msgid "Name"
+msgstr "Nombre"
+
+msgid "Room Type"
+msgstr "Tipo de sala"
+
+msgid "Cancelled 2FA auth"
+msgstr "Autenticación de dos factores cancelada"
+
+msgid "Two-factor authentication"
+msgstr "Autenticación de dos factores"
+
+msgid "Enter Discord auth code"
+msgstr "Poner código de autorización de Discord"
+
+msgid "You can get this token from your two-factor authentication mobile app."
+msgstr ""
+"Puede encontrar este código de su aplicación de autenticación de dos "
+"factores."
+
+#, fuzzy
+msgid "_Login"
+msgstr "_Iniciar sesión"
+
+#, fuzzy
+msgid "_Cancel"
+msgstr "_Cancelar"
+
+msgid "Bad username/password"
+msgstr "Nombre de usuario o contraseña incorrecto"
+
+msgid "Username needs to be an email address"
+msgstr "Nombre de usuario tiene que ser una dirección de correo electrónico"
+
+msgid "Reauthentication required"
+msgstr "Hay que autenticar otra vez"
+
+msgid "Lost connection to server"
+msgstr "Conexión al servidor perdida"
+
+msgid "Couldn't connect to gateway"
+msgstr "No se puede conectar al gateway"
+
+msgid "Bad channel type"
+msgstr "Mal tipo de canal"
+
+msgid "Cannot join a voice channel as text"
+msgstr "No se puede entrar un canal de voz como texto"
+
+msgid "Could not create conversation"
+msgstr "No pudo construir la conversación"
+
+msgid "Username"
+msgstr "Nombre de usuario"
+
+msgid "Online"
+msgstr "Disponsible"
+
+msgid "Idle"
+msgstr "Ocioso"
+
+msgid "Offline"
+msgstr "Desconectado"
+
+msgid "Do Not Disturb"
+msgstr "No molestar"
+
+msgid "Status"
+msgstr "Status"
+
+msgid "Playing"
+msgstr "Jugando"
+
+msgid "Connected Accounts"
+msgstr "Cuentas conectadas"
+
+msgid "Mutual Servers"
+msgstr "Servidores mutuales"
+
+msgid "Invisible"
+msgstr "Invisible"
+
+#, c-format
+msgid "Playing %s"
+msgstr "Jugando %s"
+
+msgid "Email address..."
+msgstr "Dirección de correo electrónico..."
+
+msgid "Use status message as in-game info"
+msgstr "Usar el mensaje de status como la información del juego"
+
+msgid "Auto-create rooms on buddy list"
+msgstr "Automáticamente crear salas en la lista de amigos"
+
+msgid "Number of users in a large channel"
+msgstr "Número de usuarios en un gran canal"
+
+msgid "Join a server"
+msgstr "Entrar a un servidor"
+
+msgid "Enter the join URL here"
+msgstr "Poner el URL de entrada aquí"
+
+msgid "_Join"
+msgstr "_Entrar"
+
+msgid "Join a server..."
+msgstr "Entrar un servidor..."
+
+msgid "nick <new nickname>:  Changes nickname on a server"
+msgstr "nick <nombre nuevo>:  Cambiar el nombre en un servidor"
+
+msgid "kick <username>:  Remove someone from channel"
+msgstr "kick <nombre>:  Quitar alguien del canal"
+
+msgid "leave:  Leave the channel"
+msgstr "leave: Salir el canal"
+
+msgid "part:  Leave the channel"
+msgstr "part: Salir el canal"
+
+msgid "mute <username>:  Mute someone in channel"
+msgstr "mute <nombre>:  Enmudecer alguien del canal"
+
+msgid "unmute <username>:  Un-mute someone in channel"
+msgstr "unmute <nombre>: Desenmudecer alguien del canal"
+
+msgid "topic <description>:  Set the channel topic description"
+msgstr "topic <descripción>:  Cambiar la descripción del tópico del canal"
+
+msgid "Protocol"
+msgstr "Protocolo"
+
+msgid "Discord Protocol Plugins."
+msgstr "Plug-in del Protocolo de Discord."
+
+msgid "Adds Discord protocol support to libpurple."
+msgstr "Añadir el protocolo de Discord a libpurple."
+
+#~ msgid "In-Game"
+#~ msgstr "En juego"
+
+#~ msgid "Full Username"
+#~ msgstr "Nombre de usuario completo"
+
+#~ msgid "Channel ID"
+#~ msgstr "Identificación del canal"
+
+#~ msgid "Cancel"
+#~ msgstr "Cancelar"

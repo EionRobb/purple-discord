@@ -25,9 +25,8 @@
 #define PURPLE_PLUGINS
 #endif
 
-#ifndef _
-#define _(a) (a)
-#define N_(a) (a)
+#ifdef _WIN32
+#include <win32/win32dep.h>
 #endif
 
 // Purple2 compat functions

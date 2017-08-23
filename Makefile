@@ -22,17 +22,20 @@ PLUGIN_VERSION ?= 0.9.$(shell date +%Y.%m.%d)
 endif
 
 CFLAGS	?= -O2 -g -pipe -Wall
-LDFLAGS ?= -Wl,-z,relro 
+LDFLAGS ?= -Wl,-z,relro
 
 CFLAGS  += -std=c99 -DDISCORD_PLUGIN_VERSION='"$(PLUGIN_VERSION)"'
+
+# Comment out to disable localisation
+CFLAGS += -DENABLE_NLS
 
 # Do some nasty OS and purple version detection
 ifeq ($(OS),Windows_NT)
   DISCORD_TARGET = libdiscord.dll
   DISCORD_DEST = "$(PROGRAMFILES)/Pidgin/plugins"
   DISCORD_ICONS_DEST = "$(PROGRAMFILES)/Pidgin/pixmaps/pidgin/protocols"
+  LOCALEDIR = "$(PROGRAMFILES)/Pidgin/locale"
 else
-
   UNAME_S := $(shell uname -s)
 
   #.. There are special flags we need for OSX
@@ -54,16 +57,18 @@ else
     ifeq ($(shell $(PKG_CONFIG) --exists purple 2>/dev/null && echo "true"),)
       DISCORD_TARGET = FAILNOPURPLE
       DISCORD_DEST =
-	  DISCORD_ICONS_DEST =
+      DISCORD_ICONS_DEST =
     else
       DISCORD_TARGET = libdiscord.so
       DISCORD_DEST = $(DESTDIR)`$(PKG_CONFIG) --variable=plugindir purple`
-	  DISCORD_ICONS_DEST = $(DESTDIR)`$(PKG_CONFIG) --variable=datadir purple`/pixmaps/pidgin/protocols
+      DISCORD_ICONS_DEST = $(DESTDIR)`$(PKG_CONFIG) --variable=datadir purple`/pixmaps/pidgin/protocols
+      LOCALEDIR = $(DESTDIR)$(shell $(PKG_CONFIG) --variable=datadir purple)/locale
     endif
   else
     DISCORD_TARGET = libdiscord3.so
     DISCORD_DEST = $(DESTDIR)`$(PKG_CONFIG) --variable=plugindir purple-3`
-	DISCORD_ICONS_DEST = $(DESTDIR)`$(PKG_CONFIG) --variable=datadir purple-3`/pixmaps/pidgin/protocols
+    DISCORD_ICONS_DEST = $(DESTDIR)`$(PKG_CONFIG) --variable=datadir purple-3`/pixmaps/pidgin/protocols
+    LOCALEDIR = $(DESTDIR)$(shell $(PKG_CONFIG) --variable=datadir purple-3)/locale
   endif
 endif
 
@@ -74,13 +79,15 @@ WIN32_PIDGIN3_CFLAGS = -I$(PIDGIN3_TREE_TOP)/libpurple -I$(PIDGIN3_TREE_TOP) -I$
 WIN32_PIDGIN2_LDFLAGS = -L$(PIDGIN_TREE_TOP)/libpurple $(WIN32_LDFLAGS)
 WIN32_PIDGIN3_LDFLAGS = -L$(PIDGIN3_TREE_TOP)/libpurple -L$(WIN32_DEV_TOP)/gplugin-dev/gplugin $(WIN32_LDFLAGS) -lgplugin
 
-C_FILES := 
-PURPLE_COMPAT_FILES := 
+CFLAGS += -DLOCALEDIR=\"$(LOCALEDIR)\"
+
+C_FILES :=
+PURPLE_COMPAT_FILES :=
 PURPLE_C_FILES := libdiscord.c $(C_FILES)
 
+.PHONY:	all install FAILNOPURPLE clean install-icons install-locales
 
-
-.PHONY:	all install FAILNOPURPLE clean install-icons
+LOCALES = $(patsubst %.po, %.mo, $(wildcard po/*.po))
 
 all: $(DISCORD_TARGET)
 
@@ -96,7 +103,17 @@ libdiscord.dll: $(PURPLE_C_FILES) $(PURPLE_COMPAT_FILES)
 libdiscord3.dll: $(PURPLE_C_FILES) $(PURPLE_COMPAT_FILES)
 	$(WIN32_CC) -O0 -g -ggdb -shared -o $@ $^ $(WIN32_PIDGIN3_CFLAGS) $(WIN32_PIDGIN3_LDFLAGS)
 
-install: $(DISCORD_TARGET) install-icons
+po/purple-discord.pot: libdiscord.c
+	xgettext $^ -k_ --no-location -o $@
+
+po/%.po: po/purple-discord.pot
+	msgmerge $@ po/purple-discord.pot > tmp
+	mv -f tmp $@
+
+po/%.mo: po/%.po
+	msgfmt -o $@ $^
+
+install: $(DISCORD_TARGET) install-icons install-locales
 	mkdir -m $(DIR_PERM) -p $(DISCORD_DEST)
 	install -m $(LIB_PERM) -p $(DISCORD_TARGET) $(DISCORD_DEST)
 
@@ -108,11 +125,15 @@ install-icons: discord16.png discord22.png discord48.png
 	install -m $(FILE_PERM) -p discord22.png $(DISCORD_ICONS_DEST)/22/discord.png
 	install -m $(FILE_PERM) -p discord48.png $(DISCORD_ICONS_DEST)/48/discord.png
 
+install-locales: $(LOCALES)
+	install -D -m $(FILE_PERM) -p po/es.mo $(LOCALEDIR)/es/LC_MESSAGES/purple-discord.mo
+	install -D -m $(FILE_PERM) -p po/it.mo $(LOCALEDIR)/it/LC_MESSAGES/purple-discord.mo
+
 FAILNOPURPLE:
 	echo "You need libpurple development headers installed to be able to compile this plugin"
 
 clean:
-	rm -f $(DISCORD_TARGET) 
+	rm -f $(DISCORD_TARGET)
 
 gdb:
 	gdb --args pidgin -c ~/.fake_purple -n -m
