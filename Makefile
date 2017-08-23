@@ -13,13 +13,7 @@ DIR_PERM = 0755
 LIB_PERM = 0755
 FILE_PERM = 0644
 
-REVISION_ID = $(shell hg id -i)
-REVISION_NUMBER = $(shell hg id -n)
-ifneq ($(REVISION_ID),)
-PLUGIN_VERSION ?= 0.9.$(shell date +%Y.%m.%d).git.r$(REVISION_NUMBER).$(REVISION_ID)
-else
 PLUGIN_VERSION ?= 0.9.$(shell date +%Y.%m.%d)
-endif
 
 CFLAGS	?= -O2 -g -pipe -Wall
 LDFLAGS ?= -Wl,-z,relro
