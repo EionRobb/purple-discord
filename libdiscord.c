@@ -1967,16 +1967,21 @@ discord_got_group_dm(DiscordAccount *da, JsonObject *data)
 
 	channel->name = discord_name_group_dm(da, channel);
 
-	if (purple_account_get_bool(da->account, "populate-blist", TRUE)) {
+	gchar *id = from_int(channel->id);
+
+	if (purple_account_get_bool(da->account, "populate-blist", TRUE)
+		&& purple_blist_find_chat(da->account, id) == NULL) {
 		GHashTable *components = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
 
-		g_hash_table_replace(components, g_strdup("id"), from_int(channel->id));
+		g_hash_table_replace(components, g_strdup("id"), id);
 		g_hash_table_replace(components, g_strdup("name"), g_strdup(channel->name));
 
 		PurpleGroup *group = discord_get_or_create_default_group();
 		PurpleChat *chat = purple_chat_new(da->account, channel->name, components);
 		purple_blist_add_chat(chat, group, NULL);
-	}
+	} else {
+    g_free(id); 
+  }
 }
 
 static void
@@ -2154,7 +2159,6 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 			}
 		}
 	} else if (purple_strequal(type, "RESUMED")) {
-
 		purple_connection_set_state(da->pc, PURPLE_CONNECTION_CONNECTED);
 	} else if (purple_strequal(type, "READY")) {
 		JsonObject *self_user = json_object_get_object_member(data, "user");
@@ -2174,6 +2178,9 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		/* Ensure user is non-null */
 		g_hash_table_replace_int64(da->new_users, da->self_user_id, self_user);
 
+		/* Set early on to enable blist searching to work */
+		purple_connection_set_state(da->pc, PURPLE_CONNECTION_CONNECTED);
+
 		discord_got_relationships(da, json_object_get_member(data, "relationships"), NULL);
 		discord_got_private_channels(da, json_object_get_member(data, "private_channels"), NULL);
 		discord_got_presences(da, json_object_get_member(data, "presences"), NULL);
@@ -2182,8 +2189,6 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 
 		/* But steal afterward, this user object is partial */
 		g_hash_table_steal(da->new_users, &da->self_user_id);
-
-		purple_connection_set_state(da->pc, PURPLE_CONNECTION_CONNECTED);
 	} else if (purple_strequal(type, "GUILD_SYNC") || purple_strequal(type, "GUILD_CREATE")) {
 		if (purple_strequal(type, "GUILD_CREATE")) {
 			discord_populate_guild(da, data);
