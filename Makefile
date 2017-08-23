@@ -85,7 +85,7 @@ C_FILES :=
 PURPLE_COMPAT_FILES :=
 PURPLE_C_FILES := libdiscord.c $(C_FILES)
 
-.PHONY:	all install FAILNOPURPLE clean install-icons install-locales
+.PHONY:	all install FAILNOPURPLE clean install-icons install-locales %-locale-install
 
 LOCALES = $(patsubst %.po, %.mo, $(wildcard po/*.po))
 
@@ -113,6 +113,9 @@ po/%.po: po/purple-discord.pot
 po/%.mo: po/%.po
 	msgfmt -o $@ $^
 
+%-locale-install: po/%.mo
+	install -D -m $(FILE_PERM) -p po/$(*F).mo $(LOCALEDIR)/$(*F)/LC_MESSAGES/purple-discord.mo
+
 install: $(DISCORD_TARGET) install-icons install-locales
 	mkdir -m $(DIR_PERM) -p $(DISCORD_DEST)
 	install -m $(LIB_PERM) -p $(DISCORD_TARGET) $(DISCORD_DEST)
@@ -125,9 +128,7 @@ install-icons: discord16.png discord22.png discord48.png
 	install -m $(FILE_PERM) -p discord22.png $(DISCORD_ICONS_DEST)/22/discord.png
 	install -m $(FILE_PERM) -p discord48.png $(DISCORD_ICONS_DEST)/48/discord.png
 
-install-locales: $(LOCALES)
-	install -D -m $(FILE_PERM) -p po/es.mo $(LOCALEDIR)/es/LC_MESSAGES/purple-discord.mo
-	install -D -m $(FILE_PERM) -p po/it.mo $(LOCALEDIR)/it/LC_MESSAGES/purple-discord.mo
+install-locales: $(patsubst po/%.po, %-locale-install, $(wildcard po/*.po))
 
 FAILNOPURPLE:
 	echo "You need libpurple development headers installed to be able to compile this plugin"
