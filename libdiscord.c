@@ -4284,6 +4284,8 @@ discord_chat_send(PurpleConnection *pc, gint id,
 	DiscordGuild *guild = NULL;
 	discord_get_channel_global_int_guild(da, room_id, &guild);
 	
+	d_message = discord_make_mentions(da, guild, d_message);
+
 	if(guild) {
 		g_return_val_if_fail(guild, -1);
 
@@ -4294,8 +4296,6 @@ discord_chat_send(PurpleConnection *pc, gint id,
 			d_message = tmp;
 		}
 	}
-
-	d_message = discord_make_mentions(da, guild, d_message);
 
 	g_return_val_if_fail(discord_get_channel_global_int(da, room_id), -1); /* TODO rejoin room? */
 	ret = discord_conversation_send_message(da, room_id, d_message);
