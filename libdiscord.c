@@ -878,6 +878,12 @@ typedef struct {
 static gchar *
 discord_combine_username(const gchar *username, const gchar *discriminator)
 {
+	g_return_val_if_fail(username != NULL, NULL);
+	
+	if (discriminator == NULL) {
+		discriminator = "0000";
+	}
+	
 	return g_strconcat(username, "#", discriminator, NULL);
 }
 
@@ -1953,11 +1959,16 @@ discord_name_group_dm(DiscordAccount *da, DiscordChannel *channel) {
 	for (l = channel->recipients; l != NULL; l = l->next) {
 		guint64 *recipient_ptr = l->data;
 		DiscordUser *recipient = discord_get_user(da, *recipient_ptr);
+		gchar *fullname = discord_create_fullname(recipient);
+		
+		if (fullname != NULL) {
+			g_string_append(name, fullname);
 
-		g_string_append(name, discord_create_fullname(recipient));
-
-		if (l->next) {
-			g_string_append(name, g_strdup(", "));
+			if (l->next) {
+				g_string_append(name, g_strdup(", "));
+			}
+			
+			g_free(fullname);
 		}
 	}
 
@@ -2032,6 +2043,8 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 					}
 				}
 			}
+			g_free(nickname);
+			
 		} else if (username) {
 			const gchar *status = json_object_get_string_member(data, "status");
 			purple_protocol_got_user_status(da->account, username, status, "message", user->game, NULL);
@@ -2248,9 +2261,12 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 			discord_update_status(user, presence);
 
 			PurpleChatUserFlags cbflags = discord_get_user_flags(da, guild, user);
-
-			users = g_list_prepend(users, discord_create_nickname(user, guild));
-			flags = g_list_prepend(flags, GINT_TO_POINTER(cbflags));
+			gchar *nickname = discord_create_nickname(user, guild);
+			
+			if (nickname != NULL) {
+				users = g_list_prepend(users, nickname);
+				flags = g_list_prepend(flags, GINT_TO_POINTER(cbflags));
+			}
 		}
 
 		/* Add all online people to any open chats */
@@ -2301,6 +2317,8 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		} else {
 			purple_chat_conversation_remove_user(chat, name, NULL);
 		}
+		
+		g_free(name);
 	} else {
 		purple_debug_info("discord", "Unhandled message type '%s'\n", type);
 	}
@@ -3842,9 +3860,12 @@ discord_got_channel_info(DiscordAccount *da, JsonNode *node, gpointer user_data)
 		for (i = len - 1; i >= 0; i--) {
 			JsonObject *recipient = json_array_get_object_element(recipients, i);
 			DiscordUser *user = discord_upsert_user(da->new_users, recipient);
+			gchar *fullname = discord_create_fullname(user);
 
-			users = g_list_prepend(users, discord_create_fullname(user));
-			flags = g_list_prepend(flags, PURPLE_CHAT_USER_NONE);
+			if (fullname != NULL) {
+				users = g_list_prepend(users, fullname);
+				flags = g_list_prepend(flags, PURPLE_CHAT_USER_NONE);
+			}
 		}
 
 		purple_chat_conversation_clear_users(chatconv);
@@ -3868,7 +3889,7 @@ discord_got_channel_info(DiscordAccount *da, JsonNode *node, gpointer user_data)
 			PurpleChatUserFlags cbflags = discord_get_user_flags(da, guild, user);
 			gchar *nickname = discord_create_nickname(user, guild);
 
-			if (user->status != USER_OFFLINE) {
+			if (nickname != NULL && user->status != USER_OFFLINE) {
 				users = g_list_prepend(users, nickname);
 				flags = g_list_prepend(flags, GINT_TO_POINTER(cbflags));
 			}
@@ -4397,6 +4418,8 @@ discord_got_avatar(DiscordAccount *ya, JsonNode *node, gpointer user_data)
 
 		purple_buddy_icons_set_for_user(ya->account, username, response_dup, response_len, user->avatar);
 	}
+	
+	g_free(username);
 }
 
 static void
