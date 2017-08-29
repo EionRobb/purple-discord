@@ -4312,7 +4312,9 @@ discord_chat_send(PurpleConnection *pc, gint id,
 
 		d_message = discord_replace_mentions_bare(da, guild, d_message);
 
-		purple_serv_got_chat_in(pc, discord_chat_hash(room_id), da->self_username, PURPLE_MESSAGE_SEND, d_message, time(NULL));
+		gchar *name = discord_create_nickname_from_id(da, guild, da->self_user_id);
+		purple_serv_got_chat_in(pc, discord_chat_hash(room_id), name, PURPLE_MESSAGE_SEND, d_message, time(NULL));
+		g_free(name);
 	}
 
 	g_free(d_message);
