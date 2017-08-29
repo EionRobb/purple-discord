@@ -1869,7 +1869,7 @@ discord_process_message(DiscordAccount *da, JsonObject *data, gboolean edited)
 
 struct discord_group_typing_data {
 	DiscordAccount *da;
-	const gchar *channel_id;
+	guint64 channel_id;
 	gchar *username;
 	gboolean set;
 	gboolean free_me;
@@ -1884,9 +1884,7 @@ discord_set_group_typing(void *_u)
 
 	struct discord_group_typing_data *ctx = _u;
 
-	guint64 tmp = to_int(ctx->channel_id);
-
-	PurpleChatConversation *chatconv = purple_conversations_find_chat(ctx->da->pc, discord_chat_hash(tmp));
+	PurpleChatConversation *chatconv = purple_conversations_find_chat(ctx->da->pc, discord_chat_hash(ctx->channel_id));
 
 	if (chatconv == NULL) {
 		goto release_ctx;
@@ -2076,7 +2074,7 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 
 		struct discord_group_typing_data ctx = {
 			.da = da,
-			.channel_id = channel_id,
+			.channel_id = tmp,
 			.username = n,
 			.set = FALSE,
 			.free_me = FALSE
@@ -2106,7 +2104,7 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 
 			struct discord_group_typing_data set = {
 				.da = da,
-				.channel_id = channel_id,
+				.channel_id = to_int(channel_id),
 				.username = username,
 				.set = TRUE,
 				.free_me = FALSE
