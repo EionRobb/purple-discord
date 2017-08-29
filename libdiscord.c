@@ -1536,6 +1536,8 @@ discord_underscore_match(const gchar *html, int i)
 static gchar *
 discord_convert_markdown(const gchar *html)
 {
+	g_return_val_if_fail(html != NULL, NULL);
+	
 	guint html_len = strlen(html);
 	GString *out = g_string_sized_new(html_len * 2);
 
@@ -4487,9 +4489,10 @@ discord_got_info(DiscordAccount *da, JsonNode *node, gpointer user_data)
 
 	user_info = purple_notify_user_info_new();
 
-	GString *buffer = g_string_new("");
-	g_string_printf(buffer, "%" G_GUINT64_FORMAT, user->id);
-	purple_notify_user_info_add_pair_html(user_info, _("ID"), buffer->str);
+	gchar *id_str = from_int(user->id);
+	purple_notify_user_info_add_pair_html(user_info, _("ID"), id_str);
+	g_free(id_str);
+	
 	purple_notify_user_info_add_pair_html(user_info, _("Username"), user->name);
 
 	/* Display other non-profile info that we know about this buddy */
@@ -4553,9 +4556,9 @@ discord_got_info(DiscordAccount *da, JsonNode *node, gpointer user_data)
 		}
 	}
 
-	purple_notify_userinfo(da->pc, buffer->str, user_info, NULL, NULL);
-
-	g_string_free(buffer, TRUE);
+	gchar *username = discord_create_fullname(user);
+	purple_notify_userinfo(da->pc, username, user_info, NULL, NULL);
+	g_free(username);
 }
 
 static void
