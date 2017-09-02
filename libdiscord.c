@@ -2227,6 +2227,8 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 
 		DiscordGuild *guild = discord_get_guild(da, guild_id);
 
+		g_array_set_size(guild->members, 0);
+		
 		/* all members in small groups, online in large */
 		for (int j = json_array_get_length(members) - 1; j >= 0; j--) {
 			JsonObject *member = json_array_get_object_element(members, j);
