@@ -3889,6 +3889,10 @@ discord_got_channel_info(DiscordAccount *da, JsonNode *node, gpointer user_data)
 			}
 		}
 
+		// Add self
+		users = g_list_prepend(users, g_strdup(da->self_username));
+		flags = g_list_prepend(flags, PURPLE_CHAT_USER_NONE);
+
 		purple_chat_conversation_clear_users(chatconv);
 		purple_chat_conversation_add_users(chatconv, users, NULL, flags, FALSE);
 
