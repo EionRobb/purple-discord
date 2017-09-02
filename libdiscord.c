@@ -2004,8 +2004,8 @@ discord_got_group_dm(DiscordAccount *da, JsonObject *data)
 		PurpleChat *chat = purple_chat_new(da->account, channel->name, components);
 		purple_blist_add_chat(chat, group, NULL);
 	} else {
-    g_free(id); 
-  }
+		g_free(id); 
+	}
 }
 
 static void
@@ -2355,13 +2355,18 @@ static void
 discord_roomlist_got_list(DiscordAccount *da, DiscordGuild *guild, gpointer user_data)
 {
 	PurpleRoomlist *roomlist = user_data;
-	PurpleRoomlistRoom *category = purple_roomlist_room_new(PURPLE_ROOMLIST_ROOMTYPE_CATEGORY, guild->name, NULL);
+	const gchar *guild_name = guild ? guild->name : _("Group DMs");
+	PurpleRoomlistRoom *category = purple_roomlist_room_new(PURPLE_ROOMLIST_ROOMTYPE_CATEGORY, guild_name, NULL);
 	purple_roomlist_room_add(roomlist, category);
 
 	GHashTableIter iter;
 	gpointer key, value;
 
-	g_hash_table_iter_init(&iter, guild->channels);
+	if (guild != NULL) {
+		g_hash_table_iter_init(&iter, guild->channels);
+	} else {
+		g_hash_table_iter_init(&iter, da->group_dms);	
+	}
 
 	while (g_hash_table_iter_next(&iter, &key, &value)) {
 		DiscordChannel *channel = value;
@@ -2376,17 +2381,29 @@ discord_roomlist_got_list(DiscordAccount *da, DiscordGuild *guild, gpointer user
 		purple_roomlist_room_add_field(roomlist, room, channel->name);
 
 		switch (channel->type) {
-		case 0:
-			type_str = "Text";
-			break;
+			case 0:
+				type_str = _("Text");
+				break;
+			
+			case 1:
+				type_str = _("Direct Message");
+				break;
+			
+			case 2:
+				type_str = _("Voice");
+				break;
+			
+			case 3:
+				type_str = _("Group DM");
+				break;
+			
+			case 4:
+				type_str = _("Guild Category");
+				break;
 
-		case 1:
-			type_str = "Voice";
-			break;
-
-		default:
-			type_str = "Unknown";
-			break;
+			default:
+				type_str = _("Unknown");
+				break;
 		}
 
 		purple_roomlist_room_add_field(roomlist, room, type_str);
@@ -2427,6 +2444,9 @@ discord_roomlist_get_list(PurpleConnection *pc)
 	purple_roomlist_set_fields(roomlist, fields);
 	purple_roomlist_set_in_progress(roomlist, TRUE);
 
+	// Add group-DM's first
+	discord_roomlist_got_list(da, NULL, roomlist);
+	
 	GHashTableIter iter;
 	gpointer key, guild;
 

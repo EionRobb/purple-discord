@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2017-08-29 15:35-0700\n"
+"POT-Creation-Date: 2017-09-02 16:16+1200\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -19,6 +19,27 @@ msgstr ""
 
 #, c-format
 msgid "Connection error: %s."
+msgstr ""
+
+msgid "Group DMs"
+msgstr ""
+
+msgid "Text"
+msgstr ""
+
+msgid "Direct Message"
+msgstr ""
+
+msgid "Voice"
+msgstr ""
+
+msgid "Group DM"
+msgstr ""
+
+msgid "Guild Category"
+msgstr ""
+
+msgid "Unknown"
 msgstr ""
 
 msgid "ID"
