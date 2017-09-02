@@ -3370,6 +3370,7 @@ discord_socket_got_data(gpointer userdata, PurpleSslConnection *conn, PurpleInpu
 			ya->frame = NULL;
 			ya->packet_code = 0;
 			ya->frame_len = 0;
+			ya->frames_since_reconnect++;
 
 			if (G_UNLIKELY(ya->websocket == NULL || success == FALSE)) {
 				return;
