@@ -2393,6 +2393,7 @@ discord_roomlist_got_list(DiscordAccount *da, DiscordGuild *guild, gpointer user
 	PurpleRoomlist *roomlist = user_data;
 	const gchar *guild_name = guild ? guild->name : _("Group DMs");
 	PurpleRoomlistRoom *category = purple_roomlist_room_new(PURPLE_ROOMLIST_ROOMTYPE_CATEGORY, guild_name, NULL);
+	purple_roomlist_room_add_field(roomlist, category, (gpointer) guild_name);
 	purple_roomlist_room_add(roomlist, category);
 
 	GHashTableIter iter;
