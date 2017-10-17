@@ -124,8 +124,6 @@ po/%.mo: po/%.po
         install -D -m $(FILE_PERM) -p po/$(*F).mo $(LOCALEDIR)/$(*F)/LC_MESSAGES/purple-discord.mo                                                                                                              
   endif                                                                                                                                                                                                         
 
-	install -D -m $(FILE_PERM) -p po/$(*F).mo $(LOCALEDIR)/$(*F)/LC_MESSAGES/purple-discord.mo
-
 install: $(DISCORD_TARGET) install-icons install-locales
 	mkdir -m $(DIR_PERM) -p $(DISCORD_DEST)
 	install -m $(LIB_PERM) -p $(DISCORD_TARGET) $(DISCORD_DEST)
