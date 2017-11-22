@@ -1974,14 +1974,17 @@ discord_name_group_dm(DiscordAccount *da, DiscordChannel *channel) {
 }
 
 static void
-discord_add_channel_to_blist(DiscordAccount *da, DiscordChannel *channel)
+discord_add_channel_to_blist(DiscordAccount *da, DiscordChannel *channel, PurpleGroup *group)
 {
 	GHashTable *components = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
 
 	g_hash_table_replace(components, g_strdup("id"), from_int(channel->id));
 	g_hash_table_replace(components, g_strdup("name"), g_strdup(channel->name));
 
-	PurpleGroup *group = discord_get_or_create_default_group();
+	if (!group) {
+		group = discord_get_or_create_default_group();
+	}
+
 	PurpleChat *chat = purple_chat_new(da->account, channel->name, components);
 	purple_blist_add_chat(chat, group, NULL);
 }
@@ -2006,7 +2009,7 @@ discord_add_group_dms_to_blist(DiscordAccount *da)
 		gchar *id_str = from_int(*id);
 		
 		if (purple_blist_find_chat(da->account, id_str) == NULL) {
-			discord_add_channel_to_blist(da, channel);
+			discord_add_channel_to_blist(da, channel, NULL);
 		}
 	}
 }
@@ -2035,7 +2038,7 @@ discord_got_group_dm(DiscordAccount *da, JsonObject *data)
 		&& purple_account_get_bool(da->account, "populate-blist", TRUE)
 		&& purple_blist_find_chat(da->account, id) == NULL) {
 			
-		discord_add_channel_to_blist(da, channel);
+		discord_add_channel_to_blist(da, channel, NULL);
 	}
 	
 	g_free(id); 
@@ -2801,7 +2804,7 @@ discord_buddy_guild(DiscordAccount *da, DiscordGuild *guild)
 			continue;
 		}
 
-		discord_add_channel_to_blist(da, channel);
+		discord_add_channel_to_blist(da, channel, group);
 	}
 
 	purple_blist_add_group(group, NULL);
