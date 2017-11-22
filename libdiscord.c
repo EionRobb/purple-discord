@@ -2764,12 +2764,22 @@ discord_buddy_guild(DiscordAccount *da, DiscordGuild *guild)
 	/* Create group */
 	/* TODO: What if this is not unique? */
 
-	if (purple_blist_find_group(guild->name)) {
-		/* TODO: Sync then? */
-		return;
-	}
+	PurpleGroup *group = purple_blist_find_group(guild->name);
 
-	PurpleGroup *group = purple_group_new(guild->name);
+	if (group) {
+#if PURPLE_VERSION_CHECK(3, 0, 0)
+		int count = purple_counting_node_get_total_size(group->node);
+#else
+		int count = group->totalsize;
+#endif
+
+		if (count != 0) {
+			/* TODO: Sync then? */
+			return;
+		}
+	} else {
+		group = purple_group_new(guild->name);
+	}
 
 	if (!group) {
 		return;
