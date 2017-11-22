@@ -3526,25 +3526,9 @@ discord_start_socket(DiscordAccount *da)
 }
 
 static void
-discord_chat_leave_by_room_id(PurpleConnection *pc, guint64 room_id)
-{
-	/*DiscordAccount *ya = purple_connection_get_protocol_data(pc);
-	JsonObject *data = json_object_new();
-	JsonArray *params = json_array_new();
-
-	json_array_add_string_element(params, room_id);
-
-	json_object_set_string_member(data, "msg", "method");
-	json_object_set_string_member(data, "method", "leaveRoom");
-	json_object_set_array_member(data, "params", params);
-	json_object_set_string_member(data, "id", discord_get_next_id_str(ya));
-
-	discord_socket_write_json(ya, data);*/
-}
-
-static void
 discord_chat_leave(PurpleConnection *pc, int id)
 {
+	DiscordAccount *da = purple_connection_get_protocol_data(pc);
 	PurpleChatConversation *chatconv;
 	/* TODO check source */
 	chatconv = purple_conversations_find_chat(pc, id);
@@ -3555,7 +3539,17 @@ discord_chat_leave(PurpleConnection *pc, int id)
 		room_id = to_int(purple_conversation_get_name(PURPLE_CONVERSATION(chatconv)));
 	}
 
-	discord_chat_leave_by_room_id(pc, room_id);
+	DiscordGuild *guild;
+	discord_get_channel_global_int_guild(da, room_id, &guild);
+
+	if (!guild) {
+		purple_debug_info("discord", "Missing leaving guild for %" G_GUINT64_FORMAT, room_id);
+		return;
+	}
+
+	gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/v6/users/@me/guilds/%" G_GUINT64_FORMAT, guild->id);
+	discord_fetch_url_with_method(da, "DELETE", url, NULL, NULL, NULL);
+	g_free(url);
 }
 
 /* Invite to a _group DM_
@@ -5071,6 +5065,7 @@ plugin_init(PurplePlugin *plugin)
 	prpl_info->join_chat = discord_join_chat;
 	prpl_info->get_chat_name = discord_get_chat_name;
 	prpl_info->chat_invite = discord_chat_invite;
+	prpl_info->chat_leave = discord_chat_leave;
 	prpl_info->chat_send = discord_chat_send;
 	prpl_info->set_chat_topic = discord_chat_set_topic;
 	prpl_info->get_cb_real_name = discord_get_real_name;
@@ -5174,6 +5169,7 @@ discord_protocol_chat_iface_init(PurpleProtocolChatIface *prpl_info)
 	prpl_info->join = discord_join_chat;
 	prpl_info->get_name = discord_get_chat_name;
 	prpl_info->invite = discord_chat_invite;
+	prpl_info->leave = discord_chat_leave;
 	prpl_info->set_topic = discord_chat_set_topic;
 	prpl_info->get_user_real_name = discord_get_real_name;
 }
