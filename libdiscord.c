@@ -1359,7 +1359,7 @@ discord_replace_mention(const GMatchInfo *match, GString *result, gpointer user_
 		if (buddy && purple_buddy_get_alias(buddy)) {
 			g_free(name);
 			name = g_strdup(purple_buddy_get_alias(buddy));
-		} else if (snowflake == da->self_user_id && purple_account_get_private_alias(da->account)) {
+		} else if (!guild && snowflake == da->self_user_id && purple_account_get_private_alias(da->account)) {
 			g_free(name);
 			name = g_strdup(purple_account_get_private_alias(da->account));
 		}
