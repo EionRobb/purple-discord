@@ -1532,6 +1532,36 @@ discord_make_mentions(DiscordAccount *da, DiscordGuild *guild, gchar *message)
 	return message;
 }
 
+static gchar *
+discord_typographise(const gchar *text)
+{
+	g_return_val_if_fail(text != NULL, NULL);
+
+	guint len = strlen(text);
+	GString *out = g_string_sized_new(len * 2);
+
+	for (guint i = 0; i < len; ++i) {
+		char c = text[i];
+
+		if (c == '-' && text[i + 1] == '-') {
+			if(text[i + 2] == '-') {
+				out = g_string_append(out, "—");
+				i += 2;
+			} else {
+				out = g_string_append(out, "–");
+				i += 1;
+			}
+		} else if (c == '.' && text[i + 1] == '.' && text[i + 2] == '.') {
+			out = g_string_append(out, "…");
+			i += 2;
+		} else {
+			out = g_string_append_c(out, c);
+		}
+	}
+
+	return g_string_free(out, FALSE);
+}
+
 #define HTML_TOGGLE_OUT(f, a, b)           \
 	out = g_string_append(out, f ? b : a); \
 	f = !f;
@@ -1769,6 +1799,10 @@ discord_process_message(DiscordAccount *da, JsonObject *data, gboolean edited)
 	}
 
 	tmp = discord_convert_markdown(escaped_content);
+	g_free(escaped_content);
+	escaped_content = tmp;
+
+	tmp = discord_typographise(escaped_content);
 	g_free(escaped_content);
 	escaped_content = tmp;
 
@@ -4300,7 +4334,7 @@ discord_conversation_send_message(DiscordAccount *da, guint64 room_id, const gch
 	nonce = g_strdup_printf("%" G_GUINT32_FORMAT, g_random_int());
 	g_hash_table_insert(da->sent_message_ids, nonce, nonce);
 
-	marked = discord_html_to_markdown(discord_escape_md(message));
+	marked = discord_typographise(discord_html_to_markdown(discord_escape_md(message)));
 	stripped = g_strstrip(purple_markup_strip_html(marked));
 
 	/* translate Discord-formatted actions into *markdown* syntax */
@@ -4379,7 +4413,7 @@ discord_chat_send(PurpleConnection *pc, gint id,
 			d_message = tmp;
 		}
 
-		d_message = discord_replace_mentions_bare(da, guild, d_message);
+		d_message = discord_typographise(discord_replace_mentions_bare(da, guild, d_message));
 
 		gchar *name = discord_create_nickname_from_id(da, guild, da->self_user_id);
 		purple_serv_got_chat_in(pc, discord_chat_hash(room_id), name, PURPLE_MESSAGE_SEND, d_message, time(NULL));
