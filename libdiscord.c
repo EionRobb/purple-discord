@@ -2007,20 +2007,70 @@ discord_name_group_dm(DiscordAccount *da, DiscordChannel *channel) {
 	return g_string_free(name, FALSE);
 }
 
+
+PurpleChat *
+discord_find_chat_from_node(PurpleAccount *account, const char *id, PurpleBlistNode *root)
+{
+	PurpleBlistNode *node;
+	
+	for (node = root;
+		 node != NULL;
+		 node = purple_blist_node_next(node, TRUE)) {
+		if (PURPLE_IS_CHAT(node)) {
+			PurpleChat *chat = PURPLE_CHAT(node);
+
+			if (purple_chat_get_account(chat) != account) {
+				continue;
+			}
+			
+			GHashTable *components = purple_chat_get_components(chat);
+			const gchar *chat_id = g_hash_table_lookup(components, "id");
+			
+			if (purple_strequal(chat_id, id)) {
+				return chat;
+			}
+		}
+	}
+	
+	return NULL;
+}
+
+PurpleChat *
+discord_find_chat(PurpleAccount *account, const char *id)
+{
+	return discord_find_chat_from_node(account, id, purple_blist_get_root());
+}
+
+
+PurpleChat *
+discord_find_chat_in_group(PurpleAccount *account, const char *id, PurpleGroup *group)
+{
+	g_return_val_if_fail(group != NULL, NULL);
+	
+	return discord_find_chat_from_node(account, id, PURPLE_BLIST_NODE(group));
+}
+
+
 static void
 discord_add_channel_to_blist(DiscordAccount *da, DiscordChannel *channel, PurpleGroup *group)
 {
 	GHashTable *components = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
-
-	g_hash_table_replace(components, g_strdup("id"), from_int(channel->id));
+	gchar *id = from_int(channel->id);
+	
+	g_hash_table_replace(components, g_strdup("id"), id);
 	g_hash_table_replace(components, g_strdup("name"), g_strdup(channel->name));
 
 	if (!group) {
 		group = discord_get_or_create_default_group();
 	}
-
-	PurpleChat *chat = purple_chat_new(da->account, channel->name, components);
-	purple_blist_add_chat(chat, group, NULL);
+	
+	/* Don't re-add the channel to the same group */
+	if (discord_find_chat_in_group(da->account, id, group) == NULL) {
+		PurpleChat *chat = purple_chat_new(da->account, channel->name, components);
+		purple_blist_add_chat(chat, group, NULL);
+	} else {
+		g_hash_table_unref(components);
+	}
 }
 
 static void
@@ -2800,18 +2850,7 @@ discord_buddy_guild(DiscordAccount *da, DiscordGuild *guild)
 
 	PurpleGroup *group = purple_blist_find_group(guild->name);
 
-	if (group) {
-#if PURPLE_VERSION_CHECK(3, 0, 0)
-		int count = purple_counting_node_get_total_size(group->node);
-#else
-		int count = group->totalsize;
-#endif
-
-		if (count != 0) {
-			/* TODO: Sync then? */
-			return;
-		}
-	} else {
+	if (!group) {
 		group = purple_group_new(guild->name);
 	}
 
@@ -5104,6 +5143,7 @@ plugin_init(PurplePlugin *plugin)
 	prpl_info->send_typing = discord_send_typing;
 	prpl_info->join_chat = discord_join_chat;
 	prpl_info->get_chat_name = discord_get_chat_name;
+	prpl_info->find_blist_chat = discord_find_chat;
 	prpl_info->chat_invite = discord_chat_invite;
 	prpl_info->chat_send = discord_chat_send;
 	prpl_info->set_chat_topic = discord_chat_set_topic;
@@ -5232,6 +5272,7 @@ discord_protocol_client_iface_init(PurpleProtocolClientIface *prpl_info)
 	prpl_info->get_actions = discord_actions;
 	prpl_info->list_emblem = discord_list_emblem;
 	prpl_info->tooltip_text = discord_tooltip_text;
+	prpl_info->find_blist_chat = discord_find_chat;
 }
 
 static void
