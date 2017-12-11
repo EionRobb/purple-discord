@@ -4310,6 +4310,7 @@ discord_escape_md(const gchar *markdown)
 			if (
 			  (c == '_' && (markdown[i + 1] == ' ' ||
 							markdown[i + 1] == '\0' ||
+							i == 0 ||
 							markdown[i - 1] == ' ' ||
 							markdown[i - 1] == '\0')) ||
 			  (c == '*') ||
