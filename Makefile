@@ -26,7 +26,6 @@ PLUGIN_VERSION ?= 0.9.$(shell date +%Y.%m.%d)
 endif
 
 CFLAGS	?= -O2 -g -pipe -Wall
-LDFLAGS ?= -Wl,-z,relro
 
 CFLAGS  += -std=c99 -DDISCORD_PLUGIN_VERSION='"$(PLUGIN_VERSION)"'
 
@@ -35,6 +34,8 @@ CFLAGS += -DENABLE_NLS
 
 # Do some nasty OS and purple version detection
 ifeq ($(OS),Windows_NT)
+  LDFLAGS ?= -Wl,-z,relro
+  
   DISCORD_TARGET = libdiscord.dll
   DISCORD_DEST = "$(PROGRAMFILES)/Pidgin/plugins"
   DISCORD_ICONS_DEST = "$(PROGRAMFILES)/Pidgin/pixmaps/pidgin/protocols"
@@ -54,6 +55,8 @@ else
 
     CC = gcc
   else
+    LDFLAGS ?= -Wl,-z,relro
+  
     CC ?= gcc
   endif
 
@@ -118,7 +121,12 @@ po/%.mo: po/%.po
 	msgfmt -o $@ $^
 
 %-locale-install: po/%.mo
-	install -D -m $(FILE_PERM) -p po/$(*F).mo $(LOCALEDIR)/$(*F)/LC_MESSAGES/purple-discord.mo
+  ifeq ($(UNAME_S), Darwin)                                                                                                                                                                                     
+	install -d $(LOCALEDIR)/$(*F)/LC_MESSAGES/                                                                                                                                                              
+        install -m $(FILE_PERM) -p po/$(*F).mo $(LOCALEDIR)/$(*F)/LC_MESSAGES/purple-discord.mo                                                                                                                 
+  else                                                                                                                                                                                                          
+        install -D -m $(FILE_PERM) -p po/$(*F).mo $(LOCALEDIR)/$(*F)/LC_MESSAGES/purple-discord.mo                                                                                                              
+  endif                                                                                                                                                                                                         
 
 install: $(DISCORD_TARGET) install-icons install-locales
 	mkdir -m $(DIR_PERM) -p $(DISCORD_DEST)
