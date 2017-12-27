@@ -2856,7 +2856,7 @@ discord_buddy_guild(DiscordAccount *da, DiscordGuild *guild)
 		discord_add_channel_to_blist(da, channel, group);
 	}
 
-	purple_blist_add_group(group, NULL);
+	purple_blist_add_group(group, group->node.prev);
 }
 
 static void
