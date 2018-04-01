@@ -35,10 +35,15 @@ CFLAGS += -DENABLE_NLS
 
 # Do some nasty OS and purple version detection
 ifeq ($(OS),Windows_NT)
+  #only defined on 64-bit windows
+  PROGFILES32 = ${ProgramFiles(x86)}
+  ifndef PROGFILES32
+    PROGFILES32 = $(PROGRAMFILES)
+  endif
   DISCORD_TARGET = libdiscord.dll
-  DISCORD_DEST = "$(PROGRAMFILES)/Pidgin/plugins"
-  DISCORD_ICONS_DEST = "$(PROGRAMFILES)/Pidgin/pixmaps/pidgin/protocols"
-  LOCALEDIR = "$(PROGRAMFILES)/Pidgin/locale"
+  DISCORD_DEST = "$(PROGFILES32)/Pidgin/plugins"
+  DISCORD_ICONS_DEST = "$(PROGFILES32)/Pidgin/pixmaps/pidgin/protocols"
+  LOCALEDIR = "$(PROGFILES32)/Pidgin/locale"
 else
   UNAME_S := $(shell uname -s)
 
