@@ -1846,7 +1846,12 @@ discord_process_message(DiscordAccount *da, JsonObject *data, gboolean edited)
 			discord_open_chat(da, channel_id, NULL, mentioned);
 		}
 
-		gchar *name = discord_create_nickname(author, guild);
+		gchar *name = NULL;
+		if (json_object_has_member(data, "webhook_id")) {
+			name = g_strdup(author->name);
+		} else {
+			name = discord_create_nickname(author, guild);
+		}
 
 		if (escaped_content && *escaped_content) {
 			purple_serv_got_chat_in(da->pc, discord_chat_hash(channel_id), name, flags, escaped_content, timestamp);
