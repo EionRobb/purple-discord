@@ -499,8 +499,14 @@ discord_get_user_fullname(DiscordAccount *da, const gchar *name)
 	g_return_val_if_fail(name && *name, NULL);
 	
 	gchar **split_name = g_strsplit(name, "#", 2);
-	DiscordUser *user = discord_get_user_name(da, to_int(split_name[1]), split_name[0]);
+	DiscordUser *user = NULL;
+	
+	if (split_name[0] && split_name[1]) {
+		discord_get_user_name(da, to_int(split_name[1]), split_name[0]);
+	}
+	
 	g_strfreev(split_name);
+	
 	return user;
 }
 static DiscordUser *
