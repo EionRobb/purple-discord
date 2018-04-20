@@ -1695,7 +1695,8 @@ discord_process_message(DiscordAccount *da, JsonObject *data, gboolean edited)
 		return msg_id;
 	}
 
-	DiscordUser *author = discord_upsert_user(da->new_users, json_object_get_object_member(data, "author"));
+	JsonObject *author_obj = json_object_get_object_member(data, "author");
+	guint64 author_id = to_int(json_object_get_string_member(author_obj, "id"));
 
 	const gchar *channel_id_s = json_object_get_string_member(data, "channel_id");
 	guint64 channel_id = to_int(channel_id_s);
@@ -1715,7 +1716,7 @@ discord_process_message(DiscordAccount *da, JsonObject *data, gboolean edited)
 	DiscordGuild *guild = NULL;
 	discord_get_channel_global_int_guild(da, channel_id, &guild);
 
-	if (author->id == da->self_user_id) {
+	if (author_id == da->self_user_id) {
 		flags = PURPLE_MESSAGE_SEND | PURPLE_MESSAGE_REMOTE_SEND | PURPLE_MESSAGE_DELAYED;
 	} else {
 		flags = PURPLE_MESSAGE_RECV;
@@ -1790,7 +1791,7 @@ discord_process_message(DiscordAccount *da, JsonObject *data, gboolean edited)
 	if (g_hash_table_contains(da->one_to_ones, channel_id_s)) {
 		/* private message */
 
-		if (author->id == da->self_user_id) {
+		if (author_id == da->self_user_id) {
 			if (!nonce || !g_hash_table_remove(da->sent_message_ids, nonce)) {
 				PurpleConversation *conv;
 				PurpleIMConversation *imconv;
@@ -1825,6 +1826,7 @@ discord_process_message(DiscordAccount *da, JsonObject *data, gboolean edited)
 				}
 			}
 		} else {
+			DiscordUser *author = discord_upsert_user(da->new_users, author_obj);
 			gchar *merged_username = discord_create_fullname(author);
 
 			if (escaped_content && *escaped_content) {
@@ -1854,8 +1856,9 @@ discord_process_message(DiscordAccount *da, JsonObject *data, gboolean edited)
 
 		gchar *name = NULL;
 		if (json_object_has_member(data, "webhook_id")) {
-			name = g_strdup(author->name);
+			name = g_strdup(json_object_get_string_member(author_obj, "username"));
 		} else {
+			DiscordUser *author = discord_upsert_user(da->new_users, author_obj);
 			name = discord_create_nickname(author, guild);
 		}
 
