@@ -501,11 +501,13 @@ discord_get_user_fullname(DiscordAccount *da, const gchar *name)
 	gchar **split_name = g_strsplit(name, "#", 2);
 	DiscordUser *user = NULL;
 	
-	if (split_name[0] && split_name[1]) {
-		discord_get_user_name(da, to_int(split_name[1]), split_name[0]);
+	if (split_name != NULL) {
+		if (split_name[0] && split_name[1]) {
+			discord_get_user_name(da, to_int(split_name[1]), split_name[0]);
+		}
+		
+		g_strfreev(split_name);
 	}
-	
-	g_strfreev(split_name);
 	
 	return user;
 }
@@ -1419,6 +1421,10 @@ discord_replace_mentions_bare(DiscordAccount *da, DiscordGuild *g, gchar *messag
 static guint64
 discord_find_role_by_name(DiscordGuild *guild, const gchar *name)
 {
+	if (!guild) {
+		return 0;
+	}
+	
 	if (purple_strequal(name, "everyone")) {
 		return guild->id;
 	}
@@ -1444,6 +1450,11 @@ discord_find_channel_by_name(DiscordGuild *guild, gchar *name)
 	GHashTableIter iter;
 	gpointer key;
 	gpointer value;
+	
+	if (!guild) {
+		return 0;
+	}
+	
 	g_hash_table_iter_init(&iter, guild->channels);
 
 	while (g_hash_table_iter_next(&iter, (gpointer *) &key, &value)) {
@@ -1501,7 +1512,7 @@ discord_make_mention(const GMatchInfo *match, GString *result, gpointer user_dat
 
 	if (user) {
 		g_string_append_printf(result, "&lt;@%" G_GUINT64_FORMAT "&gt; ", user->id);
-	} else {
+	} else if (guild != NULL) {
 		/* If that fails, find a role */
 		guint64 role = discord_find_role_by_name(guild, identifier);
 
@@ -1518,6 +1529,8 @@ discord_make_mention(const GMatchInfo *match, GString *result, gpointer user_dat
 				g_string_append(result, match_string);
 			}
 		}
+	} else {
+		g_string_append(result, match_string);
 	}
 
 	g_free(match_string);
