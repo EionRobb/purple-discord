@@ -19,7 +19,7 @@
 
 #include <json-glib/json-glib.h>
 
-// Supress overzealous json-glib 'critical errors'
+// Suppress overzealous json-glib 'critical errors'
 #define json_object_has_member(JSON_OBJECT, MEMBER) \
 	(JSON_OBJECT ? json_object_has_member(JSON_OBJECT, MEMBER) : FALSE)
 #define json_object_get_int_member(JSON_OBJECT, MEMBER) \
