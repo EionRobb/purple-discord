@@ -2303,6 +2303,7 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		purple_connection_set_state(da->pc, PURPLE_CONNECTION_CONNECTED);
 	} else if (purple_strequal(type, "READY")) {
 		JsonObject *self_user = json_object_get_object_member(data, "user");
+		DiscordUser *self_user_obj = NULL;
 		da->self_user_id = to_int(json_object_get_string_member(self_user, "id"));
 
 		if (!purple_account_get_private_alias(da->account)) {
@@ -2316,8 +2317,11 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		g_free(da->session_id);
 		da->session_id = g_strdup(json_object_get_string_member(data, "session_id"));
 
-		/* Ensure user is non-null... */
-		g_hash_table_replace_int64(da->new_users, da->self_user_id, self_user);
+		self_user_obj = discord_get_user(da, da->self_user_id);
+		if (!self_user_obj) {
+			/* Ensure user is non-null... */
+			discord_upsert_user(da->new_users, self_user);
+		}
 
 		discord_got_relationships(da, json_object_get_member(data, "relationships"), NULL);
 		discord_got_private_channels(da, json_object_get_member(data, "private_channels"), NULL);
@@ -2325,8 +2329,10 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		discord_got_guilds(da, json_object_get_member(data, "guilds"), NULL);
 		discord_got_read_states(da, json_object_get_member(data, "read_state"), NULL);
 
-		/* ...But steal afterward, this user object is partial */
-		g_hash_table_steal(da->new_users, &da->self_user_id);
+		if (!self_user_obj) {
+			/* ...But remove afterward, this user object is partial */
+			g_hash_table_remove(da->new_users, &da->self_user_id);
+		}
 		
 		/* ready for libpurple to join chats etc */
 		purple_connection_set_state(da->pc, PURPLE_CONNECTION_CONNECTED);
