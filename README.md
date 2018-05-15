@@ -17,7 +17,7 @@ On Fedora you can install [package](https://apps.fedoraproject.org/packages/purp
 	sudo dnf install purple-discord pidgin-discord
 ```
 
-On CentOS/RHEL you can install [package](https://apps.fedoraproject.org/packages/purple-discord) from Fedora's [EPEL7](http://fedoraproject.org/wiki/EPEL) repository:
+On CentOS/RHEL you can install [package](https://apps.fedoraproject.org/packages/purple-discord) from Fedora's [EPEL7](https://fedoraproject.org/wiki/EPEL) repository:
 
 ```bash
 	sudo yum install purple-discord pidgin-discord
