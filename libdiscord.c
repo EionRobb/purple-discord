@@ -1218,7 +1218,7 @@ discord_send_auth(DiscordAccount *da)
 		json_object_set_string_member(properties, "browser", "Pidgin");
 		json_object_set_object_member(data, "properties", properties);
 
-		/* TODO real presense */
+		/* TODO real presence */
 		json_object_set_string_member(presence, "status", "online");
 		json_object_set_object_member(data, "presence", presence);
 	}
@@ -2202,7 +2202,7 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		const gchar *channel_id = json_object_get_string_member(data, "channel_id");
 		guint64 user_id = to_int(json_object_get_string_member(data, "user_id"));
 
-		/* Don't display typing notfications from ourselves */
+		/* Don't display typing notifications from ourselves */
 		if (user_id == da->self_user_id) {
 			return;
 		}
