@@ -503,7 +503,7 @@ discord_get_user_fullname(DiscordAccount *da, const gchar *name)
 	
 	if (split_name != NULL) {
 		if (split_name[0] && split_name[1]) {
-			discord_get_user_name(da, to_int(split_name[1]), split_name[0]);
+			user = discord_get_user_name(da, to_int(split_name[1]), split_name[0]);
 		}
 		
 		g_strfreev(split_name);
