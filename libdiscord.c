@@ -2149,7 +2149,9 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 
 				if (chat != NULL) {
 					if (user->status == USER_OFFLINE) {
-						purple_chat_conversation_remove_user(chat, nickname, NULL);
+						if (purple_chat_conversation_has_user(chat, nickname)) {
+							purple_chat_conversation_remove_user(chat, nickname, NULL);
+						}
 					} else if (!purple_chat_conversation_has_user(chat, nickname)) {
 						PurpleChatUserFlags flags = discord_get_user_flags(da, guild, user);
 						purple_chat_conversation_add_user(chat, nickname, NULL, flags, FALSE);
@@ -2347,7 +2349,6 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		JsonArray *presences = json_object_get_array_member(data, "presences");
 		JsonArray *members = json_object_get_array_member(data, "members");
 		guint64 guild_id = to_int(json_object_get_string_member(data, "id"));
-		GList *users = NULL, *flags = NULL;
 
 		DiscordGuild *guild = discord_get_guild(da, guild_id);
 
@@ -2376,47 +2377,63 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		if (purple_account_get_bool(da->account, "populate-blist", TRUE)) {
 			discord_buddy_guild(da, guild);
 		}
-
-		/* Presence only contains online users */
+		
+		/* Update online users first */
 		for (int j = json_array_get_length(presences) - 1; j >= 0; j--) {
 			JsonObject *presence = json_array_get_object_element(presences, j);
 
 			DiscordUser *user = discord_upsert_user(da->new_users, json_object_get_object_member(presence, "user"));
 			discord_update_status(user, presence);
-
-			PurpleChatUserFlags cbflags = discord_get_user_flags(da, guild, user);
-			gchar *nickname = discord_create_nickname(user, guild);
-			
-			if (nickname != NULL) {
-				users = g_list_prepend(users, nickname);
-				flags = g_list_prepend(flags, GINT_TO_POINTER(cbflags));
-			}
 		}
 
-		/* Add all online people to any open chats */
+		/* Add online people to any open chats */
 		GHashTableIter iter;
 		gpointer key, value;
-
 		g_hash_table_iter_init(&iter, discord_get_guild(da, guild_id)->channels);
 
 		while (g_hash_table_iter_next(&iter, &key, &value)) {
+			GList *users = NULL, *flags = NULL;
 			DiscordChannel *channel = value;
 
 			PurpleChatConversation *chat = purple_conversations_find_chat(da->pc, discord_chat_hash(channel->id));
-
-			if (chat != NULL) {
-				purple_chat_conversation_clear_users(chat);
-				purple_chat_conversation_add_users(chat, users, NULL, flags, FALSE);
+			if (chat == NULL) {
+				//Skip over closed chats
+				continue;
 			}
+		
+			/* Presence only contains online users */
+			for (int j = json_array_get_length(presences) - 1; j >= 0; j--) {
+				JsonObject *presence = json_array_get_object_element(presences, j);
+
+				DiscordUser *user = discord_upsert_user(da->new_users, json_object_get_object_member(presence, "user"));
+				
+				guint64 permission = discord_compute_permission(da, user, channel);
+
+				/* must have READ_MESSAGES */
+				if ((permission & 0x400)) {
+					PurpleChatUserFlags cbflags = discord_get_user_flags(da, guild, user);
+					gchar *nickname = discord_create_nickname(user, guild);
+					
+					if (nickname != NULL) {
+						users = g_list_prepend(users, nickname);
+						flags = g_list_prepend(flags, GINT_TO_POINTER(cbflags));
+					}
+				}
+			}
+			
+			purple_chat_conversation_clear_users(chat);
+			purple_chat_conversation_add_users(chat, users, NULL, flags, FALSE);
+			
+			while (users != NULL) {
+				g_free(users->data);
+				users = g_list_delete_link(users, users);
+			}
+
+			g_list_free(users);
+			g_list_free(flags);
 		}
 
-		while (users != NULL) {
-			g_free(users->data);
-			users = g_list_delete_link(users, users);
-		}
 
-		g_list_free(users);
-		g_list_free(flags);
 		discord_print_users(da->new_users);
 	} else if (purple_strequal(type, "GUILD_MEMBER_UPDATE")) {
 		DiscordUser *user = discord_upsert_user(da->new_users, json_object_get_object_member(data, "user"));
@@ -3991,6 +4008,7 @@ discord_got_channel_info(DiscordAccount *da, JsonNode *node, gpointer user_data)
 	}
 
 	if (json_object_has_member(channel, "recipients")) {
+		// This is a Group DM
 		JsonArray *recipients = json_object_get_array_member(channel, "recipients");
 		gint i;
 		guint len = json_array_get_length(recipients);
@@ -4022,24 +4040,35 @@ discord_got_channel_info(DiscordAccount *da, JsonNode *node, gpointer user_data)
 		g_list_free(users);
 		g_list_free(flags);
 	} else if (json_object_has_member(channel, "permission_overwrites")) {
+		// This is a guild/server room
 		DiscordGuild *guild = discord_get_guild(da, to_int(json_object_get_string_member(channel, "guild_id")));
 
 		PurpleChatConversation *chat = chatconv;
 		GList *users = NULL, *flags = NULL;
-
+		DiscordChannel *chnl = discord_get_channel_global_int(da, tmp);
+		
 		for (guint i = 0; i < guild->members->len; i++) {
 			DiscordUser *user = discord_get_user(da, g_array_index(guild->members, guint64, i));
-			PurpleChatUserFlags cbflags = discord_get_user_flags(da, guild, user);
-			gchar *nickname = discord_create_nickname(user, guild);
+			
+			/* Ensure that we actually have permissions for this channel */
+			guint64 permission = discord_compute_permission(da, user, chnl);
 
-			if (nickname != NULL && user->status != USER_OFFLINE) {
-				users = g_list_prepend(users, nickname);
-				flags = g_list_prepend(flags, GINT_TO_POINTER(cbflags));
+			/* must have READ_MESSAGES */
+			if ((permission & 0x400)) {
+				PurpleChatUserFlags cbflags = discord_get_user_flags(da, guild, user);
+				gchar *nickname = discord_create_nickname(user, guild);
+
+				if (nickname != NULL && user->status != USER_OFFLINE) {
+					users = g_list_prepend(users, nickname);
+					flags = g_list_prepend(flags, GINT_TO_POINTER(cbflags));
+				}
 			}
 		}
 
-		purple_chat_conversation_clear_users(chat);
-		purple_chat_conversation_add_users(chat, users, NULL, flags, FALSE);
+		if (users != NULL) {
+			purple_chat_conversation_clear_users(chat);
+			purple_chat_conversation_add_users(chat, users, NULL, flags, FALSE);
+		}
 
 		while (users != NULL) {
 			g_free(users->data);
