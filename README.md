@@ -50,7 +50,7 @@ Requires devel headers/libs for libpurple and libjson-glib [libglib2.0-dev, libj
 	make
 	sudo make install
 ```
-
+Yout can use autocompile.sh bash script to compile.
 Advanced Options
 ----------------
 **Use status message as in-game info**: If enabled, the status message set via
