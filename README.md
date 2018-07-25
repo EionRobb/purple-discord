@@ -43,14 +43,14 @@ Thank you to Penaz for this package.
 
 Compiling
 ---------
-Requires devel headers/libs for libpurple and libjson-glib [libglib2.0-dev, libjson-glib-dev and libpurple-dev]
+Requires devel headers/libs for libpurple and libjson-glib [libglib2.0-dev, libjson-glib-dev and libpurple-dev]. You can use autocompile.sh bash script to compile.
 ```bash
 	git clone git://github.com/EionRobb/purple-discord.git
 	cd purple-discord
 	make
 	sudo make install
 ```
-Yout can use autocompile.sh bash script to compile.
+
 Advanced Options
 ----------------
 **Use status message as in-game info**: If enabled, the status message set via
