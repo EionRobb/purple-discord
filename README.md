@@ -51,6 +51,9 @@ Requires devel headers/libs for libpurple and libjson-glib [libglib2.0-dev, libj
 	sudo make install
 ```
 
+You may need to install Make:
+Ubuntu/Debian: ```sudo apt install make```
+
 Advanced Options
 ----------------
 **Use status message as in-game info**: If enabled, the status message set via
