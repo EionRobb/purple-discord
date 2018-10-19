@@ -44,12 +44,22 @@ Thank you to Penaz for this package.
 Compiling
 ---------
 Requires devel headers/libs for libpurple and libjson-glib [libglib2.0-dev, libjson-glib-dev and libpurple-dev]
+
 ```bash
 	git clone git://github.com/EionRobb/purple-discord.git
 	cd purple-discord
 	make
 	sudo make install
 ```
+
+If you recieve an error like this: 
+---------
+```echo "You need libpurple development headers installed to be able to compile this plugin"
+You need libpurple development headers installed to be able to compile this plugin
+```
+Install libpurple:
+---------
+Debian/Ubuntu: ```sudo apt-get install libpurple-dev```
 
 Advanced Options
 ----------------
