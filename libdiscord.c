@@ -25,6 +25,11 @@
 #endif
 #include <errno.h>
 
+#include <zlib.h>
+#ifndef z_const
+#	define z_const
+#endif
+
 #ifdef ENABLE_NLS
 #      define GETTEXT_PACKAGE "purple-discord"
 #      include <glib/gi18n-lib.h>
@@ -188,6 +193,9 @@ typedef struct {
 	gint frames_since_reconnect;
 	GSList *pending_writes;
 	gint roomlist_guild_count;
+	
+	gboolean compress;
+	z_stream *zstream;
 } DiscordAccount;
 
 typedef struct {
@@ -3112,6 +3120,8 @@ discord_login(PurpleAccount *account)
 	if (da->last_load_last_message_id != 0) {
 		da->last_load_last_message_id = (da->last_load_last_message_id << 32) | ((guint64) purple_account_get_int(account, "last_message_id_low", 0) & 0xFFFFFFFF);
 	}
+	
+	da->compress = purple_account_get_bool(account, "compress", FALSE);
 
 	da->one_to_ones = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
 	da->one_to_ones_rev = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
@@ -3170,6 +3180,11 @@ discord_close(PurpleConnection *pc)
 	if (da->websocket != NULL) {
 		purple_ssl_close(da->websocket);
 		da->websocket = NULL;
+	}
+	if (da->zstream != NULL) {
+		inflateEnd(da->zstream);
+		g_free(da->zstream);
+		da->zstream = NULL;
 	}
 
 	g_hash_table_unref(da->one_to_ones);
@@ -3392,6 +3407,46 @@ discord_socket_write_json(DiscordAccount *rca, JsonObject *data)
 	g_free(str);
 }
 
+static gchar *
+discord_inflate(DiscordAccount *da, gchar *frame, gsize frame_len)
+{
+	if (!da->zstream) {
+		da->zstream = g_new0(z_stream, 1);
+		inflateInit2(da->zstream, MAX_WBITS + 32);
+	}
+	
+	z_stream *zs = da->zstream;
+	
+	zs->next_in = (z_const Bytef*)frame;
+	zs->avail_in = frame_len;
+	
+	int gzres;
+	GString *ret = g_string_new(NULL);
+	while (zs->avail_in > 0) {
+		gchar decomp_buff[65535];
+		gsize decomp_len;
+		
+		zs->next_out = (Bytef*)decomp_buff;
+		zs->avail_out = sizeof(decomp_buff);
+		decomp_len = zs->avail_out = sizeof(decomp_buff);
+		gzres = inflate(zs, Z_SYNC_FLUSH);
+		decomp_len -= zs->avail_out;
+		
+		if (gzres == Z_OK || gzres == Z_STREAM_END) {
+			g_string_append_len(ret, decomp_buff, decomp_len);
+		} else {
+			break;
+		}
+	}
+	
+	if (gzres != Z_OK && gzres != Z_STREAM_END) {
+		g_string_free(ret, TRUE);
+		return NULL;
+	}
+	
+	return g_string_free(ret, FALSE);
+}
+
 static void
 discord_socket_got_data(gpointer userdata, PurpleSslConnection *conn, PurpleInputCondition cond)
 {
@@ -3426,7 +3481,7 @@ discord_socket_got_data(gpointer userdata, PurpleSslConnection *conn, PurpleInpu
 
 	while (ya->frame || (read_len = purple_ssl_read(conn, &ya->packet_code, 1)) == 1) {
 		if (!ya->frame) {
-			if (ya->packet_code != 129) {
+			if (ya->packet_code != 129 && ya->packet_code != 130) {
 				if (ya->packet_code == 136) {
 					purple_debug_error("discord", "websocket closed\n");
 
@@ -3520,6 +3575,12 @@ discord_socket_got_data(gpointer userdata, PurpleSslConnection *conn, PurpleInpu
 		done_some_reads = TRUE;
 
 		if (ya->frame_len_progress == ya->frame_len) {
+			if (ya->compress) {
+				gchar *temp = discord_inflate(ya, ya->frame, ya->frame_len);
+				g_free(ya->frame);
+				ya->frame = temp;
+			}
+			
 			gboolean success = discord_process_frame(ya, ya->frame);
 			g_free(ya->frame);
 			ya->frame = NULL;
@@ -3560,7 +3621,7 @@ discord_socket_connected(gpointer userdata, PurpleSslConnection *conn, PurpleInp
 
 	purple_ssl_input_add(da->websocket, discord_socket_got_data, da);
 
-	websocket_header = g_strdup_printf("GET %s HTTP/1.1\r\n"
+	websocket_header = g_strdup_printf("GET %s%s HTTP/1.1\r\n"
 									   "Host: %s\r\n"
 									   "Connection: Upgrade\r\n"
 									   "Pragma: no-cache\r\n"
@@ -3570,8 +3631,8 @@ discord_socket_connected(gpointer userdata, PurpleSslConnection *conn, PurpleInp
 									   "Sec-WebSocket-Key: %s\r\n"
 									   "User-Agent: " DISCORD_USERAGENT "\r\n"
 									   "\r\n",
-									   DISCORD_GATEWAY_SERVER_PATH, DISCORD_GATEWAY_SERVER,
-									   websocket_key);
+									   DISCORD_GATEWAY_SERVER_PATH, da->compress ? "&compress=zlib-stream" : "",
+									   DISCORD_GATEWAY_SERVER, websocket_key);
 
 	purple_ssl_write(da->websocket, websocket_header, strlen(websocket_header));
 
@@ -3603,6 +3664,11 @@ discord_start_socket(DiscordAccount *da)
 	/* Reset all the old stuff */
 	if (da->websocket != NULL) {
 		purple_ssl_close(da->websocket);
+	}
+	if (da->zstream != NULL) {
+		inflateEnd(da->zstream);
+		g_free(da->zstream);
+		da->zstream = NULL;
 	}
 
 	da->websocket = NULL;
