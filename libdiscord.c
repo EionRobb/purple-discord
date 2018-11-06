@@ -2952,7 +2952,7 @@ discord_got_guilds(DiscordAccount *da, JsonNode *node, gpointer user_data)
 	JsonArray *guilds = json_node_get_array(node);
 	guint len = json_array_get_length(guilds);
 	JsonArray *guild_ids = json_array_new();
-	// JsonObject *obj;
+	JsonObject *obj;
 
 	for (int i = len - 1; i >= 0; i--) {
 		JsonObject *guild = json_array_get_object_element(guilds, i);
@@ -2964,13 +2964,13 @@ discord_got_guilds(DiscordAccount *da, JsonNode *node, gpointer user_data)
 
 	/* Request more info about guilds (online/offline buddy status) */
 	//XXX disable for now as it causes the websocket to disconnect with error 4001
-	// obj = json_object_new();
-	// json_object_set_int_member(obj, "op", 12);
-	// json_object_set_array_member(obj, "d", guild_ids);
+	obj = json_object_new();
+	json_object_set_int_member(obj, "op", 12);
+	json_object_set_array_member(obj, "d", guild_ids);
 
-	// discord_socket_write_json(da, obj);
+	discord_socket_write_json(da, obj);
 
-	// json_object_unref(obj);
+	json_object_unref(obj);
 }
 
 /* If count is explicitly specified, use a static request (DMs).
