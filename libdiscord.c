@@ -2952,7 +2952,7 @@ discord_got_guilds(DiscordAccount *da, JsonNode *node, gpointer user_data)
 	JsonArray *guilds = json_node_get_array(node);
 	guint len = json_array_get_length(guilds);
 	JsonArray *guild_ids = json_array_new();
-	JsonObject *obj;
+	// JsonObject *obj;
 
 	for (int i = len - 1; i >= 0; i--) {
 		JsonObject *guild = json_array_get_object_element(guilds, i);
@@ -2963,13 +2963,14 @@ discord_got_guilds(DiscordAccount *da, JsonNode *node, gpointer user_data)
 	discord_print_guilds(da->new_guilds);
 
 	/* Request more info about guilds (online/offline buddy status) */
-	obj = json_object_new();
-	json_object_set_int_member(obj, "op", 12);
-	json_object_set_array_member(obj, "d", guild_ids);
+	//XXX disable for now as it causes the websocket to disconnect with error 4001
+	// obj = json_object_new();
+	// json_object_set_int_member(obj, "op", 12);
+	// json_object_set_array_member(obj, "d", guild_ids);
 
-	discord_socket_write_json(da, obj);
+	// discord_socket_write_json(da, obj);
 
-	json_object_unref(obj);
+	// json_object_unref(obj);
 }
 
 /* If count is explicitly specified, use a static request (DMs).
@@ -3332,6 +3333,7 @@ discord_socket_write_data(DiscordAccount *ya, guchar *data, gsize data_len, guch
 	guchar *full_data;
 	guint len_size = 1;
 	guchar mkey[4] = { 0x12, 0x34, 0x56, 0x78 };
+	int ret;
 
 	if (data_len) {
 		purple_debug_info("discord", "sending frame: %*s\n", (int) data_len, data);
@@ -3370,7 +3372,14 @@ discord_socket_write_data(DiscordAccount *ya, guchar *data, gsize data_len, guch
 	memmove(full_data + (1 + len_size), &mkey, 4);
 	memmove(full_data + (1 + len_size + 4), data, data_len);
 
-	purple_ssl_write(ya->websocket, full_data, 1 + data_len + len_size + 4);
+	ret = purple_ssl_write(ya->websocket, full_data, 1 + data_len + len_size + 4);
+	if (ret < 0) {
+		purple_debug_error("discord", "websocket sending error: %d\n", errno);
+		purple_connection_error(ya->pc, PURPLE_CONNECTION_ERROR_NETWORK_ERROR, _("Websocket failed to send"));
+		
+		// We can't just restart the socket because that would mean we lose this packet as a pending write
+		//discord_start_socket(ya);
+	}
 
 	g_free(full_data);
 	g_free(data);
