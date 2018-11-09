@@ -1579,6 +1579,18 @@ discord_underscore_match(const gchar *html, int i)
 	return FALSE;
 }
 
+static gboolean
+discord_has_nonspace_before_newline(const gchar *html, int i)
+{
+	while (html[i] && html[i] != '\n') {
+		if (!g_ascii_isspace(html[i++])) {
+			return TRUE;
+		}
+	}
+
+	return FALSE;
+}
+
 static gchar *
 discord_convert_markdown(const gchar *html)
 {
@@ -1634,6 +1646,11 @@ discord_convert_markdown(const gchar *html)
 					out = g_string_append(out, "<br/><span style='font-family: monospace; white-space: pre'>");
 				} else {
 					out = g_string_append(out, "</span>");
+
+					/* Ensure no text on same line after code. */
+					if (discord_has_nonspace_before_newline(html, i + 3)) {
+						out = g_string_append(out, "<br/>");
+					}
 				}
 
 				i += 2;
