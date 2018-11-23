@@ -4668,6 +4668,7 @@ discord_got_avatar(DiscordAccount *da, JsonNode *node, gpointer user_data)
 
 		if (user->id == da->self_user_id) {
 			purple_buddy_icons_set_account_icon(da->account, response_dup, response_len);
+			purple_account_set_string(da->account, "avatar_checksum", user->avatar);
 		} else {
 			purple_buddy_icons_set_for_user(da->account, username, response_dup, response_len, user->avatar);
 		}
@@ -4683,18 +4684,30 @@ discord_get_avatar(DiscordAccount *da, DiscordUser *user, gboolean is_buddy)
 		return;
 	}
 
-	/* We can only verify checksums for buddies due to libpurple
-	 * limitations */
+	/* libpurple only manages checksums for buddies. If we're fetching our
+	 * own icon, we need to use our own store */
+
+	const gchar *checksum = NULL;
 
 	if (is_buddy) {
 		gchar *username = discord_create_fullname(user);
-		const gchar *checksum = purple_buddy_icons_get_checksum_for_user(purple_blist_find_buddy(da->account, username));
+		checksum = purple_buddy_icons_get_checksum_for_user(purple_blist_find_buddy(da->account, username));
 		g_free(username);
 
-		if (purple_strequal(checksum, user->avatar)) {
-			return;
-		}
+	} else if (user->id == da->self_user_id) {
+		checksum = purple_account_get_string(da->account, "avatar_checksum", "");
+		printf("Fetching self..\n");
+	} else {
+		/* XXX: This should never happen unless you started writing
+		 * code for fetching avatars in guilds */
+
+		checksum = "";
 	}
+
+	if (purple_strequal(checksum, user->avatar)) {
+		return;
+	}
+	printf("Cache miss\n");
 
 	GString *url = g_string_new("https://cdn.discordapp.com/avatars/");
 	g_string_append_printf(url, "%" G_GUINT64_FORMAT, user->id);
