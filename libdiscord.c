@@ -4693,10 +4693,8 @@ discord_get_avatar(DiscordAccount *da, DiscordUser *user, gboolean is_buddy)
 		gchar *username = discord_create_fullname(user);
 		checksum = purple_buddy_icons_get_checksum_for_user(purple_blist_find_buddy(da->account, username));
 		g_free(username);
-
 	} else if (user->id == da->self_user_id) {
 		checksum = purple_account_get_string(da->account, "avatar_checksum", "");
-		printf("Fetching self..\n");
 	} else {
 		/* XXX: This should never happen unless you started writing
 		 * code for fetching avatars in guilds */
@@ -4707,7 +4705,6 @@ discord_get_avatar(DiscordAccount *da, DiscordUser *user, gboolean is_buddy)
 	if (purple_strequal(checksum, user->avatar)) {
 		return;
 	}
-	printf("Cache miss\n");
 
 	GString *url = g_string_new("https://cdn.discordapp.com/avatars/");
 	g_string_append_printf(url, "%" G_GUINT64_FORMAT, user->id);
