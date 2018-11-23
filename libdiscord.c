@@ -1268,7 +1268,7 @@ static void discord_got_history_of_room(DiscordAccount *da, JsonNode *node, gpoi
 static void discord_populate_guild(DiscordAccount *da, JsonObject *guild);
 static void discord_got_guilds(DiscordAccount *da, JsonNode *node, gpointer user_data);
 static void discord_got_avatar(DiscordAccount *da, JsonNode *node, gpointer user_data);
-static void discord_get_avatar(DiscordAccount *da, DiscordUser *user);
+static void discord_get_avatar(DiscordAccount *da, DiscordUser *user, gboolean is_buddy);
 static void discord_buddy_guild(DiscordAccount *da, DiscordGuild *guild);
 
 static const gchar *discord_normalise_room_name(const gchar *guild_name, const gchar *name);
@@ -2335,6 +2335,10 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		discord_got_guilds(da, json_object_get_member(data, "guilds"), NULL);
 		discord_got_read_states(da, json_object_get_member(data, "read_state"), NULL);
 
+		/* Fetch our own avatar */
+		self_user_obj = discord_get_user(da, da->self_user_id);
+		discord_get_avatar(da, self_user_obj, FALSE);
+
 		if (!self_user_obj) {
 			/* ...But remove afterward, this user object is partial */
 			g_hash_table_remove(da->new_users, &da->self_user_id);
@@ -2783,7 +2787,7 @@ discord_create_relationship(DiscordAccount *da, JsonObject *json)
 			purple_blist_add_buddy(buddy, NULL, discord_get_or_create_default_group(), NULL);
 		}
 
-		discord_get_avatar(da, user);
+		discord_get_avatar(da, user, TRUE);
 		
 	} else if (type == 2) {
 		/* blocked buddy */
@@ -4647,7 +4651,7 @@ discord_chat_set_topic(PurpleConnection *pc, int id, const char *topic)
 }
 
 static void
-discord_got_avatar(DiscordAccount *ya, JsonNode *node, gpointer user_data)
+discord_got_avatar(DiscordAccount *da, JsonNode *node, gpointer user_data)
 {
 	DiscordUser *user = user_data;
 	gchar *username = discord_create_fullname(user);
@@ -4662,22 +4666,41 @@ discord_got_avatar(DiscordAccount *ya, JsonNode *node, gpointer user_data)
 		response_len = json_object_get_int_member(response, "len");
 		response_dup = g_memdup(response_str, response_len);
 
-		purple_buddy_icons_set_for_user(ya->account, username, response_dup, response_len, user->avatar);
+		if (user->id == da->self_user_id) {
+			purple_buddy_icons_set_account_icon(da->account, response_dup, response_len);
+			purple_account_set_string(da->account, "avatar_checksum", user->avatar);
+		} else {
+			purple_buddy_icons_set_for_user(da->account, username, response_dup, response_len, user->avatar);
+		}
 	}
 	
 	g_free(username);
 }
 
 static void
-discord_get_avatar(DiscordAccount *da, DiscordUser *user)
+discord_get_avatar(DiscordAccount *da, DiscordUser *user, gboolean is_buddy)
 {
 	if (!user) {
 		return;
 	}
 
-	gchar *username = discord_create_fullname(user);
-	const gchar *checksum = purple_buddy_icons_get_checksum_for_user(purple_blist_find_buddy(da->account, username));
-	g_free(username);
+	/* libpurple only manages checksums for buddies. If we're fetching our
+	 * own icon, we need to use our own store */
+
+	const gchar *checksum = NULL;
+
+	if (is_buddy) {
+		gchar *username = discord_create_fullname(user);
+		checksum = purple_buddy_icons_get_checksum_for_user(purple_blist_find_buddy(da->account, username));
+		g_free(username);
+	} else if (user->id == da->self_user_id) {
+		checksum = purple_account_get_string(da->account, "avatar_checksum", "");
+	} else {
+		/* XXX: This should never happen unless you started writing
+		 * code for fetching avatars in guilds */
+
+		checksum = "";
+	}
 
 	if (purple_strequal(checksum, user->avatar)) {
 		return;
