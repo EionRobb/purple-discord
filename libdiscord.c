@@ -65,6 +65,10 @@
 #define DISCORD_GATEWAY_PORT 443
 #define DISCORD_GATEWAY_SERVER_PATH "/?encoding=json&v=6"
 
+#define DISCORD_MESSAGE_NORMAL (0)
+#define DISCORD_MESSAGE_EDITED (1)
+#define DISCORD_MESSAGE_PINNED (2)
+
 #define IGNORE_PRINTS
 
 static GRegex *channel_mentions_regex = NULL;
@@ -1616,8 +1620,11 @@ bail:
 }
 
 static guint64
-discord_process_message(DiscordAccount *da, JsonObject *data, gboolean edited)
+discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_type)
 {
+	gboolean edited = special_type == DISCORD_MESSAGE_EDITED;
+	gboolean pinned = special_type == DISCORD_MESSAGE_PINNED;
+
 	guint64 msg_id = to_int(json_object_get_string_member(data, "id"));
 
 	if (!json_object_get_object_member(data, "author")) {
@@ -1713,9 +1720,11 @@ discord_process_message(DiscordAccount *da, JsonObject *data, gboolean edited)
 	g_free(escaped_content);
 	escaped_content = tmp;
 
-	/* Add prefix for edited messages */
-	if (edited) {
-		tmp = g_strconcat("EDIT: ", escaped_content, NULL);
+	/* Add prefix for edited/pinned messages */
+	if (edited || pinned) {
+		const gchar *prefix = pinned ? "📌 " : "EDIT: ";
+
+		tmp = g_strconcat(prefix, escaped_content, NULL);
 		g_free(escaped_content);
 		escaped_content = tmp;
 	}
@@ -2087,7 +2096,7 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 
 		g_free(username);
 	} else if (purple_strequal(type, "MESSAGE_CREATE") || purple_strequal(type, "MESSAGE_UPDATE")) { /* TODO */
-		discord_process_message(da, data, purple_strequal(type, "MESSAGE_UPDATE"));
+		discord_process_message(da, data, purple_strequal(type, "MESSAGE_UPDATE") ? DISCORD_MESSAGE_EDITED : DISCORD_MESSAGE_PINNED);
 
 		const gchar *channel_id = json_object_get_string_member(data, "channel_id");
 
@@ -3652,7 +3661,7 @@ discord_got_pinned(DiscordAccount *da, JsonNode *node, gpointer user_data)
 
 	for (int i = 0; i < json_array_get_length(messages); ++i) {
 		JsonObject *message = json_array_get_object_element(messages, i);
-		discord_process_message(da, message, FALSE);
+		discord_process_message(da, message, DISCORD_MESSAGE_PINNED);
 	}
 }
 
@@ -3877,7 +3886,7 @@ discord_got_history_of_room(DiscordAccount *da, JsonNode *node, gpointer user_da
 			break;
 		}
 
-		rolling_last_message_id = discord_process_message(da, message, FALSE);
+		rolling_last_message_id = discord_process_message(da, message, DISCORD_MESSAGE_NORMAL);
 	}
 
 	if (rolling_last_message_id != 0) {
@@ -3903,7 +3912,7 @@ discord_got_history_static(DiscordAccount *da, JsonNode *node, gpointer user_dat
 	for (i = len - 1; i >= 0; i--) {
 		JsonObject *message = json_array_get_object_element(messages, i);
 
-		discord_process_message(da, message, FALSE);
+		discord_process_message(da, message, DISCORD_MESSAGE_NORMAL);
 	}
 }
 
