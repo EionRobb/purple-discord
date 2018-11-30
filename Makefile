@@ -28,7 +28,7 @@ endif
 CFLAGS	?= -O2 -g -pipe -Wall
 LDFLAGS ?= -Wl,-z,relro
 
-CFLAGS  += -std=c99 -DDISCORD_PLUGIN_VERSION='"$(PLUGIN_VERSION)"'
+CFLAGS  += -std=c99 -DDISCORD_PLUGIN_VERSION='"$(PLUGIN_VERSION)"' -DMARKDOWN_PIDGIN
 
 # Comment out to disable localisation
 CFLAGS += -DENABLE_NLS
@@ -90,7 +90,7 @@ WIN32_PIDGIN3_LDFLAGS = -L$(PIDGIN3_TREE_TOP)/libpurple -L$(WIN32_DEV_TOP)/gplug
 
 CFLAGS += -DLOCALEDIR=\"$(LOCALEDIR)\"
 
-C_FILES :=
+C_FILES := markdown.c
 PURPLE_COMPAT_FILES :=
 PURPLE_C_FILES := libdiscord.c $(C_FILES)
 
