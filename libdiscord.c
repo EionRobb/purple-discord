@@ -2096,7 +2096,19 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 
 		g_free(username);
 	} else if (purple_strequal(type, "MESSAGE_CREATE") || purple_strequal(type, "MESSAGE_UPDATE")) { /* TODO */
-		discord_process_message(da, data, purple_strequal(type, "MESSAGE_UPDATE") ? DISCORD_MESSAGE_EDITED : DISCORD_MESSAGE_PINNED);
+		unsigned msgtype = DISCORD_MESSAGE_NORMAL;
+
+		if (purple_strequal(type, "MESSAGE_UPDATE")) {
+			/* An update could mean that we were edited or that we
+			 * were pinned. If it's both, default to just showing
+			 * pinned. */
+
+			gboolean is_pinned = json_object_get_boolean_member(data, "pinned");
+
+			msgtype = is_pinned ? DISCORD_MESSAGE_PINNED : DISCORD_MESSAGE_EDITED;
+		}
+
+		discord_process_message(da, data, msgtype);
 
 		const gchar *channel_id = json_object_get_string_member(data, "channel_id");
 
