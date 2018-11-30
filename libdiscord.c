@@ -65,6 +65,10 @@
 #define DISCORD_GATEWAY_PORT 443
 #define DISCORD_GATEWAY_SERVER_PATH "/?encoding=json&v=6"
 
+#define DISCORD_MESSAGE_NORMAL (0)
+#define DISCORD_MESSAGE_EDITED (1)
+#define DISCORD_MESSAGE_PINNED (2)
+
 #define IGNORE_PRINTS
 
 static GRegex *channel_mentions_regex = NULL;
@@ -1616,8 +1620,11 @@ bail:
 }
 
 static guint64
-discord_process_message(DiscordAccount *da, JsonObject *data, gboolean edited)
+discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_type)
 {
+	gboolean edited = special_type == DISCORD_MESSAGE_EDITED;
+	gboolean pinned = special_type == DISCORD_MESSAGE_PINNED;
+
 	guint64 msg_id = to_int(json_object_get_string_member(data, "id"));
 
 	if (!json_object_get_object_member(data, "author")) {
@@ -1713,9 +1720,11 @@ discord_process_message(DiscordAccount *da, JsonObject *data, gboolean edited)
 	g_free(escaped_content);
 	escaped_content = tmp;
 
-	/* Add prefix for edited messages */
-	if (edited) {
-		tmp = g_strconcat("EDIT: ", escaped_content, NULL);
+	/* Add prefix for edited/pinned messages */
+	if (edited || pinned) {
+		const gchar *prefix = pinned ? "📌 " : "EDIT: ";
+
+		tmp = g_strconcat(prefix, escaped_content, NULL);
 		g_free(escaped_content);
 		escaped_content = tmp;
 	}
@@ -2087,7 +2096,19 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 
 		g_free(username);
 	} else if (purple_strequal(type, "MESSAGE_CREATE") || purple_strequal(type, "MESSAGE_UPDATE")) { /* TODO */
-		discord_process_message(da, data, purple_strequal(type, "MESSAGE_UPDATE"));
+		unsigned msgtype = DISCORD_MESSAGE_NORMAL;
+
+		if (purple_strequal(type, "MESSAGE_UPDATE")) {
+			/* An update could mean that we were edited or that we
+			 * were pinned. If it's both, default to just showing
+			 * pinned. */
+
+			gboolean is_pinned = json_object_get_boolean_member(data, "pinned");
+
+			msgtype = is_pinned ? DISCORD_MESSAGE_PINNED : DISCORD_MESSAGE_EDITED;
+		}
+
+		discord_process_message(da, data, msgtype);
 
 		const gchar *channel_id = json_object_get_string_member(data, "channel_id");
 
@@ -3643,6 +3664,39 @@ discord_chat_leave_by_room_id(PurpleConnection *pc, guint64 room_id)
 }
 
 static void
+discord_got_pinned(DiscordAccount *da, JsonNode *node, gpointer user_data)
+{
+	PurpleChatConversation *chatconv = user_data;
+	PurpleConversation *conv = purple_conv_chat_get_conversation(chatconv);
+
+	JsonArray *messages = json_node_get_array(node);
+
+	int count = json_array_get_length(messages);
+
+	if (count) {
+		/* Display each message with a pinned icon through the normal channel */
+
+		for (int i = 0; i < count; ++i) {
+			JsonObject *message = json_array_get_object_element(messages, i);
+			discord_process_message(da, message, DISCORD_MESSAGE_PINNED);
+		}
+	} else {
+		/* Don't make the user think we forget about them */
+		purple_conversation_write(conv, NULL, _("No pinned messages"), PURPLE_MESSAGE_SYSTEM, time(NULL));
+	}
+}
+
+static void
+discord_chat_pinned_by_room_id(PurpleConnection *pc, PurpleChatConversation *chatconv, guint64 room_id)
+{
+	DiscordAccount *da = purple_connection_get_protocol_data(pc);
+
+	gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/v6/channels/%" G_GUINT64_FORMAT "/pins", room_id);
+	discord_fetch_url(da, url, NULL, discord_got_pinned, chatconv);
+	g_free(url);
+}
+
+static void
 discord_chat_leave(PurpleConnection *pc, int id)
 {
 	PurpleChatConversation *chatconv;
@@ -3656,6 +3710,22 @@ discord_chat_leave(PurpleConnection *pc, int id)
 	}
 
 	discord_chat_leave_by_room_id(pc, room_id);
+}
+
+static void
+discord_chat_pinned(PurpleConnection *pc, int id)
+{
+	PurpleChatConversation *chatconv;
+	/* TODO check source */
+	chatconv = purple_conversations_find_chat(pc, id);
+	guint64 room_id = *(guint64 *) purple_conversation_get_data(PURPLE_CONVERSATION(chatconv), "id");
+
+	if (!room_id) {
+		/* TODO FIXME? */
+		room_id = to_int(purple_conversation_get_name(PURPLE_CONVERSATION(chatconv)));
+	}
+
+	discord_chat_pinned_by_room_id(pc, chatconv, room_id);
 }
 
 /* Invite to a _group DM_
@@ -3837,7 +3907,7 @@ discord_got_history_of_room(DiscordAccount *da, JsonNode *node, gpointer user_da
 			break;
 		}
 
-		rolling_last_message_id = discord_process_message(da, message, FALSE);
+		rolling_last_message_id = discord_process_message(da, message, DISCORD_MESSAGE_NORMAL);
 	}
 
 	if (rolling_last_message_id != 0) {
@@ -3863,7 +3933,7 @@ discord_got_history_static(DiscordAccount *da, JsonNode *node, gpointer user_dat
 	for (i = len - 1; i >= 0; i--) {
 		JsonObject *message = json_array_get_object_element(messages, i);
 
-		discord_process_message(da, message, FALSE);
+		discord_process_message(da, message, DISCORD_MESSAGE_NORMAL);
 	}
 }
 
@@ -4966,6 +5036,21 @@ discord_cmd_leave(PurpleConversation *conv, const gchar *cmd, gchar **args, gcha
 }
 
 static PurpleCmdRet
+discord_cmd_pinned(PurpleConversation *conv, const gchar *cmd, gchar **args, gchar **error, gpointer data)
+{
+	PurpleConnection *pc = purple_conversation_get_connection(conv);
+	int id = purple_chat_conversation_get_id(PURPLE_CHAT_CONVERSATION(conv));
+
+	if (pc == NULL || id == -1) {
+		return PURPLE_CMD_RET_FAILED;
+	}
+
+	discord_chat_pinned(pc, id);
+
+	return PURPLE_CMD_RET_OK;
+}
+
+static PurpleCmdRet
 discord_cmd_nick(PurpleConversation *conv, const gchar *cmd, gchar **args, gchar **error, gpointer data)
 {
 	PurpleConnection *pc = purple_conversation_get_connection(conv);
@@ -5013,6 +5098,13 @@ plugin_load(PurplePlugin *plugin, GError **error)
 														   PURPLE_CMD_FLAG_PROTOCOL_ONLY | PURPLE_CMD_FLAG_ALLOW_WRONG_ARGS,
 						DISCORD_PLUGIN_ID, discord_cmd_leave,
 						_("part:  Leave the channel"), NULL);
+
+	purple_cmd_register("pinned", "", PURPLE_CMD_P_PLUGIN, PURPLE_CMD_FLAG_CHAT |
+														   PURPLE_CMD_FLAG_PROTOCOL_ONLY | PURPLE_CMD_FLAG_ALLOW_WRONG_ARGS,
+						DISCORD_PLUGIN_ID, discord_cmd_pinned,
+						_("pinned:  Display pinned messages"), NULL);
+
+
 
 #if 0
 	purple_cmd_register("mute", "s", PURPLE_CMD_P_PLUGIN, PURPLE_CMD_FLAG_CHAT |
