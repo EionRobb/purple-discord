@@ -2636,11 +2636,22 @@ static guint discord_conv_send_typing(PurpleConversation *conv, PurpleIMTypingSt
 static gulong chat_conversation_typing_signal = 0;
 static void discord_mark_conv_seen(PurpleConversation *conv, PurpleConversationUpdateType type);
 static gulong conversation_updated_signal = 0;
+static gboolean discord_capture_join_part(PurpleConversation *conv, const char *name, PurpleConvChatBuddyFlags flags, GHashTable *users);
+static gulong join_signal = 0;
+static gulong part_signal = 0;
 
 typedef struct {
 	DiscordAccount *da;
 	DiscordUser *user;
 } DiscordUserInviteResponseStore;
+
+/* Always be quiet */
+
+static gboolean
+discord_capture_join_part(PurpleConversation *conv, const char *name, PurpleConvChatBuddyFlags flags, GHashTable *users)
+{
+	return TRUE;
+}
 
 static void
 discord_friends_auth_accept(
@@ -3079,6 +3090,14 @@ discord_login(PurpleAccount *account)
 
 	if (!conversation_updated_signal) {
 		conversation_updated_signal = purple_signal_connect(purple_conversations_get_handle(), "conversation-updated", purple_connection_get_protocol(pc), PURPLE_CALLBACK(discord_mark_conv_seen), NULL);
+	}
+
+	if (!join_signal) {
+		join_signal = purple_signal_connect(purple_conversations_get_handle(), "chat-buddy-joining", purple_connection_get_protocol(pc), PURPLE_CALLBACK(discord_capture_join_part), NULL);
+	}
+
+	if (!part_signal) {
+		part_signal = purple_signal_connect(purple_conversations_get_handle(), "chat-buddy-leaving", purple_connection_get_protocol(pc), PURPLE_CALLBACK(discord_capture_join_part), NULL);
 	}
 }
 
