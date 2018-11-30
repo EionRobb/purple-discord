@@ -3643,6 +3643,30 @@ discord_chat_leave_by_room_id(PurpleConnection *pc, guint64 room_id)
 }
 
 static void
+discord_got_pinned(DiscordAccount *da, JsonNode *node, gpointer user_data)
+{
+	PurpleChatConversation *chatconv = user_data;
+	PurpleConversation *conv = purple_conv_chat_get_conversation(chatconv);
+
+	JsonArray *messages = json_node_get_array(node);
+
+	for (int i = 0; i < json_array_get_length(messages); ++i) {
+		JsonObject *message = json_array_get_object_element(messages, i);
+		discord_process_message(da, message, FALSE);
+	}
+}
+
+static void
+discord_chat_pinned_by_room_id(PurpleConnection *pc, PurpleChatConversation *chatconv, guint64 room_id)
+{
+	DiscordAccount *da = purple_connection_get_protocol_data(pc);
+
+	gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/v6/channels/%" G_GUINT64_FORMAT "/pins", room_id);
+	discord_fetch_url(da, url, NULL, discord_got_pinned, chatconv);
+	g_free(url);
+}
+
+static void
 discord_chat_leave(PurpleConnection *pc, int id)
 {
 	PurpleChatConversation *chatconv;
@@ -3656,6 +3680,22 @@ discord_chat_leave(PurpleConnection *pc, int id)
 	}
 
 	discord_chat_leave_by_room_id(pc, room_id);
+}
+
+static void
+discord_chat_pinned(PurpleConnection *pc, int id)
+{
+	PurpleChatConversation *chatconv;
+	/* TODO check source */
+	chatconv = purple_conversations_find_chat(pc, id);
+	guint64 room_id = *(guint64 *) purple_conversation_get_data(PURPLE_CONVERSATION(chatconv), "id");
+
+	if (!room_id) {
+		/* TODO FIXME? */
+		room_id = to_int(purple_conversation_get_name(PURPLE_CONVERSATION(chatconv)));
+	}
+
+	discord_chat_pinned_by_room_id(pc, chatconv, room_id);
 }
 
 /* Invite to a _group DM_
@@ -4966,6 +5006,21 @@ discord_cmd_leave(PurpleConversation *conv, const gchar *cmd, gchar **args, gcha
 }
 
 static PurpleCmdRet
+discord_cmd_pinned(PurpleConversation *conv, const gchar *cmd, gchar **args, gchar **error, gpointer data)
+{
+	PurpleConnection *pc = purple_conversation_get_connection(conv);
+	int id = purple_chat_conversation_get_id(PURPLE_CHAT_CONVERSATION(conv));
+
+	if (pc == NULL || id == -1) {
+		return PURPLE_CMD_RET_FAILED;
+	}
+
+	discord_chat_pinned(pc, id);
+
+	return PURPLE_CMD_RET_OK;
+}
+
+static PurpleCmdRet
 discord_cmd_nick(PurpleConversation *conv, const gchar *cmd, gchar **args, gchar **error, gpointer data)
 {
 	PurpleConnection *pc = purple_conversation_get_connection(conv);
@@ -5013,6 +5068,13 @@ plugin_load(PurplePlugin *plugin, GError **error)
 														   PURPLE_CMD_FLAG_PROTOCOL_ONLY | PURPLE_CMD_FLAG_ALLOW_WRONG_ARGS,
 						DISCORD_PLUGIN_ID, discord_cmd_leave,
 						_("part:  Leave the channel"), NULL);
+
+	purple_cmd_register("pinned", "", PURPLE_CMD_P_PLUGIN, PURPLE_CMD_FLAG_CHAT |
+														   PURPLE_CMD_FLAG_PROTOCOL_ONLY | PURPLE_CMD_FLAG_ALLOW_WRONG_ARGS,
+						DISCORD_PLUGIN_ID, discord_cmd_pinned,
+						_("pinned:  Display pinned messages"), NULL);
+
+
 
 #if 0
 	purple_cmd_register("mute", "s", PURPLE_CMD_P_PLUGIN, PURPLE_CMD_FLAG_CHAT |
