@@ -47,6 +47,7 @@
 #include "glib_compat.h"
 #include "json_compat.h"
 #include "purple_compat.h"
+
 #include "markdown.h"
 
 #define DISCORD_PLUGIN_ID "prpl-eionrobb-discord"

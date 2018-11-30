@@ -202,13 +202,13 @@ markdown_convert_markdown(const gchar *html, gboolean escape_html, gboolean disc
 		} else if (c == '`') {
 			if (html[i + 1] == '`' && html[i + 2] == '`') {
 				if (!s_codeblock) {
-#ifdef PIDGIN
+#ifdef MARKDOWN_PIDGIN
 					out = g_string_append(out, "<br/><span style='font-family: monospace; white-space: pre'>");
 #else
 					out = g_string_append(out, "<br/><pre>");
 #endif
 				} else {
-#ifdef PIDGIN
+#ifdef MARKDOWN_PIDGIN
 					out = g_string_append(out, "</span>");
 #else
 					out = g_string_append(out, "</pre>");
@@ -218,7 +218,7 @@ markdown_convert_markdown(const gchar *html, gboolean escape_html, gboolean disc
 
 				s_codeblock = !s_codeblock;
 			} else {
-#ifdef PIDGIN
+#ifdef MARKDOWN_PIDGIN
 				HTML_TOGGLE_OUT(s_codebit, "<span style='font-family: monospace; white-space: pre'>", "</span>");
 #else
 				HTML_TOGGLE_OUT(s_codebit, "<code>", "</code>");

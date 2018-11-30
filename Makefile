@@ -28,7 +28,7 @@ endif
 CFLAGS	?= -O2 -g -pipe -Wall
 LDFLAGS ?= -Wl,-z,relro
 
-CFLAGS  += -std=c99 -DDISCORD_PLUGIN_VERSION='"$(PLUGIN_VERSION)"'
+CFLAGS  += -std=c99 -DDISCORD_PLUGIN_VERSION='"$(PLUGIN_VERSION)"' -DMARKDOWN_PIDGIN
 
 # Comment out to disable localisation
 CFLAGS += -DENABLE_NLS
