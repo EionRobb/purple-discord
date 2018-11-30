@@ -3671,9 +3671,18 @@ discord_got_pinned(DiscordAccount *da, JsonNode *node, gpointer user_data)
 
 	JsonArray *messages = json_node_get_array(node);
 
-	for (int i = 0; i < json_array_get_length(messages); ++i) {
-		JsonObject *message = json_array_get_object_element(messages, i);
-		discord_process_message(da, message, DISCORD_MESSAGE_PINNED);
+	int count = json_array_get_length(messages);
+
+	if (count) {
+		/* Display each message with a pinned icon through the normal channel */
+
+		for (int i = 0; i < count; ++i) {
+			JsonObject *message = json_array_get_object_element(messages, i);
+			discord_process_message(da, message, DISCORD_MESSAGE_PINNED);
+		}
+	} else {
+		/* Don't make the user think we forget about them */
+		purple_conversation_write(conv, NULL, _("No pinned messages"), PURPLE_MESSAGE_SYSTEM, time(NULL));
 	}
 }
 
