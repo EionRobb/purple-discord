@@ -3069,7 +3069,7 @@ discord_login(PurpleAccount *account)
 		da->last_load_last_message_id = (da->last_load_last_message_id << 32) | ((guint64) purple_account_get_int(account, "last_message_id_low", 0) & 0xFFFFFFFF);
 	}
 	
-	da->compress = purple_account_get_bool(account, "compress", FALSE);
+	da->compress = !purple_account_get_bool(account, "disable-compress", FALSE);
 
 	da->one_to_ones = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
 	da->one_to_ones_rev = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
