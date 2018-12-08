@@ -4567,6 +4567,13 @@ discord_created_direct_message_send(DiscordAccount *da, JsonNode *node, gpointer
 	}
 
 	result = json_node_get_object(node);
+	
+	if (json_object_get_int_member(result, "code") == 50007) {
+		purple_conversation_present_error(who, da->account, _("Could not send message to this user"));
+		purple_message_destroy(msg);
+		return;
+	}
+	
 	message = purple_message_get_contents(msg);
 	room_id = json_object_get_string_member(result, "id");
 	buddy = purple_blist_find_buddy(da->account, who);
@@ -4580,7 +4587,13 @@ discord_created_direct_message_send(DiscordAccount *da, JsonNode *node, gpointer
 		purple_blist_node_set_string(PURPLE_BLIST_NODE(buddy), "room_id", room_id);
 	}
 
-	discord_conversation_send_message(da, to_int(room_id), message);
+	if (room_id != NULL) {
+		discord_conversation_send_message(da, to_int(room_id), message);
+	} else {
+		purple_conversation_present_error(who, da->account, _("Invalid channel for this user"));
+	}
+	
+	purple_message_destroy(msg);
 }
 
 static int
@@ -4699,6 +4712,21 @@ discord_get_avatar(DiscordAccount *da, DiscordUser *user, gboolean is_buddy)
 }
 
 static void
+discord_add_buddy_cb(DiscordAccount *da, JsonNode *node, gpointer user_data)
+{
+	JsonObject *response = json_node_get_object(node);
+	PurpleBuddy *buddy = user_data;
+	
+	if (json_object_get_int_member(response, "code") == 80004) {
+		gchar *message = g_strdup_printf(_("No users with tag %s exist"), purple_buddy_get_name(buddy));
+		purple_notify_error(da, _("Unknown user"), message, "", purple_request_cpar_from_connection(da->pc));
+		g_free(message);
+		
+		purple_blist_remove_buddy(buddy);
+	}
+}
+
+static void
 discord_add_buddy(PurpleConnection *pc, PurpleBuddy *buddy, PurpleGroup *group
 #if PURPLE_VERSION_CHECK(3, 0, 0)
 				  ,
@@ -4719,12 +4747,12 @@ discord_add_buddy(PurpleConnection *pc, PurpleBuddy *buddy, PurpleGroup *group
 
 	usersplit = g_strsplit_set(buddy_name, "#", 2);
 	data = json_object_new();
-	json_object_set_string_member(data, "username", usersplit[0]);
-	json_object_set_string_member(data, "discriminator", usersplit[1]);
+	json_object_set_string_member(data, "username", g_strstrip(usersplit[0]));
+	json_object_set_string_member(data, "discriminator", g_strstrip(usersplit[1]));
 
 	postdata = json_object_to_string(data);
 
-	discord_fetch_url(da, "https://" DISCORD_API_SERVER "/api/v6/users/@me/relationships", postdata, NULL, NULL);
+	discord_fetch_url(da, "https://" DISCORD_API_SERVER "/api/v6/users/@me/relationships", postdata, discord_add_buddy_cb, buddy);
 
 	g_free(postdata);
 	g_strfreev(usersplit);
