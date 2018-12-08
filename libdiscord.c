@@ -4391,7 +4391,8 @@ discord_conversation_send_message(DiscordAccount *da, guint64 room_id, const gch
 	gchar *nonce;
 	gchar *marked;
 	gchar *stripped;
-	gchar * final;
+	gchar *final;
+	gint final_len;
 
 	nonce = g_strdup_printf("%" G_GUINT32_FORMAT, g_random_int());
 	g_hash_table_insert(da->sent_message_ids, nonce, nonce);
@@ -4406,23 +4407,31 @@ discord_conversation_send_message(DiscordAccount *da, guint64 room_id, const gch
 	} else {
 		final = g_strdup(stripped);
 	}
+	
+	final_len = strlen(final);
+	if (final_len <= 2000) {
+		json_object_set_string_member(data, "content", final);
+		json_object_set_string_member(data, "nonce", nonce);
+		json_object_set_boolean_member(data, "tts", FALSE);
 
-	json_object_set_string_member(data, "content", final);
-	json_object_set_string_member(data, "nonce", nonce);
-	json_object_set_boolean_member(data, "tts", FALSE);
+		url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/v6/channels/%" G_GUINT64_FORMAT "/messages", room_id);
+		postdata = json_object_to_string(data);
 
-	url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/v6/channels/%" G_GUINT64_FORMAT "/messages", room_id);
-	postdata = json_object_to_string(data);
-
-	discord_fetch_url(da, url, postdata, NULL, NULL);
+		discord_fetch_url(da, url, postdata, NULL, NULL);
+		
+		g_free(postdata);
+		g_free(url);
+	}
 
 	g_free(marked);
 	g_free(stripped);
-	g_free(url);
-	g_free(postdata);
 	g_free(final);
 	json_object_unref(data);
 
+	if (final_len > 2000) {
+		return -E2BIG;
+	}
+	
 	return 1;
 }
 
@@ -5261,6 +5270,12 @@ PURPLE_INIT_PLUGIN(discord, plugin_init, info);
 #else
 /* Purple 3 plugin load functions */
 
+gssize
+discord_get_max_message_size(PurpleConversation *conv)
+{
+	return 2000;
+}
+
 G_MODULE_EXPORT GType discord_protocol_get_type(void);
 #define DISCORD_TYPE_PROTOCOL (discord_protocol_get_type())
 #define DISCORD_PROTOCOL(obj) (G_TYPE_CHECK_INSTANCE_CAST((obj), DISCORD_TYPE_PROTOCOL, DiscordProtocol))
@@ -5338,6 +5353,7 @@ discord_protocol_client_iface_init(PurpleProtocolClientIface *prpl_info)
 	prpl_info->list_emblem = discord_list_emblem;
 	prpl_info->tooltip_text = discord_tooltip_text;
 	prpl_info->find_blist_chat = discord_find_chat;
+	prpl_info->get_max_message_size = discord_get_max_message_size;
 }
 
 static void
