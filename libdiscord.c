@@ -4309,7 +4309,10 @@ discord_mark_conv_seen(PurpleConversation *conv, PurpleConversationUpdateType ty
 		room_id = to_int(g_hash_table_lookup(ya->one_to_ones_rev, purple_conversation_get_name(conv)));
 	}
 
-	discord_mark_room_messages_read(ya, room_id);
+	if (room_id != 0) {
+		discord_mark_room_messages_read(ya, room_id);
+	}
+	
 }
 
 static guint
@@ -4343,6 +4346,10 @@ discord_conv_send_typing(PurpleConversation *conv, PurpleIMTypingState state, Di
 		room_id = *room_id_ptr;
 	} else {
 		room_id = to_int(g_hash_table_lookup(ya->one_to_ones_rev, purple_conversation_get_name(conv)));
+	}
+	
+	if (room_id == 0) {
+		return 0;
 	}
 
 	url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/v6/channels/%" G_GUINT64_FORMAT "/typing", room_id);
@@ -4564,6 +4571,7 @@ discord_send_im(PurpleConnection *pc,
 			return 1;
 		}
 
+		purple_conversation_present_error(who, da->account, _("Cannot send a message to someone who is not on your friend list."));
 		return -1;
 	}
 
