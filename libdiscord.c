@@ -2055,7 +2055,8 @@ static void
 discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data)
 {
 	if (purple_strequal(type, "PRESENCE_UPDATE")) {
-		DiscordUser *user = discord_upsert_user(da->new_users, json_object_get_object_member(data, "user"));
+		JsonObject *userdata = json_object_get_object_member(data, "user");
+		DiscordUser *user = discord_upsert_user(da->new_users, userdata);
 		discord_update_status(user, data);
 
 		gchar *username = discord_create_fullname_from_id(da, user->id);
@@ -2092,6 +2093,47 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 			const gchar *status = json_object_get_string_member(data, "status");
 			purple_protocol_got_user_status(da->account, username, status, "message", user->game, NULL);
 			purple_protocol_got_user_idle(da->account, username, idle_since ? TRUE : FALSE, 0);
+			
+			// Check avatar updates
+			const gchar *new_avatar = json_object_get_string_member(userdata, "avatar");
+			if (!purple_strequal(user->avatar, new_avatar)) {
+				g_free(user->avatar);
+				user->avatar = g_strdup(new_avatar);
+				discord_get_avatar(da, user, TRUE);
+			}
+			
+			// Handle a user being renamed
+			const gchar *new_username = json_object_get_string_member(userdata, "username");
+			const gchar *new_discriminator = json_object_get_string_member(userdata, "discriminator");
+			gint64 new_disc = to_int(new_discriminator);
+			if (!purple_strequal(user->name, new_username) || user->discriminator != new_disc) {
+				
+				// create a new PurpleBuddy, add to the current PurpleBuddy's PurpleContact, 'disable' the old PurpleBuddy
+				// this allows Pidgin to see the logs for a merged contact, as well as seamlessly switch between old and new
+				
+				gchar *new_username_full = discord_combine_username(new_username, new_discriminator);
+				PurpleBuddy *old_buddy = purple_blist_find_buddy(da->account, username);
+				PurpleContact *buddy_contact = NULL;
+				PurpleGroup *buddy_group = discord_get_or_create_default_group();
+				if (old_buddy != NULL) {
+					buddy_contact = purple_buddy_get_contact(old_buddy);
+					buddy_group = purple_buddy_get_group(old_buddy);
+				}
+				PurpleBuddy *buddy = purple_buddy_new(da->account, new_username_full, user->name);
+				purple_blist_add_buddy(buddy, buddy_contact, buddy_group, NULL);
+				
+				// point the user -> id lookup tables at the new user
+				g_free(user->name);
+				user->name = g_strdup(new_username);
+				user->discriminator = new_disc;
+				
+				const gchar *channel_id = g_hash_table_lookup(da->one_to_ones_rev, username);
+				const gchar *last_message_id = g_hash_table_lookup(da->last_message_id_dm, channel_id);
+				
+				g_hash_table_replace(da->one_to_ones, g_strdup(channel_id), new_username_full);
+				g_hash_table_replace(da->last_message_id_dm, g_strdup(channel_id), g_strdup(last_message_id));
+				g_hash_table_replace(da->one_to_ones_rev, g_strdup(new_username_full), g_strdup(channel_id));
+			}
 		}
 
 		g_free(username);
