@@ -2119,7 +2119,7 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 					buddy_contact = purple_buddy_get_contact(old_buddy);
 					buddy_group = purple_buddy_get_group(old_buddy);
 				}
-				PurpleBuddy *buddy = purple_buddy_new(da->account, new_username_full, user->name);
+				PurpleBuddy *buddy = purple_buddy_new(da->account, new_username_full, new_username);
 				purple_blist_add_buddy(buddy, buddy_contact, buddy_group, NULL);
 				
 				// point the user -> id lookup tables at the new user
@@ -2133,6 +2133,11 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 				g_hash_table_replace(da->one_to_ones, g_strdup(channel_id), new_username_full);
 				g_hash_table_replace(da->last_message_id_dm, g_strdup(channel_id), g_strdup(last_message_id));
 				g_hash_table_replace(da->one_to_ones_rev, g_strdup(new_username_full), g_strdup(channel_id));
+				
+				// Change status to the new user
+				purple_protocol_got_user_status(da->account, new_username_full, status, "message", user->game, NULL);
+				purple_protocol_got_user_idle(da->account, new_username_full, idle_since ? TRUE : FALSE, 0);
+				purple_protocol_got_user_status(da->account, username, "offline", NULL);
 			}
 		}
 
