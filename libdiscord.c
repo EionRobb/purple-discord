@@ -2106,7 +2106,7 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 			const gchar *new_username = json_object_get_string_member(userdata, "username");
 			const gchar *new_discriminator = json_object_get_string_member(userdata, "discriminator");
 			gint64 new_disc = to_int(new_discriminator);
-			if (!purple_strequal(user->name, new_username) || user->discriminator != new_disc) {
+			if (new_username && new_disc && (!purple_strequal(user->name, new_username) || user->discriminator != new_disc)) {
 				
 				// create a new PurpleBuddy, add to the current PurpleBuddy's PurpleContact, 'disable' the old PurpleBuddy
 				// this allows Pidgin to see the logs for a merged contact, as well as seamlessly switch between old and new
