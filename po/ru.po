@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Libpurple-Discord\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2018-04-01 18:43+1200\n"
+"POT-Creation-Date: 2018-12-09 12:57+1300\n"
 "PO-Revision-Date: 2018-03-30 16:37+0300\n"
 "Last-Translator: Дмитрий Барандов <bardimnik@rambler.ru>\n"
 "Language-Team: Only me! <bardimnik@rambler.ru>\n"
@@ -79,6 +79,9 @@ msgstr "Неправильные логин или пароль"
 msgid "Username needs to be an email address"
 msgstr "Имя пользователя должно быть адресом электронной почты"
 
+msgid "Websocket failed to send"
+msgstr ""
+
 msgid "Reauthentication required"
 msgstr "Требуется повторная проверка подлинности"
 
@@ -88,6 +91,9 @@ msgstr "Потеряно соединение с сервером"
 msgid "Couldn't connect to gateway"
 msgstr "Не удалось подключиться к шлюзу"
 
+msgid "No pinned messages"
+msgstr ""
+
 msgid "Bad channel type"
 msgstr "Неправильный тип канала"
 
@@ -96,6 +102,23 @@ msgstr "Невозможно присоединиться к голосовом�
 
 msgid "Could not create conversation"
 msgstr "Не удалось создать беседу"
+
+msgid "Could not send message to this user"
+msgstr ""
+
+msgid "Invalid channel for this user"
+msgstr ""
+
+msgid "Cannot send a message to someone who is not on your friend list."
+msgstr ""
+
+#, c-format
+msgid "No users with tag %s exist"
+msgstr ""
+
+#, fuzzy
+msgid "Unknown user"
+msgstr "неизвестный"
 
 msgid "Username"
 msgstr "Имя пользователя"
@@ -166,6 +189,9 @@ msgstr "leave:  Покинуть канал"
 
 msgid "part:  Leave the channel"
 msgstr "part:  Покинуть канал"
+
+msgid "pinned:  Display pinned messages"
+msgstr ""
 
 msgid "mute <username>:  Mute someone in channel"
 msgstr "mute <username>:  Отключение (глушение) пользователя в канале"

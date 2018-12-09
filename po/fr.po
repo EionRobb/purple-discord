@@ -7,16 +7,16 @@ msgid ""
 msgstr ""
 "Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2017-09-02 16:16+1200\n"
+"POT-Creation-Date: 2018-12-09 12:57+1300\n"
 "PO-Revision-Date: 2018-12-01 13:55+0100\n"
+"Last-Translator: draelenax <draelenax@protonmail.com>\n"
 "Language-Team: fr\n"
+"Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "X-Generator: Poedit 2.2\n"
-"Last-Translator: draelenax <draelenax@protonmail.com>\n"
 "Plural-Forms: nplurals=2; plural=(n > 1);\n"
-"Language: fr\n"
 
 #, c-format
 msgid "Connection error: %s."
@@ -62,7 +62,9 @@ msgid "Enter Discord auth code"
 msgstr "Entrer le code d'authentification Discord"
 
 msgid "You can get this token from your two-factor authentication mobile app."
-msgstr "Vous pouvez obtenir le jeton à partir votre l'application mobile de double authentification."
+msgstr ""
+"Vous pouvez obtenir le jeton à partir votre l'application mobile de double "
+"authentification."
 
 msgid "_Login"
 msgstr "_Connexion"
@@ -76,6 +78,9 @@ msgstr "Mauvais identifiant/mot de passe"
 msgid "Username needs to be an email address"
 msgstr "L'identification doit être une adresse mail"
 
+msgid "Websocket failed to send"
+msgstr ""
+
 msgid "Reauthentication required"
 msgstr "Authentification à nouveau requise"
 
@@ -85,6 +90,9 @@ msgstr "Connexion au serveur perdue"
 msgid "Couldn't connect to gateway"
 msgstr "Impossible de se connecter au portail"
 
+msgid "No pinned messages"
+msgstr ""
+
 msgid "Bad channel type"
 msgstr "Mauvais type de salon"
 
@@ -93,6 +101,23 @@ msgstr "Impossible de rejoindre un salon vocal en mode texte"
 
 msgid "Could not create conversation"
 msgstr "Impossible de créer une conversation"
+
+msgid "Could not send message to this user"
+msgstr ""
+
+msgid "Invalid channel for this user"
+msgstr ""
+
+msgid "Cannot send a message to someone who is not on your friend list."
+msgstr ""
+
+#, c-format
+msgid "No users with tag %s exist"
+msgstr ""
+
+#, fuzzy
+msgid "Unknown user"
+msgstr "Inconnu"
 
 msgid "Username"
 msgstr "Pseudo"
@@ -164,11 +189,15 @@ msgstr "leave: Quitter le salon"
 msgid "part:  Leave the channel"
 msgstr "part: partir du salon"
 
+msgid "pinned:  Display pinned messages"
+msgstr ""
+
 msgid "mute <username>:  Mute someone in channel"
 msgstr "mute <pseudo>:  Rendre muet quelqu'un dans le salon"
 
 msgid "unmute <username>:  Un-mute someone in channel"
-msgstr "unmute <pseudo> : Redonner le droit à la parole à quelqu'un dans le salon"
+msgstr ""
+"unmute <pseudo> : Redonner le droit à la parole à quelqu'un dans le salon"
 
 msgid "topic <description>:  Set the channel topic description"
 msgstr "topic <description>: ajouter une description au salon"

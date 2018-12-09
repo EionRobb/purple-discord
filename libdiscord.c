@@ -2128,11 +2128,13 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 				user->discriminator = new_disc;
 				
 				const gchar *channel_id = g_hash_table_lookup(da->one_to_ones_rev, username);
-				const gchar *last_message_id = g_hash_table_lookup(da->last_message_id_dm, channel_id);
-				
-				g_hash_table_replace(da->one_to_ones, g_strdup(channel_id), new_username_full);
-				g_hash_table_replace(da->last_message_id_dm, g_strdup(channel_id), g_strdup(last_message_id));
-				g_hash_table_replace(da->one_to_ones_rev, g_strdup(new_username_full), g_strdup(channel_id));
+				if (channel_id != NULL) {
+					const gchar *last_message_id = g_hash_table_lookup(da->last_message_id_dm, channel_id);
+					
+					g_hash_table_replace(da->one_to_ones, g_strdup(channel_id), new_username_full);
+					g_hash_table_replace(da->last_message_id_dm, g_strdup(channel_id), g_strdup(last_message_id));
+					g_hash_table_replace(da->one_to_ones_rev, g_strdup(new_username_full), g_strdup(channel_id));
+				}
 				
 				// Change status to the new user
 				purple_protocol_got_user_status(da->account, new_username_full, status, "message", user->game, NULL);
