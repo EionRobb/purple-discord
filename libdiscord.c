@@ -2428,6 +2428,25 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 
 
 		discord_print_users(da->new_users);
+	} else if (purple_strequal(type, "GUILD_MEMBER_ADD")) {
+		JsonObject *userdata = json_object_get_object_member(data, "user");
+		DiscordUser *user = discord_upsert_user(da->new_users, userdata);
+		guint64 guild_id = to_int(json_object_get_string_member(data, "guild_id"));
+		DiscordGuild *guild = discord_get_guild(da, guild_id);
+		
+		DiscordGuildMembership *membership = discord_new_guild_membership(guild_id, userdata);
+		g_hash_table_replace_int64(user->guild_memberships, membership->id, membership);
+		g_array_append_val(guild->members, user->id);
+
+		g_free(discord_alloc_nickname(user, guild, membership->nick));
+
+		JsonArray *roles = json_object_get_array_member(data, "roles");
+
+		for (int k = json_array_get_length(roles) - 1; k >= 0; k--) {
+			guint64 role = to_int(json_array_get_string_element(roles, k));
+			g_array_append_val(membership->roles, role);
+		}
+		
 	} else if (purple_strequal(type, "GUILD_MEMBER_UPDATE")) {
 		DiscordUser *user = discord_upsert_user(da->new_users, json_object_get_object_member(data, "user"));
 		DiscordGuild *guild = discord_get_guild(da, to_int(json_object_get_string_member(data, "guild_id")));
