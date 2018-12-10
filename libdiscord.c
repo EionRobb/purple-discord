@@ -2282,9 +2282,12 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 					PurpleBuddy *buddy = purple_blist_find_buddy(da->account, username);
 					purple_blist_remove_buddy(buddy);
 
-					g_hash_table_remove(da->one_to_ones, g_hash_table_lookup(da->one_to_ones_rev, username));
-					g_hash_table_remove(da->last_message_id_dm, g_hash_table_lookup(da->one_to_ones_rev, username));
-					g_hash_table_remove(da->one_to_ones_rev, username);
+					const gchar *room_id = g_hash_table_lookup(da->one_to_ones_rev, username);
+					if (room_id != NULL) {
+						g_hash_table_remove(da->one_to_ones, room_id);
+						g_hash_table_remove(da->last_message_id_dm, room_id);
+						g_hash_table_remove(da->one_to_ones_rev, username);
+					}
 				}
 
 				g_free(username);
