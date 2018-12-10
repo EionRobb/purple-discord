@@ -2693,7 +2693,7 @@ discord_set_idle(PurpleConnection *pc, int idle_time)
 	JsonObject *obj = json_object_new();
 	JsonObject *data = json_object_new();
 	const gchar *status = "idle";
-	gint64 since = (time(NULL) - idle_time) * 1000;
+	gint64 since = ((gint64) time(NULL) - (gint64) idle_time) * 1000;
 
 	if (idle_time < 20) {
 		status = "online";
@@ -2703,6 +2703,7 @@ discord_set_idle(PurpleConnection *pc, int idle_time)
 	json_object_set_int_member(obj, "op", 3);
 	json_object_set_string_member(data, "status", status);
 	json_object_set_int_member(data, "since", since);
+	json_object_set_null_member(data, "game");
 	json_object_set_boolean_member(data, "afk", idle_time >= 20);
 	json_object_set_object_member(obj, "d", data);
 
