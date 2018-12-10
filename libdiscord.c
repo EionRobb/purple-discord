@@ -4721,7 +4721,7 @@ discord_get_avatar(DiscordAccount *da, DiscordUser *user, gboolean is_buddy)
 		checksum = "";
 	}
 
-	if (purple_strequal(checksum, user->avatar)) {
+	if (!checksum || !*checksum || purple_strequal(checksum, user->avatar)) {
 		return;
 	}
 
