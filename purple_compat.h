@@ -57,7 +57,7 @@
 #define PURPLE_CONVERSATION_UPDATE_UNSEEN PURPLE_CONV_UPDATE_UNSEEN
 #define PURPLE_IS_IM_CONVERSATION(conv) (purple_conversation_get_type(conv) == PURPLE_CONV_TYPE_IM)
 #define PURPLE_IS_CHAT_CONVERSATION(conv) (purple_conversation_get_type(conv) == PURPLE_CONV_TYPE_CHAT)
-#define PURPLE_CONVERSATION(chatorim) (chatorim == NULL ? NULL : chatorim->conv)
+#define PURPLE_CONVERSATION(chatorim) ((chatorim) == NULL ? NULL : (chatorim)->conv)
 #define PURPLE_IM_CONVERSATION(conv) PURPLE_CONV_IM(conv)
 #define PURPLE_CHAT_CONVERSATION(conv) PURPLE_CONV_CHAT(conv)
 #define purple_conversation_present_error purple_conv_present_error
