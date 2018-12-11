@@ -78,6 +78,7 @@ static GRegex *emoji_natural_regex = NULL;
 static GRegex *action_star_regex = NULL;
 static GRegex *mention_regex = NULL;
 static GRegex *natural_mention_regex = NULL;
+static GRegex *discord_mention_regex = NULL;
 
 typedef enum {
 	USER_ONLINE,
@@ -1557,7 +1558,17 @@ static gchar *
 discord_make_mentions(DiscordAccount *da, DiscordGuild *guild, gchar *message)
 {
 	DiscordAccountGuild ag = {.account = da, .guild = guild };
-	gchar *tmp = g_regex_replace_eval(natural_mention_regex, message, -1, 0, 0, discord_make_mention, &ag, NULL);
+	
+	// For converting 'Discord normal' @username into a mention
+	gchar *tmp = g_regex_replace_eval(discord_mention_regex, message, -1, 0, 0, discord_make_mention, &ag, NULL);
+
+	if (tmp != NULL) {
+		g_free(message);
+		message = tmp;
+	}
+	
+	// For converting 'Pidgin normal' username: into a mention
+	tmp = g_regex_replace_eval(natural_mention_regex, message, -1, 0, 0, discord_make_mention, &ag, NULL);
 
 	if (tmp != NULL) {
 		g_free(message);
@@ -5229,6 +5240,7 @@ plugin_load(PurplePlugin *plugin, GError **error)
 	action_star_regex = g_regex_new("^_([^\\*]+)_$", G_REGEX_OPTIMIZE, 0, NULL);
 	mention_regex = g_regex_new("&lt;@!?(\\d+)&gt;", G_REGEX_OPTIMIZE, 0, NULL);
 	natural_mention_regex = g_regex_new("^([^:]+): ", G_REGEX_OPTIMIZE, 0, NULL);
+	discord_mention_regex = g_regex_new("(?:^|\\s)@([^\\s@]+)\b", G_REGEX_OPTIMIZE, 0, NULL);
 
 	purple_cmd_register("nick", "s", PURPLE_CMD_P_PLUGIN, PURPLE_CMD_FLAG_CHAT |
 															PURPLE_CMD_FLAG_PROTOCOL_ONLY | PURPLE_CMD_FLAG_ALLOW_WRONG_ARGS,
@@ -5291,6 +5303,7 @@ plugin_unload(PurplePlugin *plugin, GError **error)
 	g_regex_unref(action_star_regex);
 	g_regex_unref(mention_regex);
 	g_regex_unref(natural_mention_regex);
+	g_regex_unref(discord_mention_regex);
 
 	return TRUE;
 }
