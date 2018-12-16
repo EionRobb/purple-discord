@@ -1,12 +1,12 @@
 #
-# Alyssa Rosenzweig <alyssa@rosenzweig.io>, 2017.
+# Alyssa Rosenzweig <alyssa@rosenzweig.io>, 2017-2018.
 #
 msgid ""
 msgstr ""
 "Project-Id-Version: 0.9\n"
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2018-12-16 11:00-0800\n"
-"PO-Revision-Date: 2017-08-20 12:23-0700\n"
+"PO-Revision-Date: 2018-12-16 12:23-0700\n"
 "Last-Translator: Alyssa Rosenzweig <alyssa@rosenzweig.io>\n"
 "Language-Team: es <LL@li.org>\n"
 "Language: es\n"
@@ -21,28 +21,28 @@ msgstr "Error de conexión: %s."
 
 #, c-format
 msgid "EDIT: %s"
-msgstr ""
+msgstr "EDITADO: %s"
 
 msgid "Group DMs"
-msgstr ""
+msgstr "MDs de grupo"
 
 msgid "Text"
-msgstr ""
+msgstr "Texto"
 
 msgid "Direct Message"
-msgstr ""
+msgstr "Mensaje Directo"
 
 msgid "Voice"
-msgstr ""
+msgstr "Voz"
 
 msgid "Group DM"
-msgstr ""
+msgstr "MD de grupo"
 
 msgid "Guild Category"
-msgstr ""
+msgstr "Categoria de servidor"
 
 msgid "Unknown"
-msgstr ""
+msgstr "Desconocido"
 
 msgid "ID"
 msgstr "Identificación"
@@ -82,7 +82,7 @@ msgid "Username needs to be an email address"
 msgstr "Nombre de usuario tiene que ser una dirección de correo electrónico"
 
 msgid "Websocket failed to send"
-msgstr ""
+msgstr "Websocket falló enviar"
 
 msgid "Reauthentication required"
 msgstr "Hay que autenticar otra vez"
@@ -94,7 +94,7 @@ msgid "Couldn't connect to gateway"
 msgstr "No se puede conectar al gateway"
 
 msgid "No pinned messages"
-msgstr ""
+msgstr "Ningún mensaje destacado"
 
 msgid "Bad channel type"
 msgstr "Mal tipo de canal"
@@ -106,20 +106,20 @@ msgid "Could not create conversation"
 msgstr "No pudo construir la conversación"
 
 msgid "Could not send message to this user"
-msgstr ""
+msgstr "No pudo enviar el mensaje a este usuario"
 
 msgid "Invalid channel for this user"
-msgstr ""
+msgstr "Canal inválido para este usuario"
 
 msgid "Cannot send a message to someone who is not on your friend list."
-msgstr ""
+msgstr "No se puede enviar un mensaje a alguien que no está en su lista de amigos"
 
 #, c-format
 msgid "No users with tag %s exist"
-msgstr ""
+msgstr "Ningún usuario con etiqueta %s existe"
 
 msgid "Unknown user"
-msgstr ""
+msgstr "Usuario desconocido"
 
 msgid "Username"
 msgstr "Nombre de usuario"
@@ -193,7 +193,7 @@ msgid "part:  Leave the channel"
 msgstr "part: Salir el canal"
 
 msgid "pinned:  Display pinned messages"
-msgstr ""
+msgstr "pinned:  Mostrar mensajes destacados"
 
 msgid "mute <username>:  Mute someone in channel"
 msgstr "mute <nombre>:  Enmudecer alguien del canal"
