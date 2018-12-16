@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2018-12-09 12:57+1300\n"
+"POT-Creation-Date: 2018-12-16 11:00-0800\n"
 "PO-Revision-Date: 2018-12-01 13:55+0100\n"
 "Last-Translator: draelenax <draelenax@protonmail.com>\n"
 "Language-Team: fr\n"
@@ -21,6 +21,10 @@ msgstr ""
 #, c-format
 msgid "Connection error: %s."
 msgstr "Erreur de connexion : %s."
+
+#, c-format
+msgid "EDIT: %s"
+msgstr ""
 
 msgid "Group DMs"
 msgstr "Groupe privé"

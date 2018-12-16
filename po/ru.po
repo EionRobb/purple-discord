@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Libpurple-Discord\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2018-12-09 12:57+1300\n"
+"POT-Creation-Date: 2018-12-16 11:00-0800\n"
 "PO-Revision-Date: 2018-03-30 16:37+0300\n"
 "Last-Translator: Дмитрий Барандов <bardimnik@rambler.ru>\n"
 "Language-Team: Only me! <bardimnik@rambler.ru>\n"
@@ -22,6 +22,10 @@ msgstr ""
 #, c-format
 msgid "Connection error: %s."
 msgstr "Ошибка подключения: %s"
+
+#, c-format
+msgid "EDIT: %s"
+msgstr ""
 
 msgid "Group DMs"
 msgstr "Групповые переписки"

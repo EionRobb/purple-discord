@@ -1724,9 +1724,9 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 
 	/* Add prefix for edited/pinned messages */
 	if (edited || pinned) {
-		const gchar *prefix = pinned ? "📌 " : "EDIT: ";
+		const gchar *prefix_fmt = pinned ? "📌 %s" : _("EDIT: %s");
 
-		tmp = g_strconcat(prefix, escaped_content, NULL);
+		tmp = g_strdup_printf(prefix_fmt, escaped_content);
 		g_free(escaped_content);
 		escaped_content = tmp;
 	}
