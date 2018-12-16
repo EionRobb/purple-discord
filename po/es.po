@@ -94,7 +94,7 @@ msgid "Couldn't connect to gateway"
 msgstr "No se puede conectar al gateway"
 
 msgid "No pinned messages"
-msgstr "Ningún mensaje destacado"
+msgstr "Ningún mensaje anclado"
 
 msgid "Bad channel type"
 msgstr "Mal tipo de canal"
@@ -193,7 +193,7 @@ msgid "part:  Leave the channel"
 msgstr "part: Salir el canal"
 
 msgid "pinned:  Display pinned messages"
-msgstr "pinned:  Mostrar mensajes destacados"
+msgstr "pinned:  Mostrar mensajes anclados"
 
 msgid "mute <username>:  Mute someone in channel"
 msgstr "mute <nombre>:  Enmudecer alguien del canal"
