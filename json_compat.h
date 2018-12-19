@@ -14,12 +14,12 @@
  *   GNU General Public License for more details.
  *
  *   You should have received a copy of the GNU General Public License
- *   along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *   along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include <json-glib/json-glib.h>
 
-// Supress overzealous json-glib 'critical errors'
+// Suppress overzealous json-glib 'critical errors'
 #define json_object_has_member(JSON_OBJECT, MEMBER) \
 	(JSON_OBJECT ? json_object_has_member(JSON_OBJECT, MEMBER) : FALSE)
 #define json_object_get_int_member(JSON_OBJECT, MEMBER) \

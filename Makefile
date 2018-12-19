@@ -13,10 +13,14 @@ DIR_PERM = 0755
 LIB_PERM = 0755
 FILE_PERM = 0644
 
-REVISION_ID = $(shell hg id -i)
-REVISION_NUMBER = $(shell hg id -n)
+# Note: Use "-C .git" to avoid ascending to parent dirs if .git not present
+GIT_REVISION_ID = $(shell git -C .git rev-parse --short HEAD 2>/dev/null)
+REVISION_ID = $(shell hg id -i 2>/dev/null)
+REVISION_NUMBER = $(shell hg id -n 2>/dev/null)
 ifneq ($(REVISION_ID),)
 PLUGIN_VERSION ?= 0.9.$(shell date +%Y.%m.%d).git.r$(REVISION_NUMBER).$(REVISION_ID)
+else ifneq ($(GIT_REVISION_ID),)
+PLUGIN_VERSION ?= 0.9.$(shell date +%Y.%m.%d).git.$(GIT_REVISION_ID)
 else
 PLUGIN_VERSION ?= 0.9.$(shell date +%Y.%m.%d)
 endif
@@ -24,17 +28,22 @@ endif
 CFLAGS	?= -O2 -g -pipe -Wall
 LDFLAGS ?= -Wl,-z,relro
 
-CFLAGS  += -std=c99 -DDISCORD_PLUGIN_VERSION='"$(PLUGIN_VERSION)"'
+CFLAGS  += -std=c99 -DDISCORD_PLUGIN_VERSION='"$(PLUGIN_VERSION)"' -DMARKDOWN_PIDGIN
 
 # Comment out to disable localisation
 CFLAGS += -DENABLE_NLS
 
 # Do some nasty OS and purple version detection
 ifeq ($(OS),Windows_NT)
+  #only defined on 64-bit windows
+  PROGFILES32 = ${ProgramFiles(x86)}
+  ifndef PROGFILES32
+    PROGFILES32 = $(PROGRAMFILES)
+  endif
   DISCORD_TARGET = libdiscord.dll
-  DISCORD_DEST = "$(PROGRAMFILES)/Pidgin/plugins"
-  DISCORD_ICONS_DEST = "$(PROGRAMFILES)/Pidgin/pixmaps/pidgin/protocols"
-  LOCALEDIR = "$(PROGRAMFILES)/Pidgin/locale"
+  DISCORD_DEST = "$(PROGFILES32)/Pidgin/plugins"
+  DISCORD_ICONS_DEST = "$(PROGFILES32)/Pidgin/pixmaps/pidgin/protocols"
+  LOCALEDIR = "$(PROGFILES32)/Pidgin/locale"
 else
   UNAME_S := $(shell uname -s)
 
@@ -81,21 +90,21 @@ WIN32_PIDGIN3_LDFLAGS = -L$(PIDGIN3_TREE_TOP)/libpurple -L$(WIN32_DEV_TOP)/gplug
 
 CFLAGS += -DLOCALEDIR=\"$(LOCALEDIR)\"
 
-C_FILES :=
+C_FILES := markdown.c
 PURPLE_COMPAT_FILES :=
 PURPLE_C_FILES := libdiscord.c $(C_FILES)
 
-.PHONY:	all install FAILNOPURPLE clean install-icons install-locales
+.PHONY:	all install FAILNOPURPLE clean install-icons install-locales %-locale-install
 
 LOCALES = $(patsubst %.po, %.mo, $(wildcard po/*.po))
 
 all: $(DISCORD_TARGET)
 
 libdiscord.so: $(PURPLE_C_FILES) $(PURPLE_COMPAT_FILES)
-	$(CC) -fPIC $(CFLAGS) -shared -o $@ $^ $(LDFLAGS) `$(PKG_CONFIG) purple glib-2.0 json-glib-1.0 --libs --cflags`  $(INCLUDES) -Ipurple2compat -g -ggdb
+	$(CC) -fPIC $(CFLAGS) $(CPPFLAGS) -shared -o $@ $^ $(LDFLAGS) `$(PKG_CONFIG) purple glib-2.0 json-glib-1.0 --libs --cflags`  $(INCLUDES) -Ipurple2compat -g -ggdb
 
 libdiscord3.so: $(PURPLE_C_FILES)
-	$(CC) -fPIC $(CFLAGS) -shared -o $@ $^ $(LDFLAGS) `$(PKG_CONFIG) purple-3 glib-2.0 json-glib-1.0 --libs --cflags` $(INCLUDES)  -g -ggdb
+	$(CC) -fPIC $(CFLAGS) $(CPPFLAGS) -shared -o $@ $^ $(LDFLAGS) `$(PKG_CONFIG) purple-3 glib-2.0 json-glib-1.0 --libs --cflags` $(INCLUDES)  -g -ggdb
 
 libdiscord.dll: $(PURPLE_C_FILES) $(PURPLE_COMPAT_FILES)
 	$(WIN32_CC) -O0 -g -ggdb -shared -o $@ $^ $(WIN32_PIDGIN2_CFLAGS) $(WIN32_PIDGIN2_LDFLAGS) -Ipurple2compat
@@ -107,11 +116,14 @@ po/purple-discord.pot: libdiscord.c
 	xgettext $^ -k_ --no-location -o $@
 
 po/%.po: po/purple-discord.pot
-	msgmerge $@ po/purple-discord.pot > tmp
-	mv -f tmp $@
+	msgmerge $@ po/purple-discord.pot > tmp-$*
+	mv -f tmp-$* $@
 
 po/%.mo: po/%.po
 	msgfmt -o $@ $^
+
+%-locale-install: po/%.mo
+	install -D -m $(FILE_PERM) -p po/$(*F).mo $(LOCALEDIR)/$(*F)/LC_MESSAGES/purple-discord.mo
 
 install: $(DISCORD_TARGET) install-icons install-locales
 	mkdir -m $(DIR_PERM) -p $(DISCORD_DEST)
@@ -125,9 +137,7 @@ install-icons: discord16.png discord22.png discord48.png
 	install -m $(FILE_PERM) -p discord22.png $(DISCORD_ICONS_DEST)/22/discord.png
 	install -m $(FILE_PERM) -p discord48.png $(DISCORD_ICONS_DEST)/48/discord.png
 
-install-locales: $(LOCALES)
-	install -D -m $(FILE_PERM) -p po/es.mo $(LOCALEDIR)/es/LC_MESSAGES/purple-discord.mo
-	install -D -m $(FILE_PERM) -p po/it.mo $(LOCALEDIR)/it/LC_MESSAGES/purple-discord.mo
+install-locales: $(patsubst po/%.po, %-locale-install, $(wildcard po/*.po))
 
 FAILNOPURPLE:
 	echo "You need libpurple development headers installed to be able to compile this plugin"

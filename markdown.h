@@ -1,7 +1,6 @@
 /*
- *   Discord plugin for libpurple
- *   Copyright (C) 2016-2017  Eion Robb
- *   Copyright (C) 2017 Alyssa Rosenzweig
+ *   Markdown library for libpurple
+ *   Copyright (C) 2018 Alyssa Rosenzweig
  *
  *   This program is free software: you can redistribute it and/or modify
  *   it under the terms of the GNU General Public License as published by
@@ -17,25 +16,15 @@
  *   along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+
+#ifndef __MARKDOWN_H
+#define __MARKDOWN_H
+
+#include <purple.h>
 #include <glib.h>
 
-#if !GLIB_CHECK_VERSION(2, 32, 0)
-#define g_hash_table_contains(hash_table, key) g_hash_table_lookup_extended(hash_table, key, NULL, NULL)
-#endif /* 2.32.0 */
+gchar *markdown_convert_markdown(const gchar *html, gboolean escape_html, gboolean markdown_hacks);
+gchar *markdown_escape_md(const gchar *markdown, gboolean markdown_hacks);
+gchar *markdown_html_to_markdown(gchar *html);
 
-static gboolean
-g_str_insensitive_equal(gconstpointer v1, gconstpointer v2)
-{
-	return (g_ascii_strcasecmp(v1, v2) == 0);
-}
-static guint
-g_str_insensitive_hash(gconstpointer v)
-{
-	guint hash;
-	gchar *lower_str = g_ascii_strdown(v, -1);
-
-	hash = g_str_hash(lower_str);
-	g_free(lower_str);
-
-	return hash;
-}
+#endif

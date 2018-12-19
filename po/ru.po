@@ -1,0 +1,217 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the PACKAGE package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: Libpurple-Discord\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2018-12-16 11:00-0800\n"
+"PO-Revision-Date: 2018-03-30 16:37+0300\n"
+"Last-Translator: Дмитрий Барандов <bardimnik@rambler.ru>\n"
+"Language-Team: Only me! <bardimnik@rambler.ru>\n"
+"Language: ru\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Generator: Poedit 1.8.7.1\n"
+"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n"
+"%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
+
+#, c-format
+msgid "Connection error: %s."
+msgstr "Ошибка подключения: %s"
+
+#, c-format
+msgid "EDIT: %s"
+msgstr ""
+
+msgid "Group DMs"
+msgstr "Групповые переписки"
+
+msgid "Text"
+msgstr "Текст"
+
+msgid "Direct Message"
+msgstr "Личное сообщение"
+
+msgid "Voice"
+msgstr "Голос"
+
+msgid "Group DM"
+msgstr "Групповая переписка"
+
+msgid "Guild Category"
+msgstr "Категория гильдии"
+
+msgid "Unknown"
+msgstr "неизвестный"
+
+msgid "ID"
+msgstr "ИД"
+
+msgid "Name"
+msgstr "Имя"
+
+msgid "Room Type"
+msgstr "Тип комнаты"
+
+msgid "Cancelled 2FA auth"
+msgstr "Отменено двухфакторной аутентификацией"
+
+msgid "Two-factor authentication"
+msgstr "Двухфакторная аутентификация"
+
+msgid "Enter Discord auth code"
+msgstr "Введите код двухфакторной авторизации Discord"
+
+msgid "You can get this token from your two-factor authentication mobile app."
+msgstr ""
+"Вы можете получить этот токен из своего двухфакторного мобильного приложения "
+"для проверки подлинности (например, Google Authenticator)."
+
+msgid "_Login"
+msgstr "_Логин"
+
+msgid "_Cancel"
+msgstr "_Отмена"
+
+msgid "Bad username/password"
+msgstr "Неправильные логин или пароль"
+
+msgid "Username needs to be an email address"
+msgstr "Имя пользователя должно быть адресом электронной почты"
+
+msgid "Websocket failed to send"
+msgstr ""
+
+msgid "Reauthentication required"
+msgstr "Требуется повторная проверка подлинности"
+
+msgid "Lost connection to server"
+msgstr "Потеряно соединение с сервером"
+
+msgid "Couldn't connect to gateway"
+msgstr "Не удалось подключиться к шлюзу"
+
+msgid "No pinned messages"
+msgstr ""
+
+msgid "Bad channel type"
+msgstr "Неправильный тип канала"
+
+msgid "Cannot join a voice channel as text"
+msgstr "Невозможно присоединиться к голосовому каналу в виде текста"
+
+msgid "Could not create conversation"
+msgstr "Не удалось создать беседу"
+
+msgid "Could not send message to this user"
+msgstr ""
+
+msgid "Invalid channel for this user"
+msgstr ""
+
+msgid "Cannot send a message to someone who is not on your friend list."
+msgstr ""
+
+#, c-format
+msgid "No users with tag %s exist"
+msgstr ""
+
+#, fuzzy
+msgid "Unknown user"
+msgstr "неизвестный"
+
+msgid "Username"
+msgstr "Имя пользователя"
+
+msgid "Online"
+msgstr "В сети"
+
+msgid "Idle"
+msgstr "Пусто"
+
+msgid "Offline"
+msgstr "Не в сети"
+
+msgid "Do Not Disturb"
+msgstr "Не беспокоить"
+
+msgid "Status"
+msgstr "Статус"
+
+msgid "Playing"
+msgstr "Воспроизведение"
+
+msgid "Connected Accounts"
+msgstr "Подключенные учетные записи"
+
+msgid "Mutual Servers"
+msgstr "Общие (совместные) сервера"
+
+msgid "Invisible"
+msgstr "Невидимый"
+
+#, c-format
+msgid "Playing %s"
+msgstr "Воспроизведение %s"
+
+msgid "Email address..."
+msgstr "Адрес электронной почты..."
+
+msgid "Use status message as in-game info"
+msgstr "Использовать сообщение о состоянии в игре"
+
+msgid "Auto-create rooms on buddy list"
+msgstr "Автоматическое создание комнат в списке друзей"
+
+msgid "Number of users in a large channel"
+msgstr "Количество пользователей в большом канале"
+
+msgid "Join a server"
+msgstr "Присоединиться к серверу"
+
+msgid "Enter the join URL here"
+msgstr "Введите URL-адрес соединения здесь"
+
+msgid "_Join"
+msgstr "_Присоединиться"
+
+msgid "Join a server..."
+msgstr "Присоединиться к серверу..."
+
+msgid "nick <new nickname>:  Changes nickname on a server"
+msgstr "nick <new nickname>: Меняет ник на сервере"
+
+msgid "kick <username>:  Remove someone from channel"
+msgstr "kick <username>:  Удаляет пользователя из канала"
+
+msgid "leave:  Leave the channel"
+msgstr "leave:  Покинуть канал"
+
+msgid "part:  Leave the channel"
+msgstr "part:  Покинуть канал"
+
+msgid "pinned:  Display pinned messages"
+msgstr ""
+
+msgid "mute <username>:  Mute someone in channel"
+msgstr "mute <username>:  Отключение (глушение) пользователя в канале"
+
+msgid "unmute <username>:  Un-mute someone in channel"
+msgstr ""
+"unmute <username>:  Включение (перестать глушить) пользователя в канале"
+
+msgid "topic <description>:  Set the channel topic description"
+msgstr "topic <description>: Задать описание темы канала"
+
+msgid "Protocol"
+msgstr "Протокол"
+
+msgid "Discord Protocol Plugins."
+msgstr "Протокол плагинов Discord"
+
+msgid "Adds Discord protocol support to libpurple."
+msgstr "Добавляет поддержку протокола Discord в libpurple."

@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: 0.9\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2017-08-20 17:26-0700\n"
+"POT-Creation-Date: 2018-12-16 11:00-0800\n"
 "PO-Revision-Date: 2017-08-22 21:01+0200\n"
 "Last-Translator: Penaz <penazarea@altervista.org>\n"
 "Language-Team: Italian <>\n"
@@ -19,6 +19,31 @@ msgstr ""
 #, c-format
 msgid "Connection error: %s."
 msgstr "Errore di Connessione: %s."
+
+#, c-format
+msgid "EDIT: %s"
+msgstr ""
+
+msgid "Group DMs"
+msgstr ""
+
+msgid "Text"
+msgstr ""
+
+msgid "Direct Message"
+msgstr ""
+
+msgid "Voice"
+msgstr ""
+
+msgid "Group DM"
+msgstr ""
+
+msgid "Guild Category"
+msgstr ""
+
+msgid "Unknown"
+msgstr ""
 
 msgid "ID"
 msgstr "Identificatore"
@@ -55,6 +80,9 @@ msgstr "Nome Utente/Password errati"
 msgid "Username needs to be an email address"
 msgstr "Il nome utente deve essere un indirizzo email"
 
+msgid "Websocket failed to send"
+msgstr ""
+
 msgid "Reauthentication required"
 msgstr "Richiesta ri-autenticazione"
 
@@ -64,6 +92,9 @@ msgstr "Connessione al server persa"
 msgid "Couldn't connect to gateway"
 msgstr "Impossibile connettersi al gateway"
 
+msgid "No pinned messages"
+msgstr ""
+
 msgid "Bad channel type"
 msgstr "Tipo di canale errato"
 
@@ -72,6 +103,22 @@ msgstr "Impossibile entrare in un canale voce in modalità testo"
 
 msgid "Could not create conversation"
 msgstr "Impossibile creare la conversazione"
+
+msgid "Could not send message to this user"
+msgstr ""
+
+msgid "Invalid channel for this user"
+msgstr ""
+
+msgid "Cannot send a message to someone who is not on your friend list."
+msgstr ""
+
+#, c-format
+msgid "No users with tag %s exist"
+msgstr ""
+
+msgid "Unknown user"
+msgstr ""
 
 msgid "Username"
 msgstr "Nome Utente"
@@ -91,9 +138,10 @@ msgstr "Non Disturbare"
 msgid "Status"
 msgstr "Stato"
 
-msgid "In-Game"
-msgstr "In gioco"
+msgid "Playing"
+msgstr "In Gioco"
 
+#, fuzzy
 msgid "Connected Accounts"
 msgstr "Account Connessi"
 
@@ -106,9 +154,6 @@ msgstr "Invisibile"
 #, c-format
 msgid "Playing %s"
 msgstr "In gioco: %s"
-
-msgid "Playing"
-msgstr "In Gioco"
 
 msgid "Email address..."
 msgstr "Indirizzo email..."
@@ -146,6 +191,9 @@ msgstr "leave: Esci dal canale"
 msgid "part:  Leave the channel"
 msgstr "part: Esci dal canale"
 
+msgid "pinned:  Display pinned messages"
+msgstr ""
+
 msgid "mute <username>:  Mute someone in channel"
 msgstr "mute <nome>:  Silenzia qualcuno nel canale"
 
@@ -163,6 +211,9 @@ msgstr "Plug-in del Protocollo di Discord."
 
 msgid "Adds Discord protocol support to libpurple."
 msgstr "Aggiunge il supporto per il protocollo Discord a LibPurple"
+
+#~ msgid "In-Game"
+#~ msgstr "In gioco"
 
 #~ msgid "Full Username"
 #~ msgstr "Nombre de usuario completo"
