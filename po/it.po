@@ -1,12 +1,12 @@
 #
-# Penaz <penazarea@altervista.org>, 2017.
+# Penaz <penazarea@altervista.org>, 2018.
 #
 msgid ""
 msgstr ""
 "Project-Id-Version: 0.9\n"
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2018-12-16 11:00-0800\n"
-"PO-Revision-Date: 2017-08-22 21:01+0200\n"
+"PO-Revision-Date: 2018-12-19 23:20+0200\n"
 "Last-Translator: Penaz <penazarea@altervista.org>\n"
 "Language-Team: Italian <>\n"
 "Language: it\n"
@@ -22,28 +22,28 @@ msgstr "Errore di Connessione: %s."
 
 #, c-format
 msgid "EDIT: %s"
-msgstr ""
+msgstr "MODIFICATO: %s"
 
 msgid "Group DMs"
-msgstr ""
+msgstr "Messaggi di gruppo"
 
 msgid "Text"
-msgstr ""
+msgstr "Testo"
 
 msgid "Direct Message"
-msgstr ""
+msgstr "Messaggio Diretto"
 
 msgid "Voice"
-msgstr ""
+msgstr "Voce"
 
 msgid "Group DM"
-msgstr ""
+msgstr "Messaggio di Gruppo"
 
 msgid "Guild Category"
-msgstr ""
+msgstr "Categoria Gilda"
 
 msgid "Unknown"
-msgstr ""
+msgstr "Sconosciuto"
 
 msgid "ID"
 msgstr "Identificatore"
@@ -64,9 +64,7 @@ msgid "Enter Discord auth code"
 msgstr "Inserisci il codice di autorizzazione di Discord"
 
 msgid "You can get this token from your two-factor authentication mobile app."
-msgstr ""
-"Puoi trovare questo codice nella tua app di autenticazione di 2 passaggi su "
-"cellulare"
+msgstr "Puoi trovare il token nella tua app di autenticazione in due passaggi."
 
 msgid "_Login"
 msgstr "_Inizio sessione"
@@ -81,7 +79,7 @@ msgid "Username needs to be an email address"
 msgstr "Il nome utente deve essere un indirizzo email"
 
 msgid "Websocket failed to send"
-msgstr ""
+msgstr "Invio Websocket fallito"
 
 msgid "Reauthentication required"
 msgstr "Richiesta ri-autenticazione"
@@ -93,7 +91,7 @@ msgid "Couldn't connect to gateway"
 msgstr "Impossibile connettersi al gateway"
 
 msgid "No pinned messages"
-msgstr ""
+msgstr "Nessun messaggio fissato"
 
 msgid "Bad channel type"
 msgstr "Tipo di canale errato"
@@ -105,20 +103,20 @@ msgid "Could not create conversation"
 msgstr "Impossibile creare la conversazione"
 
 msgid "Could not send message to this user"
-msgstr ""
+msgstr "Impossibile inviare il messaggio a questo utente"
 
 msgid "Invalid channel for this user"
-msgstr ""
+msgstr "Canale non valido per questo utente"
 
 msgid "Cannot send a message to someone who is not on your friend list."
-msgstr ""
+msgstr "Impossibile inviare un messaggio a qualcuno che non fa parte della tua lista amici."
 
 #, c-format
 msgid "No users with tag %s exist"
-msgstr ""
+msgstr "Non esiste alcun utente con il tag %s"
 
 msgid "Unknown user"
-msgstr ""
+msgstr "Utente sconosciuto"
 
 msgid "Username"
 msgstr "Nome Utente"
@@ -192,7 +190,7 @@ msgid "part:  Leave the channel"
 msgstr "part: Esci dal canale"
 
 msgid "pinned:  Display pinned messages"
-msgstr ""
+msgstr "pinned: Mostra messaggi fissati"
 
 msgid "mute <username>:  Mute someone in channel"
 msgstr "mute <nome>:  Silenzia qualcuno nel canale"
@@ -216,10 +214,10 @@ msgstr "Aggiunge il supporto per il protocollo Discord a LibPurple"
 #~ msgstr "In gioco"
 
 #~ msgid "Full Username"
-#~ msgstr "Nombre de usuario completo"
+#~ msgstr "Nome utente completo"
 
 #~ msgid "Channel ID"
-#~ msgstr "Identificación del canal"
+#~ msgstr "Identificativo Canale"
 
 #~ msgid "Cancel"
-#~ msgstr "Cancelar"
+#~ msgstr "Annulla"
