@@ -1352,7 +1352,7 @@ discord_replace_emoji(const GMatchInfo *match, GString *result, gpointer user_da
 	gchar *emoji_id = g_match_info_fetch(match, 2);
 
 	/* TODO: download and cache emoji as a PurpleStoredImage? */
-	g_string_append_printf(result, "<img src=\"https://cdn.discordapp.com/emojis/%s.png\" alt=\":%s:\"/>", emoji_id, alt_text);
+	g_string_append_printf(result, "<img src=\"https://cdn.discordapp.com/emojis/%s\" alt=\":%s:\"/>", emoji_id, alt_text);
 
 	g_free(emoji_id);
 	g_free(alt_text);
