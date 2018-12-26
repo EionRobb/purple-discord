@@ -4741,23 +4741,35 @@ discord_get_avatar(DiscordAccount *da, DiscordUser *user, gboolean is_buddy)
 		gchar *username = discord_create_fullname(user);
 		checksum = purple_buddy_icons_get_checksum_for_user(purple_blist_find_buddy(da->account, username));
 		g_free(username);
+
+		if (!checksum) {
+			/* TODO: What if they just... don't have an avatar? */
+			checksum = "N/A";
+		}
 	} else if (user->id == da->self_user_id) {
 		checksum = purple_account_get_string(da->account, "avatar_checksum", "");
 	} else {
 		/* XXX: This should never happen unless you started writing
 		 * code for fetching avatars in guilds */
 
-		checksum = "";
+		checksum = "N/A";
 	}
 
 	if (!checksum || !*checksum || purple_strequal(checksum, user->avatar)) {
 		return;
 	}
 
+	/* Construct the URL for the desired avatar. Specifically select png to
+	 * avoid being returned animated gifs, which are a bandwidth hog in
+	 * Pidgin (which ignores the animation) and a CPU hog in other clients
+	 * (which animate). Either way, given that Discord does transcoding
+	 * anyway, we specifically request the png version, for the best
+	 * balance of quality and non-animated-ness */
+
 	GString *url = g_string_new("https://cdn.discordapp.com/avatars/");
 	g_string_append_printf(url, "%" G_GUINT64_FORMAT, user->id);
 	g_string_append_c(url, '/');
-	g_string_append_printf(url, "%s", purple_url_encode(user->avatar));
+	g_string_append_printf(url, "%s.png", purple_url_encode(user->avatar));
 
 	discord_fetch_url(da, url->str, NULL, discord_got_avatar, user);
 

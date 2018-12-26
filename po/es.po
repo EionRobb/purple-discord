@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: 0.9\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2018-12-16 11:00-0800\n"
+"POT-Creation-Date: 2018-12-25 22:32-0800\n"
 "PO-Revision-Date: 2018-12-16 12:23-0700\n"
 "Last-Translator: Alyssa Rosenzweig <alyssa@rosenzweig.io>\n"
 "Language-Team: es <LL@li.org>\n"
@@ -112,7 +112,8 @@ msgid "Invalid channel for this user"
 msgstr "Canal inválido para este usuario"
 
 msgid "Cannot send a message to someone who is not on your friend list."
-msgstr "No se puede enviar un mensaje a alguien que no está en su lista de amigos"
+msgstr ""
+"No se puede enviar un mensaje a alguien que no está en su lista de amigos"
 
 #, c-format
 msgid "No users with tag %s exist"
