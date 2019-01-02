@@ -57,7 +57,7 @@
 #define PURPLE_CONVERSATION_UPDATE_UNSEEN PURPLE_CONV_UPDATE_UNSEEN
 #define PURPLE_IS_IM_CONVERSATION(conv) (purple_conversation_get_type(conv) == PURPLE_CONV_TYPE_IM)
 #define PURPLE_IS_CHAT_CONVERSATION(conv) (purple_conversation_get_type(conv) == PURPLE_CONV_TYPE_CHAT)
-#define PURPLE_CONVERSATION(chatorim) (chatorim == NULL ? NULL : chatorim->conv)
+#define PURPLE_CONVERSATION(chatorim) ((chatorim) == NULL ? NULL : (chatorim)->conv)
 #define PURPLE_IM_CONVERSATION(conv) PURPLE_CONV_IM(conv)
 #define PURPLE_CHAT_CONVERSATION(conv) PURPLE_CONV_CHAT(conv)
 #define purple_conversation_present_error purple_conv_present_error
@@ -82,6 +82,7 @@ purple_conversations_find_chat(PurpleConnection *pc, int id)
 #define purple_chat_conversation_rename_user purple_conv_chat_rename_user
 #define purple_chat_conversation_get_topic purple_conv_chat_get_topic
 #define purple_chat_conversation_set_topic purple_conv_chat_set_topic
+#define purple_chat_conversation_set_nick purple_conv_chat_set_nick
 #define PurpleChatUserFlags PurpleConvChatBuddyFlags
 #define PURPLE_CHAT_USER_NONE PURPLE_CBFLAGS_NONE
 #define PURPLE_CHAT_USER_OP PURPLE_CBFLAGS_OP

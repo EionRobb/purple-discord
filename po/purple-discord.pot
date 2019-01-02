@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2017-09-02 16:16+1200\n"
+"POT-Creation-Date: 2018-12-16 11:00-0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -19,6 +19,10 @@ msgstr ""
 
 #, c-format
 msgid "Connection error: %s."
+msgstr ""
+
+#, c-format
+msgid "EDIT: %s"
 msgstr ""
 
 msgid "Group DMs"
@@ -75,6 +79,9 @@ msgstr ""
 msgid "Username needs to be an email address"
 msgstr ""
 
+msgid "Websocket failed to send"
+msgstr ""
+
 msgid "Reauthentication required"
 msgstr ""
 
@@ -84,6 +91,9 @@ msgstr ""
 msgid "Couldn't connect to gateway"
 msgstr ""
 
+msgid "No pinned messages"
+msgstr ""
+
 msgid "Bad channel type"
 msgstr ""
 
@@ -91,6 +101,22 @@ msgid "Cannot join a voice channel as text"
 msgstr ""
 
 msgid "Could not create conversation"
+msgstr ""
+
+msgid "Could not send message to this user"
+msgstr ""
+
+msgid "Invalid channel for this user"
+msgstr ""
+
+msgid "Cannot send a message to someone who is not on your friend list."
+msgstr ""
+
+#, c-format
+msgid "No users with tag %s exist"
+msgstr ""
+
+msgid "Unknown user"
 msgstr ""
 
 msgid "Username"
@@ -161,6 +187,9 @@ msgid "leave:  Leave the channel"
 msgstr ""
 
 msgid "part:  Leave the channel"
+msgstr ""
+
+msgid "pinned:  Display pinned messages"
 msgstr ""
 
 msgid "mute <username>:  Mute someone in channel"
