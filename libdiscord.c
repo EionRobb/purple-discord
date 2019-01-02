@@ -3039,6 +3039,10 @@ discord_get_history(DiscordAccount *da, const gchar *channel, const gchar *last,
 	g_free(url);
 }
 
+
+static guint64 discord_get_room_last_id(DiscordAccount *da, guint64 id);
+static void discord_set_room_last_id(DiscordAccount *da, guint64 channel_id, guint64 last_id);
+
 static void
 discord_got_read_states(DiscordAccount *da, JsonNode *node, gpointer user_data)
 {
@@ -3049,7 +3053,7 @@ discord_got_read_states(DiscordAccount *da, JsonNode *node, gpointer user_data)
 		JsonObject *state = json_array_get_object_element(states, i);
 
 		const gchar *channel = json_object_get_string_member(state, "id");
-		const gchar *last_id = json_object_get_string_member(state, "last_message_id");
+		gchar *last_id = from_int(discord_get_room_last_id(da, to_int(channel)));
 		guint mentions = json_object_get_int_member(state, "mention_count");
 
 		if (mentions && channel) {
@@ -3065,6 +3069,8 @@ discord_got_read_states(DiscordAccount *da, JsonNode *node, gpointer user_data)
 				}
 			}
 		}
+		
+		g_free(last_id);
 	}
 }
 
@@ -3995,8 +4001,6 @@ discord_get_chat_name(GHashTable *data)
 	return g_strdup(temp);
 }
 
-static void discord_set_room_last_id(DiscordAccount *da, guint64 channel_id, guint64 last_id);
-
 static void
 discord_got_history_of_room(DiscordAccount *da, JsonNode *node, gpointer user_data)
 {
@@ -4384,6 +4388,8 @@ discord_mark_room_messages_read(DiscordAccount *da, guint64 channel_id)
 		return;
 	}
 
+	last_message_id = MAX(last_message_id, known_message_id);
+	
 	discord_set_room_last_id(da, channel_id, last_message_id);
 
 	gchar *url;
