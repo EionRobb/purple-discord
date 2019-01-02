@@ -4278,7 +4278,8 @@ discord_open_chat(DiscordAccount *da, guint64 id, gboolean present)
 {
 	PurpleChatConversation *chatconv = NULL;
 
-	DiscordChannel *channel = discord_get_channel_global_int(da, id);
+	DiscordGuild *guild = NULL;
+	DiscordChannel *channel = discord_get_channel_global_int_guild(da, id, &guild);
 
 	if (channel == NULL) {
 		return NULL;
@@ -4313,6 +4314,12 @@ discord_open_chat(DiscordAccount *da, guint64 id, gboolean present)
 	gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/v6/channels/%" G_GUINT64_FORMAT, id);
 	discord_fetch_url(da, url, NULL, discord_got_channel_info, channel);
 	g_free(url);
+	
+	if (guild != NULL) {
+		gchar *name = discord_create_nickname_from_id(da, guild, da->self_user_id);
+		purple_chat_conversation_set_nick(chatconv, name);
+		g_free(name);
+	}
 
 	return channel;
 }

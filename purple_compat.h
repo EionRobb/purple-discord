@@ -82,6 +82,7 @@ purple_conversations_find_chat(PurpleConnection *pc, int id)
 #define purple_chat_conversation_rename_user purple_conv_chat_rename_user
 #define purple_chat_conversation_get_topic purple_conv_chat_get_topic
 #define purple_chat_conversation_set_topic purple_conv_chat_set_topic
+#define purple_chat_conversation_set_nick purple_conv_chat_set_nick
 #define PurpleChatUserFlags PurpleConvChatBuddyFlags
 #define PURPLE_CHAT_USER_NONE PURPLE_CBFLAGS_NONE
 #define PURPLE_CHAT_USER_OP PURPLE_CBFLAGS_OP
