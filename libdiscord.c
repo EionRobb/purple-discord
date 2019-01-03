@@ -2777,6 +2777,12 @@ typedef struct {
 static gboolean
 discord_capture_join_part(PurpleConversation *conv, const char *name, PurpleConvChatBuddyFlags flags, GHashTable *users)
 {
+	PurpleConnection *pc = purple_conversation_get_connection(conv);
+	
+	if (!purple_strequal(purple_protocol_get_id(purple_connection_get_protocol(pc)), DISCORD_PLUGIN_ID)) {
+		return FALSE;
+	}
+	
 	return TRUE;
 }
 
