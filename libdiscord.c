@@ -4906,7 +4906,7 @@ discord_got_info(DiscordAccount *da, JsonNode *node, gpointer user_data)
 
 	if (json_array_get_length(connected_accounts)) {
 		purple_notify_user_info_add_section_break(user_info);
-		purple_notify_user_info_add_pair_html(user_info, _("Connected Accounts"), user->game);
+		purple_notify_user_info_add_pair_html(user_info, _("Connected Accounts"), NULL);
 	}
 
 	for (i = json_array_get_length(connected_accounts) - 1; i >= 0; i--) {
@@ -4922,7 +4922,7 @@ discord_got_info(DiscordAccount *da, JsonNode *node, gpointer user_data)
 
 	if (json_array_get_length(mutual_guilds)) {
 		purple_notify_user_info_add_section_break(user_info);
-		purple_notify_user_info_add_pair_html(user_info, _("Mutual Servers"), user->game);
+		purple_notify_user_info_add_pair_html(user_info, _("Mutual Servers"), NULL);
 	}
 
 	for (i = json_array_get_length(mutual_guilds) - 1; i >= 0; i--) {
