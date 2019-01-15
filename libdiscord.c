@@ -2274,7 +2274,32 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 			}
 		} else if (channel_type == 3) {
 			discord_got_group_dm(da, data);
+		} else if (channel_type == 0) {
+			const gchar *guild_id = json_object_get_string_member(data, "guild_id");
+			DiscordGuild *guild = discord_get_guild(da, to_int(guild_id));
+			DiscordChannel *channel = discord_add_channel(guild, data, guild->id);
+
+			JsonArray *permission_overrides = json_object_get_array_member(data, "permission_overwrites");
+
+			for (int k = json_array_get_length(permission_overrides) - 1; k >= 0; k--) {
+				JsonObject *permission_override = json_array_get_object_element(permission_overrides, k);
+				discord_add_permission_override(channel, permission_override);
+			}
+			
+			if (purple_account_is_connected(da->account) 
+				&& purple_account_get_bool(da->account, "populate-blist", TRUE)
+				&& purple_blist_find_chat(da->account, channel_id) == NULL) {
+				
+				DiscordUser *user = discord_get_user(da, da->self_user_id);
+				guint64 permission = discord_compute_permission(da, user, channel);
+
+				/* must have READ_MESSAGES */
+				if ((permission & 0x400)) {
+					discord_add_channel_to_blist(da, channel, NULL);
+				}
+			}
 		}
+		
 	} else if (purple_strequal(type, "CHANNEL_UPDATE")) {
 		guint64 channel_id = to_int(json_object_get_string_member(data, "id"));
 		gint64 channel_type = json_object_get_int_member(data, "type");
