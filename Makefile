@@ -129,6 +129,15 @@ install: $(DISCORD_TARGET) install-icons install-locales
 	mkdir -m $(DIR_PERM) -p $(DISCORD_DEST)
 	install -m $(LIB_PERM) -p $(DISCORD_TARGET) $(DISCORD_DEST)
 
+discord16.png: discord-alt-logo.svg
+	convert -background none discord-alt-logo.svg -resize 16x16 discord16.png
+
+discord22.png: discord-alt-logo.svg
+	convert -background none discord-alt-logo.svg -resize 22x22 discord22.png
+
+discord48.png: discord-alt-logo.svg
+	convert -background none discord-alt-logo.svg -resize 48x48 discord48.png
+
 install-icons: discord16.png discord22.png discord48.png
 	mkdir -m $(DIR_PERM) -p $(DISCORD_ICONS_DEST)/16
 	mkdir -m $(DIR_PERM) -p $(DISCORD_ICONS_DEST)/22
@@ -144,6 +153,7 @@ FAILNOPURPLE:
 
 clean:
 	rm -f $(DISCORD_TARGET)
+	rm discord*.png
 
 gdb:
 	gdb --args pidgin -c ~/.fake_purple -n -m

@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+
+<!--
+To the extent possible under law, Alyssa Rosenzweig has waived all copyright
+and related or neighboring rights to this work.
+
+Colour palette from http://tango.freedesktop.org/Tango_Icon_Theme_Guidelines
+-->
+
+<svg
+   xmlns:dc="http://purl.org/dc/elements/1.1/"
+   xmlns:cc="http://creativecommons.org/ns#"
+   xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+   xmlns:svg="http://www.w3.org/2000/svg"
+   xmlns="http://www.w3.org/2000/svg"
+   id="svg1037"
+   version="1.1"
+   viewBox="0 0 226.43228 226.43228"
+   height="226.43228mm"
+   width="226.43228mm">
+  <defs
+     id="defs1031" />
+  <g
+     transform="translate(481.91565,-151.99751)"
+     id="layer1">
+    <path
+       id="rect1592"
+       d="m -427.41326,174.40294 c -13.6222,0 -24.58868,10.96649 -24.58868,24.58868 v 117.59851 c 0,13.62219 10.96648,24.58868 24.58868,24.58868 h 117.06417 c 0.76427,0 1.51991,-0.0363 2.26601,-0.10387 l 21.95111,24.76645 v -44.95385 c 0.24394,-1.39486 0.37156,-2.83059 0.37156,-4.29741 V 198.99162 c 0,-13.62219 -10.96649,-24.58868 -24.58868,-24.58868 z m 32.27708,50.8584 h 22.03588 c 20.41031,0 32.51223,11.19807 32.51223,30.0731 0,19.95875 -13.54706,32.60266 -33.77675,32.60266 h -20.77136 z m 11.56004,10.02419 v 42.62686 h 10.56627 c 13.09511,0 20.41013,-7.58629 20.41013,-21.04265 0,-13.63697 -7.76689,-21.58421 -21.40387,-21.58421 z"
+       style="fill:#3465a4;fill-opacity:1;stroke:none;stroke-width:1;stroke-linecap:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" />
+  </g>
+</svg>

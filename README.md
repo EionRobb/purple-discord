@@ -7,7 +7,7 @@ Windows
 -------
 Windows nightly builds from [here](https://eion.robbmob.com/libdiscord.dll)
 
-The plugin requires libjson-glib which can be downloaded [from github](https://github.com/EionRobb/skype4pidgin/raw/master/skypeweb/libjson-glib-1.0.dll) and copied to the Program Files\Pidgin folder (not the plugins subfolder)
+The plugin requires libjson-glib which can be downloaded [from github](https://github.com/EionRobb/skype4pidgin/raw/master/skypeweb/libjson-glib-1.0.dll) and copied to the Program Files\Pidgin folder (not the plugins subfolder).
 
 Fedora/CentOS/RHEL
 ---------
@@ -43,7 +43,7 @@ Thank you to Penaz for this package.
 
 Compiling
 ---------
-Requires devel headers/libs for libpurple and libjson-glib [libglib2.0-dev, libjson-glib-dev and libpurple-dev]
+Requires devel headers/libs for libpurple and libjson-glib [libglib2.0-dev, libjson-glib-dev and libpurple-dev], as well as ImageMagick [imagemagick].
 ```bash
 	git clone git://github.com/EionRobb/purple-discord.git
 	cd purple-discord
