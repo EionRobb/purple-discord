@@ -1345,19 +1345,95 @@ discord_replace_role(const GMatchInfo *match, GString *result, gpointer user_dat
 	return FALSE;
 }
 
+typedef struct {
+	PurpleConversation *conv;
+	gchar *shortcut;
+} DiscordSmileyData;
+
+static void
+discord_fetch_emoji_cb(DiscordAccount *da, JsonNode *node, gpointer user_data)
+{	
+	DiscordSmileyData *data = user_data;
+
+	if (node != NULL) {
+		JsonObject *response = json_node_get_object(node);
+		const gchar *response_str;
+		gsize response_len;
+		PurpleSmiley *smiley = NULL;
+
+		response_str = g_dataset_get_data(node, "raw_body");
+		response_len = json_object_get_int_member(response, "len");
+
+		smiley = purple_smiley_new_from_data(data->shortcut, (const guchar *) response_str, response_len);
+
+		purple_conversation_add_smiley(data->conv, smiley);
+
+		g_object_unref(G_OBJECT(smiley));
+	}
+	
+	g_free(data->shortcut);
+	g_free(data);
+}
+
+static void
+discord_fetch_emoji(PurpleConversation *conv, const gchar *emoji, guint64 id)
+{
+	DiscordAccount *da;
+	PurpleConnection *pc;
+	DiscordSmileyData *data;
+	gchar *shortcut;
+	
+	g_return_if_fail(conv);
+	g_return_if_fail(emoji);
+	g_return_if_fail(id);
+	
+	shortcut = g_strdup_printf(":%s:", emoji);
+	if (purple_conversation_get_smiley(conv, shortcut)) {
+		g_free(shortcut);
+		return;
+	}
+	
+	pc = purple_conversation_get_connection(conv);
+	da = purple_connection_get_protocol_data(pc);
+	g_return_if_fail(da);
+	
+	// TODO
+	// if (id == 0) {
+		// id = g_hash_table_lookup(guild->emojis, emoji);
+	// }
+	
+	data = g_new0(DiscordSmileyData, 1);
+	
+	data->shortcut = shortcut;
+	data->conv = conv;  //TODO g_object_ref(conv); for purple3?
+
+	GString *url = g_string_new("https://cdn.discordapp.com/emojis/");
+	g_string_append_printf(url, "%" G_GUINT64_FORMAT, id);
+	g_string_append(url, ".png");
+
+	discord_fetch_url(da, url->str, NULL, discord_fetch_emoji_cb, data);
+
+	g_string_free(url, TRUE);
+}
 
 static gboolean
 discord_replace_emoji(const GMatchInfo *match, GString *result, gpointer user_data)
 {
+	PurpleConversation *conv = user_data;
 	gchar *alt_text = g_match_info_fetch(match, 1);
 	gchar *emoji_id = g_match_info_fetch(match, 2);
 
 	/* TODO: download and cache emoji as a PurpleStoredImage? */
-	g_string_append_printf(result, "<img src=\"https://cdn.discordapp.com/emojis/%s\" alt=\":%s:\"/>", emoji_id, alt_text);
+	//g_string_append_printf(result, "<img src=\"https://cdn.discordapp.com/emojis/%s\" alt=\":%s:\"/>", emoji_id, alt_text);
+	g_string_append_printf(result, ":%s:", alt_text);
+
+	if (conv != NULL) {
+		discord_fetch_emoji(conv, alt_text, to_int(emoji_id));
+	}
 
 	g_free(emoji_id);
 	g_free(alt_text);
-
+	
 	return FALSE;
 }
 
@@ -1661,6 +1737,7 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 	PurpleMessageFlags flags;
 	gchar *tmp;
 	gint i;
+	PurpleConversation *conv;
 
 	DiscordGuild *guild = NULL;
 	discord_get_channel_global_int_guild(da, channel_id, &guild);
@@ -1711,9 +1788,23 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 	if (json_object_get_boolean_member(data, "mention_everyone")) {
 		flags |= PURPLE_MESSAGE_NICK;
 	}
+	
+	// Find the conversation for adding the emoji's to
+	if (channel_id_s && g_hash_table_contains(da->one_to_ones, channel_id_s)) {
+		PurpleIMConversation *imconv;
+		
+		gchar *username = g_hash_table_lookup(da->one_to_ones, channel_id_s);
+		imconv = purple_conversations_find_im_with_account(username, da->account);
+		
+		conv = PURPLE_CONVERSATION(imconv);
+	} else {
+		PurpleChatConversation *chatconv = purple_conversations_find_chat(da->pc, discord_chat_hash(channel_id));
+		
+		conv = PURPLE_CONVERSATION(chatconv);
+	}
 
 	/* Replace <:emoji:id> with emojis */
-	tmp = g_regex_replace_eval(emoji_regex, escaped_content, -1, 0, 0, discord_replace_emoji, da, NULL);
+	tmp = g_regex_replace_eval(emoji_regex, escaped_content, -1, 0, 0, discord_replace_emoji, conv, NULL);
 
 	if (tmp != NULL) {
 		g_free(escaped_content);
@@ -1747,18 +1838,19 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 
 		if (author_id == da->self_user_id) {
 			if (!nonce || !g_hash_table_remove(da->sent_message_ids, nonce)) {
-				PurpleConversation *conv;
-				PurpleIMConversation *imconv;
 				PurpleMessage *msg;
 
 				gchar *username = g_hash_table_lookup(da->one_to_ones, channel_id_s);
-				imconv = purple_conversations_find_im_with_account(username, da->account);
 
-				if (imconv == NULL) {
-					imconv = purple_im_conversation_new(da->account, username);
+				if (conv == NULL) {
+					PurpleIMConversation *imconv;
+					imconv = purple_conversations_find_im_with_account(username, da->account);
+					if (imconv == NULL) {
+						imconv = purple_im_conversation_new(da->account, username);
+					}
+					
+					conv = PURPLE_CONVERSATION(imconv);
 				}
-
-				conv = PURPLE_CONVERSATION(imconv);
 
 				if (escaped_content && *escaped_content) {
 					msg = purple_message_new_outgoing(username, escaped_content, flags);
@@ -4637,7 +4729,7 @@ discord_chat_send(PurpleConnection *pc, gint id,
 	ret = discord_conversation_send_message(da, room_id, d_message);
 
 	if (ret > 0) {
-		gchar *tmp = g_regex_replace_eval(emoji_regex, d_message, -1, 0, 0, discord_replace_emoji, da, NULL);
+		gchar *tmp = g_regex_replace_eval(emoji_regex, d_message, -1, 0, 0, discord_replace_emoji, PURPLE_CONVERSATION(chatconv), NULL);
 
 		if (tmp != NULL) {
 			g_free(d_message);

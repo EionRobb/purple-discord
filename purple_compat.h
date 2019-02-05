@@ -172,6 +172,43 @@ purple_message_destroy(PurpleMessage *message)
 	purple_notify_message((handle), PURPLE_NOTIFY_MSG_ERROR, (title), \
 						  (primary), (secondary), NULL, NULL)
 
+
+#define purple_conversation_get_smiley(conv, smiley)  (!purple_conv_custom_smiley_add((conv), (smiley), NULL, NULL, TRUE))
+
+static inline void
+purple_conversation_add_smiley(PurpleConversation *conv, PurpleSmiley *smiley)
+{
+	gsize len;
+	const guchar *data;
+	const gchar *shortcut;
+	
+	data = purple_smiley_get_data(smiley, &len);
+	shortcut = purple_smiley_get_shortcut(smiley);
+	
+	purple_conv_custom_smiley_write(conv, shortcut, data, len);
+	purple_conv_custom_smiley_close(conv, shortcut);
+}
+
+static inline PurpleSmiley *
+purple_smiley_new_from_data(const gchar *shortcut, const guchar *data, gsize size)
+{
+	gchar *filename;
+	PurpleStoredImage *stored_img;
+
+	g_return_val_if_fail(data != NULL, NULL);
+	g_return_val_if_fail(size > 0, NULL);
+
+	filename = purple_util_get_image_filename(data, size);
+	if (filename == NULL) {
+		return NULL;
+	}
+
+	stored_img = purple_imgstore_add(g_memdup(data, size), size, filename);
+	g_free(filename);
+	
+	return purple_smiley_new(stored_img, shortcut);
+}
+
 // Kinda gross, since we can technically use the glib mainloop from purple2
 #define g_timeout_add_seconds  purple_timeout_add_seconds
 #define g_timeout_add          purple_timeout_add
