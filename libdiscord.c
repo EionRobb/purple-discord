@@ -2880,7 +2880,7 @@ static guint discord_conv_send_typing(PurpleConversation *conv, PurpleIMTypingSt
 static gulong chat_conversation_typing_signal = 0;
 static void discord_mark_conv_seen(PurpleConversation *conv, PurpleConversationUpdateType type);
 static gulong conversation_updated_signal = 0;
-static gboolean discord_capture_join_part(PurpleConversation *conv, const char *name, PurpleConvChatBuddyFlags flags, GHashTable *users);
+static gboolean discord_capture_join_part(PurpleConversation *conv, const char *name, PurpleChatUserFlags flags, GHashTable *users);
 static gulong join_signal = 0;
 static gulong part_signal = 0;
 
@@ -2892,7 +2892,7 @@ typedef struct {
 /* Always be quiet */
 
 static gboolean
-discord_capture_join_part(PurpleConversation *conv, const char *name, PurpleConvChatBuddyFlags flags, GHashTable *users)
+discord_capture_join_part(PurpleConversation *conv, const char *name, PurpleChatUserFlags flags, GHashTable *users)
 {
 	PurpleConnection *pc = purple_conversation_get_connection(conv);
 	
@@ -3902,7 +3902,7 @@ static void
 discord_got_pinned(DiscordAccount *da, JsonNode *node, gpointer user_data)
 {
 	PurpleChatConversation *chatconv = user_data;
-	PurpleConversation *conv = purple_conv_chat_get_conversation(chatconv);
+	PurpleConversation *conv = PURPLE_CONVERSATION(chatconv);
 
 	JsonArray *messages = json_node_get_array(node);
 
@@ -3917,7 +3917,7 @@ discord_got_pinned(DiscordAccount *da, JsonNode *node, gpointer user_data)
 		}
 	} else {
 		/* Don't make the user think we forget about them */
-		purple_conversation_write(conv, NULL, _("No pinned messages"), PURPLE_MESSAGE_SYSTEM, time(NULL));
+		purple_conversation_write_system_message(conv, _("No pinned messages"), PURPLE_MESSAGE_SYSTEM);
 	}
 }
 
