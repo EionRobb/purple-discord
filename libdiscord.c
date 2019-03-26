@@ -1896,7 +1896,7 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 
 		gboolean mentioned = flags & PURPLE_MESSAGE_NICK;
 
-		if (mentioned || (head_count < purple_account_get_int(da->account, "large-channel-count", 20))) {
+		if (mentioned || (head_count > 0 && head_count < purple_account_get_int(da->account, "large-channel-count", 20))) {
 			discord_open_chat(da, channel_id, mentioned);
 		}
 
