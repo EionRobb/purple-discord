@@ -1423,12 +1423,13 @@ discord_replace_emoji(const GMatchInfo *match, GString *result, gpointer user_da
 	gchar *alt_text = g_match_info_fetch(match, 1);
 	gchar *emoji_id = g_match_info_fetch(match, 2);
 
-	/* TODO: download and cache emoji as a PurpleStoredImage? */
-	//g_string_append_printf(result, "<img src=\"https://cdn.discordapp.com/emojis/%s\" alt=\":%s:\"/>", emoji_id, alt_text);
-	g_string_append_printf(result, ":%s:", alt_text);
+	if (conv != NULL && purple_account_get_bool(purple_conversation_get_account(conv), "show-custom-emojis", TRUE)) {
+		g_string_append_printf(result, ":%s:", alt_text);
 
-	if (conv != NULL) {
 		discord_fetch_emoji(conv, alt_text, to_int(emoji_id));
+
+	} else {
+		g_string_append_printf(result, "<img src=\"https://cdn.discordapp.com/emojis/%s\" alt=\":%s:\"/>", emoji_id, alt_text);
 	}
 
 	g_free(emoji_id);
@@ -5375,6 +5376,9 @@ discord_add_account_options(GList *account_options)
 	account_options = g_list_append(account_options, option);
 
 	option = purple_account_option_int_new(_("Number of users in a large channel"), "large-channel-count", 20);
+	account_options = g_list_append(account_options, option);
+
+	option = purple_account_option_bool_new(_("Display custom emoji as inline images"), "show-custom-emojis", TRUE);
 	account_options = g_list_append(account_options, option);
 
 	return account_options;
