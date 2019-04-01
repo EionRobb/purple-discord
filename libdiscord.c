@@ -1732,6 +1732,7 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 	const gchar *nonce = json_object_get_string_member(data, "nonce");
 	gchar *escaped_content = purple_markup_escape_text(content, -1);
 	JsonArray *attachments = json_object_get_array_member(data, "attachments");
+	JsonArray *embeds = json_object_get_array_member(data, "embeds");
 	JsonArray *mentions = json_object_get_array_member(data, "mentions");
 	JsonArray *mention_roles = json_object_get_array_member(data, "mention_roles");
 	PurpleMessageFlags flags;
@@ -1831,6 +1832,121 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 		tmp = g_strdup_printf(prefix_fmt, escaped_content);
 		g_free(escaped_content);
 		escaped_content = tmp;
+	}
+	
+	if (embeds != NULL) {
+		GString *embed_str = g_string_new(NULL);
+		guint embeds_len = json_array_get_length(embeds);
+		static const gchar *border_format = "<font back=\"#%06x\" color=\"#%06x\"> </font> ";
+		
+		for (guint i = 0; i < embeds_len; i++) {
+			JsonObject *embed = json_array_get_object_element(embeds, i);
+			JsonObject *author = json_object_get_object_member(embed, "author");
+			JsonObject *footer = json_object_get_object_member(embed, "footer");
+			JsonArray *fields = json_object_get_array_member(embed, "fields");
+			gint64 color = 0xcccccc;
+			
+			if (json_object_has_member(embed, "color")) {
+				color = json_object_get_int_member(embed, "color");
+			}
+			
+			if (author != NULL) {
+				// author name (url)
+				const gchar *author_name = json_object_get_string_member(author, "name");
+				const gchar *author_url = json_object_get_string_member(author, "url");
+				
+				g_string_append_printf(embed_str, border_format, color, color);
+				if (author_url) {
+					g_string_append_printf(embed_str, "<a href=\"%s\">", author_url);
+				}
+				g_string_append_printf(embed_str, "<b>%s</b>", author_name);
+				if (author_url) {
+					g_string_append(embed_str, "</a>");
+				}
+				g_string_append(embed_str, "<br/>");
+			}
+			
+			if (json_object_has_member(embed, "title")) {
+				// title (url)
+				const gchar *title = json_object_get_string_member(embed, "title");
+				const gchar *url = json_object_get_string_member(embed, "url");
+				
+				g_string_append_printf(embed_str, border_format, color, color);
+				if (url) {
+					g_string_append_printf(embed_str, "<a href=\"%s\">", url);
+				}
+				
+				tmp = markdown_convert_markdown(title, FALSE, TRUE);
+				g_string_append(embed_str, tmp);
+				g_free(tmp);
+				
+				if (url) {
+					g_string_append(embed_str, "</a>");
+				}
+				g_string_append(embed_str, "<br/>");
+			}
+			
+			if (json_object_has_member(embed, "description")) {
+				// description
+				const gchar *description = json_object_get_string_member(embed, "description");
+				
+				g_string_append_printf(embed_str, border_format, color, color);
+				
+				tmp = markdown_convert_markdown(description, FALSE, TRUE);
+				g_string_append(embed_str, tmp);
+				g_free(tmp);
+				
+				g_string_append(embed_str, "<br/>");
+			}
+			
+			if (fields != NULL) {
+				guint j, fields_len = json_array_get_length(fields);
+				// loop over fields
+				for(j = 0; j < fields_len; j++) {
+					JsonObject *field = json_array_get_object_element(fields, j);
+					const gchar *field_title = json_object_get_string_member(field, "name");
+					const gchar *field_text = json_object_get_string_member(field, "value");
+					//TODO inline?
+					
+					if (field_title) {
+						g_string_append_printf(embed_str, border_format, color, color);
+						tmp = markdown_convert_markdown(field_title, FALSE, TRUE);
+						g_string_append_printf(embed_str, "<b>%s</b> ", tmp);
+						g_free(tmp);
+						g_string_append(embed_str, "<br/>");
+					}
+					if (field_text) {
+						g_string_append_printf(embed_str, border_format, color, color);
+						tmp = markdown_convert_markdown(field_text, FALSE, TRUE);
+						g_string_append(embed_str, tmp);
+						g_free(tmp);
+						g_string_append(embed_str, "<br/>");
+					}
+				}
+			}
+			// image - TODO
+			// footer | time
+			
+			g_string_append_printf(embed_str, border_format, color, color);
+			
+			if (footer != NULL) {
+				// footer - XXX is this really the only one without markdown?
+				const gchar *footer_text = json_object_get_string_member(footer, "text");
+				g_string_append(embed_str, footer_text);
+				g_string_append(embed_str, " | ");
+			}
+			
+			g_string_append(embed_str, purple_utf8_strftime("%c", NULL));
+			g_string_append(embed_str, "<br/>");
+		}
+		
+		if (embeds_len > 0) {
+			g_string_prepend(embed_str, "<br/>");
+			g_string_prepend(embed_str, escaped_content);
+			tmp = g_string_free(embed_str, FALSE);
+			g_free(escaped_content);
+			escaped_content = tmp;
+		}
 	}
 
 	if (channel_id_s && g_hash_table_contains(da->one_to_ones, channel_id_s)) {
