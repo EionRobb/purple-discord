@@ -16,7 +16,7 @@
  *   along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-
+#include <string.h>
 #include "markdown.h"
 
 /* Markdown test string:
