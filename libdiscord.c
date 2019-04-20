@@ -2598,7 +2598,7 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		
 		discord_add_group_dms_to_blist(da);
 		
-	} else if (purple_strequal(type, "GUILD_SYNC") || purple_strequal(type, "GUILD_CREATE")) {
+	} else if (purple_strequal(type, "GUILD_SYNC") || purple_strequal(type, "GUILD_CREATE") || purple_strequal(type, "GUILD_MEMBERS_CHUNK")) {
 		if (purple_strequal(type, "GUILD_CREATE")) {
 			discord_populate_guild(da, data);
 		}
@@ -2732,6 +2732,7 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		}
 
 		/* TODO: Track role changes */
+		
 	} else if (purple_strequal(type, "CHANNEL_RECIPIENT_ADD") || purple_strequal(type, "CHANNEL_RECIPIENT_REMOVE")) {
 		DiscordUser *user = discord_upsert_user(da->new_users, json_object_get_object_member(data, "user"));
 		gchar *name = discord_create_fullname(user);
@@ -3251,8 +3252,28 @@ discord_got_guilds(DiscordAccount *da, JsonNode *node, gpointer user_data)
 
 	for (int i = len - 1; i >= 0; i--) {
 		JsonObject *guild = json_array_get_object_element(guilds, i);
+		const gchar *guild_id = json_object_get_string_member(guild, "id");
 		discord_populate_guild(da, guild);
-		json_array_add_string_element(guild_ids, json_object_get_string_member(guild, "id"));
+		
+		if (guild_id != NULL) {
+			JsonObject *d;
+			
+			json_array_add_string_element(guild_ids, guild_id);
+			
+			// Try to request all offline users in this guild
+			d = json_object_new();
+			json_object_set_string_member(d, "guild_id", guild_id);
+			json_object_set_string_member(d, "query", "");
+			json_object_set_int_member(d, "limit", 0);
+			
+			obj = json_object_new();
+			json_object_set_int_member(obj, "op", 8);
+			json_object_set_object_member(obj, "d", d);
+			
+			discord_socket_write_json(da, obj);
+
+			json_object_unref(obj);
+		}
 	}
 
 	discord_print_guilds(da->new_guilds);
