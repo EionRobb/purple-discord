@@ -128,7 +128,7 @@ typedef struct {
 	guint64 owner;
 
 	GHashTable *roles;
-	GArray *members;		   /* list of member ids */
+	GHashTable *members;	 /* list of member ids */
 	GHashTable *nicknames;	 /* id->nick? */
 	GHashTable *nicknames_rev; /* reverse */
 
@@ -268,7 +268,7 @@ discord_new_guild(JsonObject *json)
 	guild->owner = to_int(json_object_get_string_member(json, "owner_id"));
 
 	guild->roles = g_hash_table_new_full(g_int64_hash, g_int64_equal, NULL, discord_free_guild_role);
-	guild->members = g_array_new(TRUE, TRUE, sizeof(guint64));
+	guild->members = g_hash_table_new_full(g_int64_hash, g_int64_equal, NULL, NULL);
 	guild->nicknames = g_hash_table_new_full(g_int64_hash, g_int64_equal, NULL, g_free);
 	guild->nicknames_rev = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
 
@@ -391,7 +391,7 @@ discord_free_guild(gpointer data)
 	g_free(guild->icon);
 
 	g_hash_table_unref(guild->roles);
-	g_array_unref(guild->members);
+	g_hash_table_unref(guild->members);
 	g_hash_table_unref(guild->nicknames);
 	g_hash_table_unref(guild->nicknames_rev);
 	g_hash_table_unref(guild->channels);
@@ -779,10 +779,14 @@ discord_print_guilds(GHashTable *guilds)
 			discord_print_append(2, buffer, row_buffer, "Permissions: %" G_GUINT64_FORMAT, role->permissions);
 		}
 
-		discord_print_append(1, buffer, row_buffer, "Member count: %d", guild->members->len);
+		discord_print_append(1, buffer, row_buffer, "Member count: %d", g_hash_table_size(guild->members));
+		
+		GHashTableIter iter;
+		gpointer key, value;
 
-		for (guint i = 0; i < guild->members->len; i++) {
-			guint64 member_id = g_array_index(guild->members, guint64, i);
+		g_hash_table_iter_init (&iter, guild->members);
+		while (g_hash_table_iter_next (&iter, &key, &value)) {
+			guint64 member_id = *(gint64 *) key;
 			discord_print_append(3, buffer, row_buffer, "Member id: %" G_GUINT64_FORMAT, member_id);
 		}
 
@@ -2009,7 +2013,7 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 		}
 	} else if (!nonce || !g_hash_table_remove(da->sent_message_ids, nonce)) {
 		/* Open the buffer if it's not already */
-		int head_count = guild ? guild->members->len : 0;
+		int head_count = guild ? g_hash_table_size(guild->members) : 0;
 
 		gboolean mentioned = flags & PURPLE_MESSAGE_NICK;
 
@@ -2610,8 +2614,6 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 			return;
 		}
 		
-		g_array_set_size(guild->members, 0);
-		
 		/* all members in small groups, online in large */
 		for (int j = json_array_get_length(members) - 1; j >= 0; j--) {
 			JsonObject *member = json_array_get_object_element(members, j);
@@ -2620,7 +2622,7 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 			DiscordUser *u = discord_upsert_user(da->new_users, user);
 			DiscordGuildMembership *membership = discord_new_guild_membership(guild_id, member);
 			g_hash_table_replace_int64(u->guild_memberships, membership->id, membership);
-			g_array_append_val(guild->members, u->id);
+			g_hash_table_replace_int64(guild->members, u->id, NULL);
 
 			g_free(discord_alloc_nickname(u, guild, membership->nick));
 
@@ -2705,7 +2707,7 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		
 		DiscordGuildMembership *membership = discord_new_guild_membership(guild_id, userdata);
 		g_hash_table_replace_int64(user->guild_memberships, membership->id, membership);
-		g_array_append_val(guild->members, user->id);
+		g_hash_table_replace_int64(guild->members, user->id, NULL);
 
 		g_free(discord_alloc_nickname(user, guild, membership->nick));
 
@@ -4480,9 +4482,13 @@ discord_got_channel_info(DiscordAccount *da, JsonNode *node, gpointer user_data)
 		PurpleChatConversation *chat = chatconv;
 		GList *users = NULL, *flags = NULL;
 		DiscordChannel *chnl = discord_get_channel_global_int(da, tmp);
-		
-		for (guint i = 0; guild && i < guild->members->len; i++) {
-			DiscordUser *user = discord_get_user(da, g_array_index(guild->members, guint64, i));
+		GHashTableIter iter;
+		gpointer key, value;
+
+		g_hash_table_iter_init (&iter, guild->members);
+		while (g_hash_table_iter_next (&iter, &key, &value)) {
+			guint64 uid = *(gint64 *)key;
+			DiscordUser *user = discord_get_user(da, uid);
 			
 			if (!user) {
 				continue;
