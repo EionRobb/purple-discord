@@ -3299,10 +3299,17 @@ discord_got_guilds(DiscordAccount *da, JsonNode *node, gpointer user_data)
  */
 
 static void
-discord_get_history(DiscordAccount *da, const gchar *channel, const gchar *last, int count)
+discord_get_history(DiscordAccount *da, const gchar *channel_id, const gchar *last, int count)
 {
-	gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/v6/channels/%s/messages?limit=%d&after=%s", channel, count ? count : 100, last);
-	discord_fetch_url(da, url, NULL, count ? discord_got_history_static : discord_got_history_of_room, count ? NULL : discord_get_channel_global(da, channel));
+	gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/v6/channels/%s/messages?limit=%d&after=%s", channel_id, count ? count : 100, last);
+	DiscordChannel *channel = discord_get_channel_global(da, channel_id);
+	
+	if (count && channel) {
+		discord_fetch_url(da, url, NULL, discord_got_history_of_room, channel);
+	} else {
+		discord_fetch_url(da, url, NULL, discord_got_history_static, NULL);
+	}
+	
 	g_free(url);
 }
 
@@ -4273,6 +4280,8 @@ discord_got_history_of_room(DiscordAccount *da, JsonNode *node, gpointer user_da
 {
 	JsonArray *messages = json_node_get_array(node);
 	DiscordChannel *channel = user_data;
+	g_return_if_fail(channel);
+	
 	gint i, len = json_array_get_length(messages);
 	guint64 last_message = channel->last_message_id;
 	guint64 rolling_last_message_id = 0;
@@ -4363,8 +4372,15 @@ discord_set_room_last_id(DiscordAccount *da, guint64 id, guint64 last_id)
 	}
 
 	if (blistnode != NULL) {
-		purple_blist_node_set_int(blistnode, "last_message_id_high", last_id >> 32);
-		purple_blist_node_set_int(blistnode, "last_message_id_low", last_id & 0xFFFFFFFF);
+		guint64 last_id_saved = purple_blist_node_get_int(blistnode, "last_message_id_high");
+		if (last_id_saved) {
+			last_id_saved = (last_id_saved << 32) | ((guint64) purple_blist_node_get_int(blistnode, "last_message_id_low") & 0xFFFFFFFF);
+		}
+		
+		if (last_id > last_id_saved) {
+			purple_blist_node_set_int(blistnode, "last_message_id_high", last_id >> 32);
+			purple_blist_node_set_int(blistnode, "last_message_id_low", last_id & 0xFFFFFFFF);
+		}
 	}
 
 	da->last_message_id = MAX(da->last_message_id, last_id);
