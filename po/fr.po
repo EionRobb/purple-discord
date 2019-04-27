@@ -8,7 +8,7 @@ msgstr ""
 "Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2018-12-16 11:00-0800\n"
-"PO-Revision-Date: 2018-12-01 13:55+0100\n"
+"PO-Revision-Date: 2019-04-27 17:12\n"
 "Last-Translator: draelenax <draelenax@protonmail.com>\n"
 "Language-Team: fr\n"
 "Language: fr\n"
@@ -24,7 +24,7 @@ msgstr "Erreur de connexion : %s."
 
 #, c-format
 msgid "EDIT: %s"
-msgstr ""
+msgstr "Édition : %s"
 
 msgid "Group DMs"
 msgstr "Groupe privé"
@@ -80,10 +80,10 @@ msgid "Bad username/password"
 msgstr "Mauvais identifiant/mot de passe"
 
 msgid "Username needs to be an email address"
-msgstr "L'identification doit être une adresse mail"
+msgstr "L'identifiant doit être une adresse mail"
 
 msgid "Websocket failed to send"
-msgstr ""
+msgstr "Échec de l'envoi de la requête réseau"
 
 msgid "Reauthentication required"
 msgstr "Authentification à nouveau requise"
@@ -95,7 +95,7 @@ msgid "Couldn't connect to gateway"
 msgstr "Impossible de se connecter au portail"
 
 msgid "No pinned messages"
-msgstr ""
+msgstr "Aucun message épinglé"
 
 msgid "Bad channel type"
 msgstr "Mauvais type de salon"
@@ -107,17 +107,17 @@ msgid "Could not create conversation"
 msgstr "Impossible de créer une conversation"
 
 msgid "Could not send message to this user"
-msgstr ""
+msgstr "Impossible d’envoyer de message à cet utilisateeur"
 
 msgid "Invalid channel for this user"
-msgstr ""
+msgstr "Salon invalide pour cet utilisateur"
 
 msgid "Cannot send a message to someone who is not on your friend list."
-msgstr ""
+msgstr "Impossible d’envoyer le message aux personnes qui ne sont pas dans votre liste d’ami"
 
 #, c-format
 msgid "No users with tag %s exist"
-msgstr ""
+msgstr "Aucun utilisateur avec le tag %s existe"
 
 #, fuzzy
 msgid "Unknown user"
@@ -142,7 +142,7 @@ msgid "Status"
 msgstr "Statut"
 
 msgid "Playing"
-msgstr "Jouer"
+msgstr "Joue"
 
 msgid "Connected Accounts"
 msgstr "Comptes connectés"
@@ -182,19 +182,19 @@ msgid "Join a server..."
 msgstr "Rejoindre un serveur..."
 
 msgid "nick <new nickname>:  Changes nickname on a server"
-msgstr "nick <nouveau pseudo>: changer le pseudonyme sur le serveur"
+msgstr "nick <nouveau pseudo>: Changer le pseudonyme sur le serveur"
 
 msgid "kick <username>:  Remove someone from channel"
-msgstr "kick <pseudo>: bannir quelqu'un du salon"
+msgstr "kick <pseudo>: Bannir quelqu'un du salon"
 
 msgid "leave:  Leave the channel"
 msgstr "leave: Quitter le salon"
 
 msgid "part:  Leave the channel"
-msgstr "part: partir du salon"
+msgstr "part: Partir du salon"
 
 msgid "pinned:  Display pinned messages"
-msgstr ""
+msgstr "Afficher les messages épinglés"
 
 msgid "mute <username>:  Mute someone in channel"
 msgstr "mute <pseudo>:  Rendre muet quelqu'un dans le salon"
