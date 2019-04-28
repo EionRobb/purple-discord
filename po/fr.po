@@ -194,7 +194,7 @@ msgid "part:  Leave the channel"
 msgstr "part: Partir du salon"
 
 msgid "pinned:  Display pinned messages"
-msgstr "Afficher les messages épinglés"
+msgstr "pinned: Afficher les messages épinglés"
 
 msgid "mute <username>:  Mute someone in channel"
 msgstr "mute <pseudo>:  Rendre muet quelqu'un dans le salon"
