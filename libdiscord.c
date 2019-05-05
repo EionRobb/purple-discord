@@ -1746,7 +1746,7 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 	PurpleConversation *conv;
 
 	DiscordGuild *guild = NULL;
-	discord_get_channel_global_int_guild(da, channel_id, &guild);
+	DiscordChannel *channel = discord_get_channel_global_int_guild(da, channel_id, &guild);
 
 	if (author_id == da->self_user_id) {
 		flags = PURPLE_MESSAGE_SEND | PURPLE_MESSAGE_REMOTE_SEND | PURPLE_MESSAGE_DELAYED;
@@ -2046,6 +2046,10 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 	}
 
 	g_free(escaped_content);
+	
+	if (channel != NULL && msg_id > channel->last_message_id) {
+		channel->last_message_id = msg_id;
+	}
 
 	return msg_id;
 }
@@ -4278,10 +4282,8 @@ discord_got_history_of_room(DiscordAccount *da, JsonNode *node, gpointer user_da
 		JsonObject *message = json_array_get_object_element(messages, i);
 		guint64 id = to_int(json_object_get_string_member(message, "id"));
 
-		rolling_last_message_id = discord_process_message(da, message, DISCORD_MESSAGE_NORMAL);
-
-		if (id >= last_message) {
-			break;
+		if (id > last_message) {
+			rolling_last_message_id = discord_process_message(da, message, DISCORD_MESSAGE_NORMAL);
 		}
 	}
 
