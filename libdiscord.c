@@ -2150,7 +2150,7 @@ discord_name_group_dm(DiscordAccount *da, DiscordChannel *channel) {
 			g_string_append(name, fullname);
 
 			if (l->next) {
-				g_string_append(name, g_strdup(", "));
+				g_string_append(name, ", ");
 			}
 			
 			g_free(fullname);
@@ -2248,6 +2248,8 @@ discord_add_group_dms_to_blist(DiscordAccount *da)
 		if (purple_blist_find_chat(da->account, id_str) == NULL) {
 			discord_add_channel_to_blist(da, channel, NULL);
 		}
+		
+		g_free(id_str);
 	}
 }
 
@@ -4068,7 +4070,7 @@ discord_got_pinned(DiscordAccount *da, JsonNode *node, gpointer user_data)
 		}
 	} else {
 		/* Don't make the user think we forget about them */
-		purple_conversation_write_system_message(conv, _("No pinned messages"), PURPLE_MESSAGE_SYSTEM);
+		purple_conversation_write_system_message(conv, _("No pinned messages"), PURPLE_MESSAGE_NO_LOG);
 	}
 }
 
@@ -4541,9 +4543,13 @@ discord_got_channel_info(DiscordAccount *da, JsonNode *node, gpointer user_data)
 				PurpleChatUserFlags cbflags = discord_get_user_flags(da, guild, user);
 				gchar *nickname = discord_create_nickname(user, guild);
 
-				if (nickname != NULL && user->status != USER_OFFLINE) {
-					users = g_list_prepend(users, nickname);
-					flags = g_list_prepend(flags, GINT_TO_POINTER(cbflags));
+				if (nickname != NULL) {
+					if (user->status != USER_OFFLINE) {
+						users = g_list_prepend(users, nickname);
+						flags = g_list_prepend(flags, GINT_TO_POINTER(cbflags));
+					} else {
+						g_free(nickname);
+					}
 				}
 			}
 		}
