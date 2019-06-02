@@ -2613,6 +2613,10 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		JsonArray *members = json_object_get_array_member(data, "members");
 		guint64 guild_id = to_int(json_object_get_string_member(data, "id"));
 
+		if (guild_id == 0) {
+			guild_id = to_int(json_object_get_string_member(data, "guild_id"));
+		}
+
 		DiscordGuild *guild = discord_get_guild(da, guild_id);
 
 		if (!guild) {
