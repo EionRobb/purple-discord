@@ -5212,7 +5212,7 @@ discord_got_info(DiscordAccount *da, JsonNode *node, gpointer user_data)
 		/* const gchar *id = json_object_get_string_member(account, "id"); */
 		/* TODO href link to account? */
 
-		purple_notify_user_info_add_pair_html(user_info, type, name);
+		purple_notify_user_info_add_pair_plaintext(user_info, type, name);
 	}
 
 	if (json_array_get_length(mutual_guilds)) {
@@ -5261,6 +5261,7 @@ discord_get_info(PurpleConnection *pc, const gchar *username)
 	DiscordUser *user = discord_get_user_fullname(da, username);
 
 	if (!user) {
+		purple_notify_userinfo(pc, username, NULL, NULL, NULL);
 		return;
 	}
 
