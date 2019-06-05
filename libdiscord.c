@@ -1458,7 +1458,7 @@ discord_replace_mention(const GMatchInfo *match, GString *result, gpointer user_
 
 	if (mention_user) {
 		/* TODO make this a clickable link */
-		gchar *name = discord_create_nickname(mention_user, guild);
+		gchar *name = discord_create_fullname(mention_user);
 
 		PurpleBuddy *buddy = purple_blist_find_buddy(da->account, name);
 
