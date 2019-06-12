@@ -43,7 +43,7 @@ Thank you to Penaz for this package.
 
 Compiling
 ---------
-Requires devel headers/libs for libpurple and libjson-glib [libglib2.0-dev, libjson-glib-dev and libpurple-dev], as well as ImageMagick [imagemagick].
+Requires devel headers/libs for libpurple and libjson-glib [libglib2.0-dev, libjson-glib-dev and libpurple-dev], as well as ImageMagick [imagemagick] and [gettext].
 ```bash
 	git clone git://github.com/EionRobb/purple-discord.git
 	cd purple-discord
