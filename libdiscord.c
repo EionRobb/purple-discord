@@ -54,7 +54,7 @@
 #ifndef DISCORD_PLUGIN_VERSION
 #define DISCORD_PLUGIN_VERSION "0.1"
 #endif
-#define DISCORD_PLUGIN_WEBSITE "https://github.com/EionRobb/discord-libpurple"
+#define DISCORD_PLUGIN_WEBSITE "https://github.com/EionRobb/purple-discord"
 
 #define DISCORD_USERAGENT "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/51.0.2704.103 Safari/537.36"
 
