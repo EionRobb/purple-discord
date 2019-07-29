@@ -1607,19 +1607,19 @@ discord_make_mention(const GMatchInfo *match, GString *result, gpointer user_dat
 	}
 
 	if (user) {
-		g_string_append_printf(result, "&lt;@%" G_GUINT64_FORMAT "&gt; ", user->id);
+		g_string_append_printf(result, " &lt;@%" G_GUINT64_FORMAT "&gt; ", user->id);
 	} else if (guild != NULL) {
 		/* If that fails, find a role */
 		guint64 role = discord_find_role_by_name(guild, identifier);
 
 		if (role) {
-			g_string_append_printf(result, "&lt;@&amp;%" G_GUINT64_FORMAT "&gt; ", role);
+			g_string_append_printf(result, " &lt;@&amp;%" G_GUINT64_FORMAT "&gt; ", role);
 		} else {
 			/* If that fails, find a channel */
 			guint64 channel = discord_find_channel_by_name(guild, identifier);
 
-			if(channel) {
-				g_string_append_printf(result, "&lt;#%" G_GUINT64_FORMAT "&gt; ", channel);
+			if (channel) {
+				g_string_append_printf(result, " &lt;#%" G_GUINT64_FORMAT "&gt; ", channel);
 			} else {
 				/* If all else fails, trap out */
 				g_string_append(result, match_string);
@@ -5552,7 +5552,7 @@ plugin_load(PurplePlugin *plugin, GError **error)
 	action_star_regex = g_regex_new("^_([^\\*]+)_$", G_REGEX_OPTIMIZE, 0, NULL);
 	mention_regex = g_regex_new("&lt;@!?(\\d+)&gt;", G_REGEX_OPTIMIZE, 0, NULL);
 	natural_mention_regex = g_regex_new("^([^:]+): ", G_REGEX_OPTIMIZE, 0, NULL);
-	discord_mention_regex = g_regex_new("(?:^|\\s)@([^\\s@]+)\b", G_REGEX_OPTIMIZE, 0, NULL);
+	discord_mention_regex = g_regex_new("(?:^|\\s)@([^\\s@]+)\\b", G_REGEX_OPTIMIZE, 0, NULL);
 
 	purple_cmd_register("nick", "s", PURPLE_CMD_P_PLUGIN, PURPLE_CMD_FLAG_CHAT |
 															PURPLE_CMD_FLAG_PROTOCOL_ONLY | PURPLE_CMD_FLAG_ALLOW_WRONG_ARGS,
