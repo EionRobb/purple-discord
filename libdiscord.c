@@ -475,20 +475,6 @@ discord_permission_is_role(JsonObject *json)
 	return purple_strequal(json_object_get_string_member(json, "type"), "role");
 }
 
-void
-discord_dump_int64_hashtable_keys(GHashTable *hash_table)
-{
-	GHashTableIter iter;
-	guint64 *key;
-	gpointer value;
-
-	g_hash_table_iter_init(&iter, hash_table);
-
-	while (g_hash_table_iter_next(&iter, (gpointer *) &key, &value)) {
-		purple_debug_info("discord", "%" G_GUINT64_FORMAT, *key);
-	}
-}
-
 static DiscordUser *
 discord_get_user_name(DiscordAccount *da, int discriminator, gchar *name)
 {
@@ -1774,8 +1760,8 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 				for (i = json_array_get_length(mention_roles) - 1; i >= 0; i--) {
 					guint64 id = to_int(json_array_get_string_element(mention_roles, i));
 
-					for (guint i = 0; i < membership->roles->len; i++) {
-						guint64 role_id = g_array_index(membership->roles, guint64, i);
+					for (guint j = 0; j < membership->roles->len; j++) {
+						guint64 role_id = g_array_index(membership->roles, guint64, j);
 
 						if (role_id == id) {
 							flags |= PURPLE_MESSAGE_NICK;
@@ -1844,8 +1830,8 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 		guint embeds_len = json_array_get_length(embeds);
 		static const gchar *border_format = "<font back=\"#%06x\" color=\"#%06x\"> </font> ";
 		
-		for (guint i = 0; i < embeds_len; i++) {
-			JsonObject *embed = json_array_get_object_element(embeds, i);
+		for (guint n = 0; n < embeds_len; n++) {
+			JsonObject *embed = json_array_get_object_element(embeds, n);
 			JsonObject *author = json_object_get_object_member(embed, "author");
 			JsonObject *footer = json_object_get_object_member(embed, "footer");
 			JsonArray *fields = json_object_get_array_member(embed, "fields");
@@ -4809,8 +4795,6 @@ static gint
 discord_conversation_send_message(DiscordAccount *da, guint64 room_id, const gchar *message)
 {
 	JsonObject *data = json_object_new();
-	gchar *url;
-	gchar *postdata;
 	gchar *nonce;
 	gchar *marked;
 	gchar *stripped;
@@ -4833,6 +4817,8 @@ discord_conversation_send_message(DiscordAccount *da, guint64 room_id, const gch
 	
 	final_len = strlen(final);
 	if (final_len <= 2000) {
+		gchar *url;
+		gchar *postdata;
 		json_object_set_string_member(data, "content", final);
 		json_object_set_string_member(data, "nonce", nonce);
 		json_object_set_boolean_member(data, "tts", FALSE);
@@ -4996,6 +4982,10 @@ discord_send_im(PurpleConnection *pc,
 
 			g_free(postdata);
 			json_object_unref(data);
+
+#if !PURPLE_VERSION_CHECK(3, 0, 0)
+			purple_message_destroy(msg);
+#endif
 
 			return 1;
 		}
@@ -5235,8 +5225,8 @@ discord_got_info(DiscordAccount *da, JsonNode *node, gpointer user_data)
 
 			GString *role_str = g_string_new(name);
 
-			for (guint i = 0; i < membership->roles->len; i++) {
-				guint64 role_id = g_array_index(membership->roles, guint64, i);
+			for (guint j = 0; j < membership->roles->len; j++) {
+				guint64 role_id = g_array_index(membership->roles, guint64, j);
 				DiscordGuildRole *role = g_hash_table_lookup_int64(guild->roles, role_id);
 
 				if (role) {
