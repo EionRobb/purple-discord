@@ -4997,6 +4997,10 @@ discord_send_im(PurpleConnection *pc,
 			g_free(postdata);
 			json_object_unref(data);
 
+#if !PURPLE_VERSION_CHECK(3, 0, 0)
+			purple_message_destroy(msg);
+#endif
+
 			return 1;
 		}
 
