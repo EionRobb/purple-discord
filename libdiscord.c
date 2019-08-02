@@ -475,20 +475,6 @@ discord_permission_is_role(JsonObject *json)
 	return purple_strequal(json_object_get_string_member(json, "type"), "role");
 }
 
-void
-discord_dump_int64_hashtable_keys(GHashTable *hash_table)
-{
-	GHashTableIter iter;
-	guint64 *key;
-	gpointer value;
-
-	g_hash_table_iter_init(&iter, hash_table);
-
-	while (g_hash_table_iter_next(&iter, (gpointer *) &key, &value)) {
-		purple_debug_info("discord", "%" G_GUINT64_FORMAT, *key);
-	}
-}
-
 static DiscordUser *
 discord_get_user_name(DiscordAccount *da, int discriminator, gchar *name)
 {
