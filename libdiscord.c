@@ -4809,8 +4809,6 @@ static gint
 discord_conversation_send_message(DiscordAccount *da, guint64 room_id, const gchar *message)
 {
 	JsonObject *data = json_object_new();
-	gchar *url;
-	gchar *postdata;
 	gchar *nonce;
 	gchar *marked;
 	gchar *stripped;
@@ -4833,6 +4831,8 @@ discord_conversation_send_message(DiscordAccount *da, guint64 room_id, const gch
 	
 	final_len = strlen(final);
 	if (final_len <= 2000) {
+		gchar *url;
+		gchar *postdata;
 		json_object_set_string_member(data, "content", final);
 		json_object_set_string_member(data, "nonce", nonce);
 		json_object_set_boolean_member(data, "tts", FALSE);
