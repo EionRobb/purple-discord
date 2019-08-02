@@ -1760,8 +1760,8 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 				for (i = json_array_get_length(mention_roles) - 1; i >= 0; i--) {
 					guint64 id = to_int(json_array_get_string_element(mention_roles, i));
 
-					for (guint i = 0; i < membership->roles->len; i++) {
-						guint64 role_id = g_array_index(membership->roles, guint64, i);
+					for (guint j = 0; j < membership->roles->len; j++) {
+						guint64 role_id = g_array_index(membership->roles, guint64, j);
 
 						if (role_id == id) {
 							flags |= PURPLE_MESSAGE_NICK;
@@ -1830,8 +1830,8 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 		guint embeds_len = json_array_get_length(embeds);
 		static const gchar *border_format = "<font back=\"#%06x\" color=\"#%06x\"> </font> ";
 		
-		for (guint i = 0; i < embeds_len; i++) {
-			JsonObject *embed = json_array_get_object_element(embeds, i);
+		for (guint n = 0; n < embeds_len; n++) {
+			JsonObject *embed = json_array_get_object_element(embeds, n);
 			JsonObject *author = json_object_get_object_member(embed, "author");
 			JsonObject *footer = json_object_get_object_member(embed, "footer");
 			JsonArray *fields = json_object_get_array_member(embed, "fields");
@@ -5225,8 +5225,8 @@ discord_got_info(DiscordAccount *da, JsonNode *node, gpointer user_data)
 
 			GString *role_str = g_string_new(name);
 
-			for (guint i = 0; i < membership->roles->len; i++) {
-				guint64 role_id = g_array_index(membership->roles, guint64, i);
+			for (guint j = 0; j < membership->roles->len; j++) {
+				guint64 role_id = g_array_index(membership->roles, guint64, j);
 				DiscordGuildRole *role = g_hash_table_lookup_int64(guild->roles, role_id);
 
 				if (role) {
