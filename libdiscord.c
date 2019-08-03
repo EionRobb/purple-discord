@@ -3412,6 +3412,12 @@ discord_login_response(DiscordAccount *da, JsonNode *node, gpointer user_data)
 			purple_connection_error(da->pc, PURPLE_CONNECTION_ERROR_AUTHENTICATION_FAILED, json_object_get_string_member(response, "password"));
 			return;
 		}
+
+		if (json_object_has_member(response, "captcha_key")) {
+			/* Probably an error about needing CAPTCHA */
+			purple_connection_error(da->pc, PURPLE_CONNECTION_ERROR_AUTHENTICATION_FAILED, _("Need CAPTCHA to login. Consider using Harmony first, then retry."));
+			return;
+		}
 	}
 
 	purple_connection_error(da->pc, PURPLE_CONNECTION_ERROR_AUTHENTICATION_FAILED, _("Bad username/password"));
