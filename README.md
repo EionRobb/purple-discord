@@ -78,6 +78,11 @@ considered large.
 emoji from the server and displays it in Pidgin as an inline image instead
 of as a URL link
 
+Mentions
+--------
+To mention a user in a chat room, you can either use tab-completion at the
+start of the message, or prefix their username with an @ eg,
+`SeriousEion: i am mentioning @SeriousEion`
 
 Bitlbee and spectrum2 users
 ---------------------------
