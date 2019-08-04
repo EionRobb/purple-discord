@@ -60,8 +60,9 @@ used as the game info for Discord "Playing ...".
 **Auto-create rooms on buddy list**: If enabled, the plugin will add the
 channels (rooms) from the servers you're on as chats on your buddy list.
 This is preferred if you're using Pidgin, so you don't need to access
-the room list manually. If you're not using Pidgin (or finch), you
-probably don't want this, since they have different buddy list APIs.
+the room list manually (from the buddy list, Tools->Room List). If 
+you're not using Pidgin (or finch), you probably don't want this, since
+they have different buddy list APIs.
 Note: If the room list changes, it won't recreate the list unless you
 delete the entire group.
 
@@ -73,6 +74,22 @@ This value is the threshold to define a large channel. By default, if
 there are more than 80 (online) users in the channel, it will be
 considered large.
 
+**Display custom emoji as inline images**: Automatically downloads custom
+emoji from the server and displays it in Pidgin as an inline image instead
+of as a URL link
+
+
+Bitlbee and spectrum2 users
+---------------------------
+Discord doesn't like you trying to connect from remote IP addresses so
+you'll need to grab an auth token from your browsers local storage:
+
+* Chrome: Developer Tools -> Application -> Local Storage -> https://discordapp.com -> token
+* Firefox: Web Developer -> Storage Inspector -> Local Storage -> http://discordapp.com -> token
+
+Bitlbee users can then set the token with `acc eionrobb-discord set token ......`.
+
+spectrum2 users will need to edit the accounts.xml file to add the token.
 
 Show your appreciation
 ----------------------
