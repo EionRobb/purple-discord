@@ -98,10 +98,27 @@ markdown_should_underscore(const gchar *html, unsigned i, gboolean s_italics)
 }
 
 static gchar *
-markdown_helper_replace(gchar *a, gchar *b, gchar *c)
+markdown_helper_replace(gchar *html, const gchar *tag, const gchar *replacement)
 {
-	gchar *temp = purple_strreplace(a, b, c);
-	g_free(a);
+	gchar *replace_regex;
+	gchar *replace_with;
+	
+	if (tag[0] == '<' && tag[1] == '/') {
+		//closing tag
+		replace_regex = g_strconcat("(\\s*)", tag, NULL);
+		replace_with = g_strconcat(replacement, "\\1", NULL);
+	} else {
+		replace_regex = g_strconcat(tag, "(\\s*)", NULL);
+		replace_with = g_strconcat("\\1", replacement, NULL);
+	}
+	
+	GRegex *markdown_replace = g_regex_new(replace_regex, 0, 0, NULL);
+	gchar *temp = g_regex_replace(markdown_replace, html, -1, 0, replace_with, 0, NULL);
+	
+	g_free(replace_regex);
+	g_free(replace_with);
+	g_free(html);
+	
 	return temp;
 }
 
@@ -228,9 +245,10 @@ markdown_convert_markdown(const gchar *html, gboolean escape_html, gboolean disc
 			out = g_string_append_c(out, c);
 		}
 	}
-
-	gchar *new_out = g_string_free(out, FALSE);
-	return markdown_helper_replace(new_out, "\n", "<br>");
+	
+	gchar *new_out = purple_strreplace(out->str, "\n", "<br>");
+	g_string_free(out, TRUE);
+	return new_out;
 }
 
 #define REPLACE_TAG(name, repl) \
