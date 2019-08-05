@@ -5438,6 +5438,12 @@ discord_add_account_options(GList *account_options)
 	option = purple_account_option_bool_new(_("Open chat when you are @mention'd"), "open-chat-on-mention", TRUE);
 	account_options = g_list_append(account_options, option);
 
+	// Only show the token auth input for non-Pidgin clients
+	if (!purple_strequal(purple_core_get_ui(), "gtk-gaim")) {
+		option = purple_account_option_string_new(_("Auth token"), "token", "");
+		account_options = g_list_append(account_options, option);
+	}
+
 	return account_options;
 }
 
