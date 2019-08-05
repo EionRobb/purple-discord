@@ -2003,7 +2003,8 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 
 		gboolean mentioned = flags & PURPLE_MESSAGE_NICK;
 
-		if (mentioned || (head_count > 0 && head_count < purple_account_get_int(da->account, "large-channel-count", 20))) {
+		if ((mentioned && purple_account_get_bool(da->account, "open-chat-on-mention", TRUE)) || 
+			(head_count > 0 && head_count < purple_account_get_int(da->account, "large-channel-count", 20))) {
 			discord_open_chat(da, channel_id, mentioned);
 		}
 
@@ -5431,6 +5432,9 @@ discord_add_account_options(GList *account_options)
 	account_options = g_list_append(account_options, option);
 
 	option = purple_account_option_bool_new(_("Display custom emoji as inline images"), "show-custom-emojis", TRUE);
+	account_options = g_list_append(account_options, option);
+
+	option = purple_account_option_bool_new(_("Open chat when you are @mention'd"), "open-chat-on-mention", TRUE);
 	account_options = g_list_append(account_options, option);
 
 	return account_options;
