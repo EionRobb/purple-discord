@@ -1275,14 +1275,16 @@ static DiscordChannel *discord_open_chat(DiscordAccount *da, guint64 id, gboolea
 static gboolean
 discord_replace_channel(const GMatchInfo *match, GString *result, gpointer user_data)
 {
-	DiscordAccount *da = user_data;
+	DiscordAccountGuild *ag = user_data;
+	//DiscordAccount *da = ag->account;
+	DiscordGuild *guild = ag->guild;
 	gchar *match_string = g_match_info_fetch(match, 0);
 	gchar *channel_id = g_match_info_fetch(match, 1);
-	DiscordChannel *channel = discord_get_channel_global(da, channel_id);
+	gint64 channel_num = to_int(channel_id);
+	DiscordChannel *channel = g_hash_table_lookup_int64(guild->channels, channel_num);
 
 	if (channel) {
 		/* TODO make this a clickable link */
-		DiscordGuild *guild = discord_get_guild(da, channel->guild_id);
 
 		if (guild) {
 			g_string_append_printf(result, "%s", discord_normalise_room_name(guild->name, channel->name));
@@ -1479,7 +1481,7 @@ discord_replace_mentions_bare(DiscordAccount *da, DiscordGuild *g, gchar *messag
 	}
 
 	/* Replace <#channel_id> with channel names */
-	tmp = g_regex_replace_eval(channel_mentions_regex, message, -1, 0, 0, discord_replace_channel, da, NULL);
+	tmp = g_regex_replace_eval(channel_mentions_regex, message, -1, 0, 0, discord_replace_channel, &ag, NULL);
 
 	if (tmp != NULL) {
 		g_free(message);
@@ -1488,7 +1490,6 @@ discord_replace_mentions_bare(DiscordAccount *da, DiscordGuild *g, gchar *messag
 
 	/* Replace <@&role_id> with role names */
 	if (g) {
-		DiscordAccountGuild ag = { .account = da, .guild = g };
 		tmp = g_regex_replace_eval(role_mentions_regex, message, -1, 0, 0, discord_replace_role, &ag, NULL);
 
 		if (tmp != NULL) {
@@ -4653,9 +4654,9 @@ discord_mark_room_messages_read(DiscordAccount *da, guint64 channel_id)
 	if (channel) {
 		last_message_id = channel->last_message_id;
 	} else {
-		gchar *channel = from_int(channel_id);
-		gchar *msg = g_hash_table_lookup(da->last_message_id_dm, channel);
-		g_free(channel);
+		gchar *channel_str = from_int(channel_id);
+		gchar *msg = g_hash_table_lookup(da->last_message_id_dm, channel_str);
+		g_free(channel_str);
 
 		if (msg) {
 			last_message_id = to_int(msg);
