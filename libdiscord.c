@@ -5259,7 +5259,9 @@ discord_get_info(PurpleConnection *pc, const gchar *username)
 	DiscordUser *user = discord_get_user_fullname(da, username);
 
 	if (!user) {
-		purple_notify_userinfo(pc, username, NULL, NULL, NULL);
+		PurpleNotifyUserInfo *user_info = purple_notify_user_info_new();
+		purple_notify_user_info_add_pair_html(user_info, _("Unknown user"), username);
+		purple_notify_userinfo(pc, username, user_info, NULL, NULL);
 		return;
 	}
 
