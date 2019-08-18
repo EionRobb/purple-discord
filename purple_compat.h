@@ -32,6 +32,8 @@
 // Purple2 compat functions
 #if !PURPLE_VERSION_CHECK(3, 0, 0)
 
+#define purple_buddy_get_local_alias  purple_buddy_get_local_buddy_alias
+#define purple_buddy_set_local_alias  purple_blist_alias_buddy
 #define purple_connection_error purple_connection_error_reason
 #define purple_connection_get_protocol purple_connection_get_prpl
 #define PURPLE_CONNECTION_CONNECTING PURPLE_CONNECTING

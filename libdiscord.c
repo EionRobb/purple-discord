@@ -2367,6 +2367,11 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 				purple_protocol_got_user_status(da->account, new_username_full, status, "message", user->game, NULL);
 				purple_protocol_got_user_idle(da->account, new_username_full, idle_since ? TRUE : FALSE, 0);
 				purple_protocol_got_user_status(da->account, username, "offline", NULL);
+				
+				const gchar *old_alias = purple_buddy_get_local_alias(old_buddy);
+				if (old_alias != NULL && *old_alias) {
+					purple_buddy_set_local_alias(buddy, old_alias);
+				}
 			}
 		}
 
@@ -4798,6 +4803,7 @@ discord_replace_natural_emoji(const GMatchInfo *match, GString *result, gpointer
 
 	return FALSE;
 }
+
 
 static gint
 discord_conversation_send_message(DiscordAccount *da, guint64 room_id, const gchar *message)
