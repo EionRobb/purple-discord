@@ -118,6 +118,7 @@ markdown_helper_replace(gchar *html, const gchar *tag, const gchar *replacement)
 	g_free(replace_regex);
 	g_free(replace_with);
 	g_free(html);
+	g_regex_unref(markdown_replace);
 	
 	return temp;
 }
