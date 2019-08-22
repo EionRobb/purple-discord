@@ -1459,7 +1459,7 @@ discord_replace_mention(const GMatchInfo *match, GString *result, gpointer user_
 			name = g_strdup(purple_account_get_private_alias(da->account));
 		} else if (guild && g_hash_table_lookup_int64(guild->nicknames, snowflake)) {
 			g_free(name);
-			name = g_hash_table_lookup_int64(guild->nicknames, snowflake);
+			name = g_strdup(g_hash_table_lookup_int64(guild->nicknames, snowflake));
 		}
 
 		g_string_append_printf(result, "<b>@%s</b>", name);
