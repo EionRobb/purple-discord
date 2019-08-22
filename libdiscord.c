@@ -5260,7 +5260,8 @@ discord_got_info(DiscordAccount *da, JsonNode *node, gpointer user_data)
 				}
 			}
 
-			purple_notify_user_info_add_pair_html(user_info, guild->name, g_string_free(role_str, FALSE));
+			purple_notify_user_info_add_pair_html(user_info, guild->name, role_str->str);
+			g_string_free(role_str, TRUE);
 		}
 	}
 
