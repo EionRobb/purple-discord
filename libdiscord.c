@@ -1277,12 +1277,12 @@ static gboolean
 discord_replace_channel(const GMatchInfo *match, GString *result, gpointer user_data)
 {
 	DiscordAccountGuild *ag = user_data;
-	//DiscordAccount *da = ag->account;
+	DiscordAccount *da = ag->account;
 	DiscordGuild *guild = ag->guild;
 	gchar *match_string = g_match_info_fetch(match, 0);
 	gchar *channel_id = g_match_info_fetch(match, 1);
 	gint64 channel_num = to_int(channel_id);
-	DiscordChannel *channel = g_hash_table_lookup_int64(guild->channels, channel_num);
+	DiscordChannel *channel = guild ? g_hash_table_lookup_int64(guild->channels, channel_num) : discord_get_channel_global(da, channel_id);
 
 	if (channel) {
 		/* TODO make this a clickable link */
