@@ -2829,6 +2829,34 @@ discord_is_channel_visible(DiscordAccount *da, DiscordUser *user, DiscordChannel
 	return TRUE;
 }
 
+static PurpleRoomlistRoom *
+discord_get_room_category(DiscordAccount *da, GHashTable *id_to_category, guint64 category_id, PurpleRoomlist *roomlist, PurpleRoomlistRoom *parent)
+{
+	/* No category -> no category */
+	if (!category_id)
+		return parent;
+
+	/* Lookup first */
+	PurpleRoomlistRoom *room = g_hash_table_lookup_int64(id_to_category, category_id);
+
+	if (room)
+		return room;
+
+	/* Otherwise, let's create */
+	DiscordChannel *channel = discord_get_channel_global_int(da, category_id);
+
+	if (!channel)
+		return parent;
+
+	room = purple_roomlist_room_new(PURPLE_ROOMLIST_ROOMTYPE_CATEGORY, channel->name, parent);
+	purple_roomlist_room_add_field(roomlist, room, (gpointer) channel->name);
+	purple_roomlist_room_add(roomlist, room);
+
+	/* Record it */
+	g_hash_table_replace_int64(id_to_category, category_id, room);
+	return room;
+}
+
 static void
 discord_roomlist_got_list(DiscordAccount *da, DiscordGuild *guild, gpointer user_data)
 {
@@ -2837,6 +2865,8 @@ discord_roomlist_got_list(DiscordAccount *da, DiscordGuild *guild, gpointer user
 	PurpleRoomlistRoom *category = purple_roomlist_room_new(PURPLE_ROOMLIST_ROOMTYPE_CATEGORY, guild_name, NULL);
 	purple_roomlist_room_add_field(roomlist, category, (gpointer) guild_name);
 	purple_roomlist_room_add(roomlist, category);
+
+	DiscordUser *user = discord_get_user(da, da->self_user_id);
 
 	GHashTableIter iter;
 	gpointer key, value;
@@ -2847,39 +2877,42 @@ discord_roomlist_got_list(DiscordAccount *da, DiscordGuild *guild, gpointer user
 		g_hash_table_iter_init(&iter, da->group_dms);	
 	}
 
+	GHashTable *id_to_category = g_hash_table_new_full(g_int64_hash, g_int64_equal, NULL, NULL);
+
 	while (g_hash_table_iter_next(&iter, &key, &value)) {
 		DiscordChannel *channel = value;
 		PurpleRoomlistRoom *room;
 
+		if (channel->type == CHANNEL_GUILD_CATEGORY)
+			continue;
+
+		if (!discord_is_channel_visible(da, user, channel))
+			continue;
+
 		gchar *channel_id = from_int(channel->id);
 		gchar *type_str;
 
-		room = purple_roomlist_room_new(PURPLE_ROOMLIST_ROOMTYPE_ROOM, "", category);
+		/* Try to find the category */
+		PurpleRoomlistRoom *local_category =
+			discord_get_room_category(da, id_to_category, channel->category_id, roomlist, category);
 
+		room = purple_roomlist_room_new(PURPLE_ROOMLIST_ROOMTYPE_ROOM, "", local_category);
 		purple_roomlist_room_add_field(roomlist, room, channel_id);
 		purple_roomlist_room_add_field(roomlist, room, channel->name);
 
 		switch (channel->type) {
-			case 0:
+			case CHANNEL_GUILD_TEXT:
 				type_str = _("Text");
 				break;
-			
-			case 1:
+			case CHANNEL_DM:
 				type_str = _("Direct Message");
 				break;
-			
-			case 2:
+			case CHANNEL_VOICE:
 				type_str = _("Voice");
 				break;
-			
-			case 3:
+			case CHANNEL_GROUP_DM:
 				type_str = _("Group DM");
 				break;
-			
-			case 4:
-				type_str = _("Guild Category");
-				break;
-
 			default:
 				type_str = _("Unknown");
 				break;
@@ -2890,6 +2923,8 @@ discord_roomlist_got_list(DiscordAccount *da, DiscordGuild *guild, gpointer user
 		purple_roomlist_room_add(roomlist, room);
 		g_free(channel_id);
 	}
+
+	g_hash_table_unref(id_to_category);
 }
 
 static gchar *
