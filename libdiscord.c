@@ -2890,7 +2890,6 @@ discord_roomlist_got_list(DiscordAccount *da, DiscordGuild *guild, gpointer user
 			continue;
 
 		gchar *channel_id = from_int(channel->id);
-		gchar *type_str;
 
 		/* Try to find the category */
 		PurpleRoomlistRoom *local_category =
@@ -2898,26 +2897,6 @@ discord_roomlist_got_list(DiscordAccount *da, DiscordGuild *guild, gpointer user
 
 		room = purple_roomlist_room_new(PURPLE_ROOMLIST_ROOMTYPE_ROOM, channel->name, local_category);
 		purple_roomlist_room_add_field(roomlist, room, channel_id);
-
-		switch (channel->type) {
-			case CHANNEL_GUILD_TEXT:
-				type_str = _("Text");
-				break;
-			case CHANNEL_DM:
-				type_str = _("Direct Message");
-				break;
-			case CHANNEL_VOICE:
-				type_str = _("Voice");
-				break;
-			case CHANNEL_GROUP_DM:
-				type_str = _("Group DM");
-				break;
-			default:
-				type_str = _("Unknown");
-				break;
-		}
-
-		purple_roomlist_room_add_field(roomlist, room, type_str);
 
 		purple_roomlist_room_add(roomlist, room);
 		g_free(channel_id);
@@ -2946,9 +2925,6 @@ discord_roomlist_get_list(PurpleConnection *pc)
 	roomlist = purple_roomlist_new(da->account);
 
 	f = purple_roomlist_field_new(PURPLE_ROOMLIST_FIELD_STRING, _("ID"), "id", TRUE);
-	fields = g_list_append(fields, f);
-
-	f = purple_roomlist_field_new(PURPLE_ROOMLIST_FIELD_STRING, _("Room Type"), "type", FALSE);
 	fields = g_list_append(fields, f);
 
 	purple_roomlist_set_fields(roomlist, fields);
