@@ -1274,6 +1274,8 @@ static void discord_got_relationships(DiscordAccount *da, JsonNode *node, gpoint
 static void discord_got_private_channels(DiscordAccount *da, JsonNode *node, gpointer user_data);
 static void discord_got_presences(DiscordAccount *da, JsonNode *node, gpointer user_data);
 static void discord_got_read_states(DiscordAccount *da, JsonNode *node, gpointer user_data);
+static void discord_got_guild_setting(DiscordAccount *da, JsonObject *obj);
+static void discord_got_guild_settings(DiscordAccount *da, JsonNode *node);
 static void discord_got_history_static(DiscordAccount *da, JsonNode *node, gpointer user_data);
 static void discord_got_history_of_room(DiscordAccount *da, JsonNode *node, gpointer user_data);
 static void discord_populate_guild(DiscordAccount *da, JsonObject *guild);
@@ -2621,6 +2623,7 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		discord_got_presences(da, json_object_get_member(data, "presences"), NULL);
 		discord_got_guilds(da, json_object_get_member(data, "guilds"), NULL);
 		discord_got_read_states(da, json_object_get_member(data, "read_state"), NULL);
+		discord_got_guild_settings(da, json_object_get_member(data, "user_guild_settings"));
 
 		/* Fetch our own avatar */
 		self_user_obj = discord_get_user(da, da->self_user_id);
@@ -2788,6 +2791,8 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		}
 		
 		g_free(name);
+	} else if (purple_strequal(type, "USER_GUILD_SETTINGS_UPDATE")) {
+		discord_got_guild_setting(da, data);
 	} else {
 		purple_debug_info("discord", "Unhandled message type '%s'\n", type);
 	}
@@ -3446,6 +3451,71 @@ discord_got_read_states(DiscordAccount *da, JsonNode *node, gpointer user_data)
 		}
 		
 		g_free(last_id);
+	}
+}
+
+static void
+discord_got_guild_setting(DiscordAccount *da, JsonObject *settings)
+{
+	/* Lookup the guild in question */
+	guint64 guild_id = to_int(json_object_get_string_member(settings, "guild_id"));
+	DiscordGuild *guild = discord_get_guild(da, guild_id);
+
+	if (!guild)
+		return;
+
+	/* Grab global settings */
+	gboolean all_mute = json_object_get_boolean_member(settings, "muted");
+	gboolean all_suppressed = json_object_get_boolean_member(settings, "suppress_everyone");
+	DiscordNotificationLevel all_notification = json_object_get_int_member(settings, "message_notifications");
+
+	/* Apply the guild-global settings */
+	GHashTableIter iter;
+	gpointer key;
+	gpointer value;
+
+	g_hash_table_iter_init(&iter, guild->channels);
+
+	while (g_hash_table_iter_next(&iter, &key, &value)) {
+		DiscordChannel *channel = value;
+		channel->muted = all_mute;
+		channel->suppress_everyone = all_suppressed;
+		channel->notification_level = all_notification;
+	}
+
+	/* Apply per-channel overrides */
+	JsonArray *overrides = json_object_get_array_member(settings, "channel_overrides");
+	guint olen = json_array_get_length(overrides);
+
+	for (int j = olen - 1; j >= 0; j--) {
+		JsonObject *override = json_array_get_object_element(overrides, j);
+
+		/* Lookup overriden channel */
+		guint64 channel_id = to_int(json_object_get_string_member(override, "channel_id"));
+		DiscordChannel *channel = g_hash_table_lookup_int64(guild->channels, channel_id);
+
+		if (!channel)
+			continue;
+
+		/* Apply overrides */
+		channel->muted = json_object_get_boolean_member(override, "muted");
+		printf("%s: %smute", channel->name, channel->muted ? "" : "un");
+		DiscordNotificationLevel level = json_object_get_int_member(override, "message_notifications");
+
+		if (level != NOTIFICATIONS_INHERIT)
+			channel->notification_level = level;
+	}
+}
+
+static void
+discord_got_guild_settings(DiscordAccount *da, JsonNode *node)
+{
+	JsonArray *guilds = json_node_get_array(node);
+	guint len = json_array_get_length(guilds);
+
+	for (int i = len - 1; i >= 0; i--) {
+		JsonObject *settings = json_array_get_object_element(guilds, i);
+		discord_got_guild_setting(da, settings);
 	}
 }
 
