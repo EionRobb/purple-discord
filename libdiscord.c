@@ -2795,6 +2795,39 @@ discord_normalise_room_name(const gchar *guild_name, const gchar *name)
 	return old_name;
 }
 
+/* Should the channel be visible via permissions? */
+
+static gboolean
+discord_is_channel_visible(DiscordAccount *da, DiscordUser *user, DiscordChannel *channel)
+{
+	/* Fail gracefully */
+	if (!user)
+		return TRUE;
+
+	/* We can always see non-guild (e.g. group DMs) */
+	if (!channel->guild_id)
+		return TRUE;
+
+	/* Ensure that we actually have permissions for this channel */
+	guint64 permission = discord_compute_permission(da, user, channel);
+
+	/* must have READ_MESSAGES */
+	if (!(permission & 0x400))
+		return FALSE;
+
+	/* Drop voice channels since we don't support them anyway */
+	if (channel->type == CHANNEL_VOICE)
+		return FALSE;
+
+	/* Channel categories become new PurpleGroups so we don't
+	 * handle explicitly */
+	if (channel->type == CHANNEL_GUILD_CATEGORY)
+		return FALSE;
+
+	/* Other channels are visible */
+	return TRUE;
+}
+
 static void
 discord_roomlist_got_list(DiscordAccount *da, DiscordGuild *guild, gpointer user_data)
 {
@@ -3215,18 +3248,20 @@ discord_buddy_guild(DiscordAccount *da, DiscordGuild *guild)
 	while (g_hash_table_iter_next(&iter, &key, &value)) {
 		DiscordChannel *channel = value;
 
-		/* Ensure that we actually have permissions for this channel */
-		guint64 permission = discord_compute_permission(da, user, channel);
-
-		/* must have READ_MESSAGES */
-		if (!(permission & 0x400)) {
+		if (!discord_is_channel_visible(da, user, channel))
 			continue;
-		}
 
-		/* Drop voice channels since we don't support them anyway */
-		if (channel->type == CHANNEL_VOICE) {
+		/* Find/make a group */
+		gchar *category_name = NULL;
+		DiscordChannel *cat = g_hash_table_lookup_int64(guild->channels, channel->category_id);
+
+		if (cat)
+			category_name = cat->name;
+
+		PurpleGroup *group = discord_grab_group(guild->name, category_name);
+
+		if (!group)
 			continue;
-		}
 
 		discord_add_channel_to_blist(da, channel, group);
 	}
