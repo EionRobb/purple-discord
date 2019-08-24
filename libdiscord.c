@@ -1782,7 +1782,13 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 		flags = PURPLE_MESSAGE_RECV;
 	}
 
-	if (mentions) {
+	/* Check for mentions, but only if the user has not globally disabled
+	 * mentions for the channel. If the level is ALL or MENTIONS, it's
+	 * okay; we just check for NONE */
+
+	gboolean mentionable = channel ? (channel->notification_level != NOTIFICATIONS_NONE) : FALSE;
+
+	if (mentions && mentionable) {
 		for (i = json_array_get_length(mentions) - 1; i >= 0; i--) {
 			JsonObject *user = json_array_get_object_element(mentions, i);
 			guint64 id = to_int(json_object_get_string_member(user, "id"));
@@ -1793,7 +1799,7 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 		}
 	}
 
-	if (mention_roles && guild) {
+	if (mention_roles && guild && mentionable) {
 		DiscordUser *self = discord_get_user(da, da->self_user_id);
 		if (self) {
 			DiscordGuildMembership *membership = g_hash_table_lookup_int64(self->guild_memberships, guild->id);
