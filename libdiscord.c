@@ -2864,6 +2864,7 @@ discord_roomlist_got_list(DiscordAccount *da, DiscordGuild *guild, gpointer user
 	const gchar *guild_name = guild ? guild->name : _("Group DMs");
 	PurpleRoomlistRoom *category = purple_roomlist_room_new(PURPLE_ROOMLIST_ROOMTYPE_CATEGORY, guild_name, NULL);
 	purple_roomlist_room_add_field(roomlist, category, (gpointer) guild_name);
+	purple_roomlist_room_add_field(roomlist, category, (gpointer) NULL);
 	purple_roomlist_room_add(roomlist, category);
 
 	DiscordUser *user = discord_get_user(da, da->self_user_id);
@@ -2897,6 +2898,7 @@ discord_roomlist_got_list(DiscordAccount *da, DiscordGuild *guild, gpointer user
 
 		room = purple_roomlist_room_new(PURPLE_ROOMLIST_ROOMTYPE_ROOM, channel->name, local_category);
 		purple_roomlist_room_add_field(roomlist, room, channel_id);
+		purple_roomlist_room_add_field(roomlist, room, channel->topic);
 
 		purple_roomlist_room_add(roomlist, room);
 		g_free(channel_id);
@@ -2925,6 +2927,9 @@ discord_roomlist_get_list(PurpleConnection *pc)
 	roomlist = purple_roomlist_new(da->account);
 
 	f = purple_roomlist_field_new(PURPLE_ROOMLIST_FIELD_STRING, _("ID"), "id", TRUE);
+	fields = g_list_append(fields, f);
+
+	f = purple_roomlist_field_new(PURPLE_ROOMLIST_FIELD_STRING, _("Topic"), "topic", FALSE);
 	fields = g_list_append(fields, f);
 
 	purple_roomlist_set_fields(roomlist, fields);
