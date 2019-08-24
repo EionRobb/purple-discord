@@ -1809,7 +1809,12 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 		escaped_content = discord_replace_mentions_bare(da, guild, escaped_content);
 	}
 
-	if (json_object_get_boolean_member(data, "mention_everyone")) {
+	/* Ping for @everyone, but only if we didn't suppress it in the channel */
+
+	gboolean mention_everyone = json_object_get_boolean_member(data, "mention_everyone");
+	gboolean everyone_suppressed = channel ? channel->suppress_everyone : FALSE;
+
+	if (mention_everyone && !everyone_suppressed) {
 		flags |= PURPLE_MESSAGE_NICK;
 	}
 	
