@@ -112,6 +112,7 @@ typedef struct {
 typedef struct {
 	guint64 id;
 	guint64 guild_id;
+	guint64 category_id;
 	gchar *name;
 	gchar *topic;
 	DiscordChannelType type;
@@ -315,6 +316,7 @@ discord_new_channel(JsonObject *json)
 	channel->position = json_object_get_int_member(json, "position");
 	channel->type = json_object_get_int_member(json, "type");
 	channel->last_message_id = to_int(json_object_get_string_member(json, "last_message_id"));
+	channel->category_id = to_int(json_object_get_string_member(json, "parent_id"));
 
 	channel->permission_user_overrides = g_hash_table_new_full(g_int64_hash, g_int64_equal, NULL, g_free);
 	channel->permission_role_overrides = g_hash_table_new_full(g_int64_hash, g_int64_equal, NULL, g_free);
