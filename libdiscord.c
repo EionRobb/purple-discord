@@ -97,6 +97,13 @@ typedef enum {
 	CHANNEL_GUILD_CATEGORY = 4
 } DiscordChannelType;
 
+typedef enum {
+	NOTIFICATIONS_ALL = 0,
+	NOTIFICATIONS_MENTIONS = 1,
+	NOTIFICATIONS_NONE = 2,
+	NOTIFICATIONS_INHERIT = 3,
+} DiscordNotificationLevel;
+
 typedef struct {
 	guint64 id;
 	gchar *name;
@@ -122,6 +129,9 @@ typedef struct {
 	GHashTable *permission_user_overrides;
 	GHashTable *permission_role_overrides;
 	GList *recipients; /* For group DMs */
+	gboolean suppress_everyone;
+	gboolean muted;
+	DiscordNotificationLevel notification_level;
 } DiscordChannel;
 
 typedef struct {
