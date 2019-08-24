@@ -183,7 +183,7 @@ markdown_convert_markdown(const gchar *html, gboolean escape_html, gboolean disc
 				out = g_string_append(out, "&lt;");
 			else if (c == '>')
 				out = g_string_append(out, "&gt;");
-			else if (c == '&')
+			else /*if (c == '&')*/
 				out = g_string_append(out, "&amp;");
 		} else if (c == '*') {
 			if (html[i + 1] == '*') {
