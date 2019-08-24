@@ -1766,6 +1766,16 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 	DiscordGuild *guild = NULL;
 	DiscordChannel *channel = discord_get_channel_global_int_guild(da, channel_id, &guild);
 
+	/* Check if we should receive messages at all and shortcircuit if not,
+	 * unless the user already opened the channel */
+
+	gboolean muted = channel ? channel->muted : FALSE;
+
+	if (muted) {
+		if (purple_conversations_find_chat(da->pc, discord_chat_hash(channel_id)) == NULL)
+			return msg_id;
+	}
+
 	if (author_id == da->self_user_id) {
 		flags = PURPLE_MESSAGE_SEND | PURPLE_MESSAGE_REMOTE_SEND | PURPLE_MESSAGE_DELAYED;
 	} else {
