@@ -2896,9 +2896,8 @@ discord_roomlist_got_list(DiscordAccount *da, DiscordGuild *guild, gpointer user
 		PurpleRoomlistRoom *local_category =
 			discord_get_room_category(da, id_to_category, channel->category_id, roomlist, category);
 
-		room = purple_roomlist_room_new(PURPLE_ROOMLIST_ROOMTYPE_ROOM, "", local_category);
+		room = purple_roomlist_room_new(PURPLE_ROOMLIST_ROOMTYPE_ROOM, channel->name, local_category);
 		purple_roomlist_room_add_field(roomlist, room, channel_id);
-		purple_roomlist_room_add_field(roomlist, room, channel->name);
 
 		switch (channel->type) {
 			case CHANNEL_GUILD_TEXT:
@@ -2947,9 +2946,6 @@ discord_roomlist_get_list(PurpleConnection *pc)
 	roomlist = purple_roomlist_new(da->account);
 
 	f = purple_roomlist_field_new(PURPLE_ROOMLIST_FIELD_STRING, _("ID"), "id", TRUE);
-	fields = g_list_append(fields, f);
-
-	f = purple_roomlist_field_new(PURPLE_ROOMLIST_FIELD_STRING, _("Name"), "name", FALSE);
 	fields = g_list_append(fields, f);
 
 	f = purple_roomlist_field_new(PURPLE_ROOMLIST_FIELD_STRING, _("Room Type"), "type", FALSE);
