@@ -24,6 +24,7 @@
 #include <unistd.h>
 #endif
 #include <errno.h>
+#include <assert.h>
 
 #include <zlib.h>
 #ifndef z_const
@@ -112,6 +113,7 @@ typedef struct {
 typedef struct {
 	guint64 id;
 	guint64 guild_id;
+	guint64 category_id;
 	gchar *name;
 	gchar *topic;
 	DiscordChannelType type;
@@ -315,6 +317,7 @@ discord_new_channel(JsonObject *json)
 	channel->position = json_object_get_int_member(json, "position");
 	channel->type = json_object_get_int_member(json, "type");
 	channel->last_message_id = to_int(json_object_get_string_member(json, "last_message_id"));
+	channel->category_id = to_int(json_object_get_string_member(json, "parent_id"));
 
 	channel->permission_user_overrides = g_hash_table_new_full(g_int64_hash, g_int64_equal, NULL, g_free);
 	channel->permission_role_overrides = g_hash_table_new_full(g_int64_hash, g_int64_equal, NULL, g_free);
@@ -2793,6 +2796,67 @@ discord_normalise_room_name(const gchar *guild_name, const gchar *name)
 	return old_name;
 }
 
+/* Should the channel be visible via permissions? */
+
+static gboolean
+discord_is_channel_visible(DiscordAccount *da, DiscordUser *user, DiscordChannel *channel)
+{
+	/* Fail gracefully */
+	if (!user)
+		return TRUE;
+
+	/* We can always see non-guild (e.g. group DMs) */
+	if (!channel->guild_id)
+		return TRUE;
+
+	/* Ensure that we actually have permissions for this channel */
+	guint64 permission = discord_compute_permission(da, user, channel);
+
+	/* must have READ_MESSAGES */
+	if (!(permission & 0x400))
+		return FALSE;
+
+	/* Drop voice channels since we don't support them anyway */
+	if (channel->type == CHANNEL_VOICE)
+		return FALSE;
+
+	/* Channel categories become new PurpleGroups so we don't
+	 * handle explicitly */
+	if (channel->type == CHANNEL_GUILD_CATEGORY)
+		return FALSE;
+
+	/* Other channels are visible */
+	return TRUE;
+}
+
+static PurpleRoomlistRoom *
+discord_get_room_category(DiscordAccount *da, GHashTable *id_to_category, guint64 category_id, PurpleRoomlist *roomlist, PurpleRoomlistRoom *parent)
+{
+	/* No category -> no category */
+	if (!category_id)
+		return parent;
+
+	/* Lookup first */
+	PurpleRoomlistRoom *room = g_hash_table_lookup_int64(id_to_category, category_id);
+
+	if (room)
+		return room;
+
+	/* Otherwise, let's create */
+	DiscordChannel *channel = discord_get_channel_global_int(da, category_id);
+
+	if (!channel)
+		return parent;
+
+	room = purple_roomlist_room_new(PURPLE_ROOMLIST_ROOMTYPE_CATEGORY, channel->name, parent);
+	purple_roomlist_room_add_field(roomlist, room, (gpointer) channel->name);
+	purple_roomlist_room_add(roomlist, room);
+
+	/* Record it */
+	g_hash_table_replace_int64(id_to_category, category_id, room);
+	return room;
+}
+
 static void
 discord_roomlist_got_list(DiscordAccount *da, DiscordGuild *guild, gpointer user_data)
 {
@@ -2800,7 +2864,10 @@ discord_roomlist_got_list(DiscordAccount *da, DiscordGuild *guild, gpointer user
 	const gchar *guild_name = guild ? guild->name : _("Group DMs");
 	PurpleRoomlistRoom *category = purple_roomlist_room_new(PURPLE_ROOMLIST_ROOMTYPE_CATEGORY, guild_name, NULL);
 	purple_roomlist_room_add_field(roomlist, category, (gpointer) guild_name);
+	purple_roomlist_room_add_field(roomlist, category, (gpointer) NULL);
 	purple_roomlist_room_add(roomlist, category);
+
+	DiscordUser *user = discord_get_user(da, da->self_user_id);
 
 	GHashTableIter iter;
 	gpointer key, value;
@@ -2811,49 +2878,33 @@ discord_roomlist_got_list(DiscordAccount *da, DiscordGuild *guild, gpointer user
 		g_hash_table_iter_init(&iter, da->group_dms);	
 	}
 
+	GHashTable *id_to_category = g_hash_table_new_full(g_int64_hash, g_int64_equal, NULL, NULL);
+
 	while (g_hash_table_iter_next(&iter, &key, &value)) {
 		DiscordChannel *channel = value;
 		PurpleRoomlistRoom *room;
 
+		if (channel->type == CHANNEL_GUILD_CATEGORY)
+			continue;
+
+		if (!discord_is_channel_visible(da, user, channel))
+			continue;
+
 		gchar *channel_id = from_int(channel->id);
-		gchar *type_str;
 
-		room = purple_roomlist_room_new(PURPLE_ROOMLIST_ROOMTYPE_ROOM, "", category);
+		/* Try to find the category */
+		PurpleRoomlistRoom *local_category =
+			discord_get_room_category(da, id_to_category, channel->category_id, roomlist, category);
 
+		room = purple_roomlist_room_new(PURPLE_ROOMLIST_ROOMTYPE_ROOM, channel->name, local_category);
 		purple_roomlist_room_add_field(roomlist, room, channel_id);
-		purple_roomlist_room_add_field(roomlist, room, channel->name);
-
-		switch (channel->type) {
-			case 0:
-				type_str = _("Text");
-				break;
-			
-			case 1:
-				type_str = _("Direct Message");
-				break;
-			
-			case 2:
-				type_str = _("Voice");
-				break;
-			
-			case 3:
-				type_str = _("Group DM");
-				break;
-			
-			case 4:
-				type_str = _("Guild Category");
-				break;
-
-			default:
-				type_str = _("Unknown");
-				break;
-		}
-
-		purple_roomlist_room_add_field(roomlist, room, type_str);
+		purple_roomlist_room_add_field(roomlist, room, channel->topic);
 
 		purple_roomlist_room_add(roomlist, room);
 		g_free(channel_id);
 	}
+
+	g_hash_table_unref(id_to_category);
 }
 
 static gchar *
@@ -2878,10 +2929,7 @@ discord_roomlist_get_list(PurpleConnection *pc)
 	f = purple_roomlist_field_new(PURPLE_ROOMLIST_FIELD_STRING, _("ID"), "id", TRUE);
 	fields = g_list_append(fields, f);
 
-	f = purple_roomlist_field_new(PURPLE_ROOMLIST_FIELD_STRING, _("Name"), "name", FALSE);
-	fields = g_list_append(fields, f);
-
-	f = purple_roomlist_field_new(PURPLE_ROOMLIST_FIELD_STRING, _("Room Type"), "type", FALSE);
+	f = purple_roomlist_field_new(PURPLE_ROOMLIST_FIELD_STRING, _("Topic"), "topic", FALSE);
 	fields = g_list_append(fields, f);
 
 	purple_roomlist_set_fields(roomlist, fields);
@@ -3179,24 +3227,40 @@ discord_got_presences(DiscordAccount *da, JsonNode *node, gpointer user_data)
 	}
 }
 
-static void
-discord_buddy_guild(DiscordAccount *da, DiscordGuild *guild)
+static PurpleGroup *
+discord_grab_group(const char *guild_name, const char *category_name)
 {
-	/* Create group */
+	/* Create the combined name */
+
+	gchar *combined_name = NULL;
+	assert(guild_name != NULL);
+
+	if (category_name != NULL)
+		combined_name = g_strdup_printf("%s: %s", guild_name, category_name);
+	else
+		combined_name = g_strdup(guild_name);
+
+	/* Make a group */
 	/* TODO: What if this is not unique? */
 
-	PurpleGroup *group = purple_blist_find_group(guild->name);
+	PurpleGroup *group = purple_blist_find_group(combined_name);
 
 	if (!group) {
-		group = purple_group_new(guild->name);
+		group = purple_group_new(combined_name);
 
-		if (!group) {
-			return;
-		}
+		if (!group)
+			return NULL;
 
 		purple_blist_add_group(group, NULL);
 	}
 
+	g_free(combined_name);
+	return group;
+}
+
+static void
+discord_buddy_guild(DiscordAccount *da, DiscordGuild *guild)
+{
 	GHashTableIter iter;
 	gpointer key;
 	gpointer value;
@@ -3213,18 +3277,20 @@ discord_buddy_guild(DiscordAccount *da, DiscordGuild *guild)
 	while (g_hash_table_iter_next(&iter, &key, &value)) {
 		DiscordChannel *channel = value;
 
-		/* Ensure that we actually have permissions for this channel */
-		guint64 permission = discord_compute_permission(da, user, channel);
-
-		/* must have READ_MESSAGES */
-		if (!(permission & 0x400)) {
+		if (!discord_is_channel_visible(da, user, channel))
 			continue;
-		}
 
-		/* Drop voice channels since we don't support them anyway */
-		if (channel->type == CHANNEL_VOICE) {
+		/* Find/make a group */
+		gchar *category_name = NULL;
+		DiscordChannel *cat = g_hash_table_lookup_int64(guild->channels, channel->category_id);
+
+		if (cat)
+			category_name = cat->name;
+
+		PurpleGroup *group = discord_grab_group(guild->name, category_name);
+
+		if (!group)
 			continue;
-		}
 
 		discord_add_channel_to_blist(da, channel, group);
 	}
