@@ -24,6 +24,7 @@
 #include <unistd.h>
 #endif
 #include <errno.h>
+#include <assert.h>
 
 #include <zlib.h>
 #ifndef z_const
@@ -3214,24 +3215,40 @@ discord_got_presences(DiscordAccount *da, JsonNode *node, gpointer user_data)
 	}
 }
 
-static void
-discord_buddy_guild(DiscordAccount *da, DiscordGuild *guild)
+static PurpleGroup *
+discord_grab_group(const char *guild_name, const char *category_name)
 {
-	/* Create group */
+	/* Create the combined name */
+
+	gchar *combined_name = NULL;
+	assert(guild_name != NULL);
+
+	if (category_name != NULL)
+		combined_name = g_strdup_printf("%s: %s", guild_name, category_name);
+	else
+		combined_name = g_strdup(guild_name);
+
+	/* Make a group */
 	/* TODO: What if this is not unique? */
 
-	PurpleGroup *group = purple_blist_find_group(guild->name);
+	PurpleGroup *group = purple_blist_find_group(combined_name);
 
 	if (!group) {
-		group = purple_group_new(guild->name);
+		group = purple_group_new(combined_name);
 
-		if (!group) {
-			return;
-		}
+		if (!group)
+			return NULL;
 
 		purple_blist_add_group(group, NULL);
 	}
 
+	g_free(combined_name);
+	return group;
+}
+
+static void
+discord_buddy_guild(DiscordAccount *da, DiscordGuild *guild)
+{
 	GHashTableIter iter;
 	gpointer key;
 	gpointer value;
