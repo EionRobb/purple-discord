@@ -2070,8 +2070,8 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 }
 
 struct discord_group_typing_data {
-	DiscordAccount *da;
 	guint64 channel_id;
+	DiscordAccount *da;
 	gchar *username;
 	gboolean set;
 	gboolean free_me;
@@ -3873,7 +3873,7 @@ discord_inflate(DiscordAccount *da, gchar *frame, gsize frame_len)
 	gsize decomp_len;
 	
 	while (zs->avail_in > 0) {
-		zs->next_out = (Bytef*)decomp_buff;
+		zs->next_out = (Bytef*)decomp_buff; //-V507
 		zs->avail_out = sizeof(decomp_buff);
 		decomp_len = zs->avail_out = sizeof(decomp_buff);
 		gzres = inflate(zs, Z_SYNC_FLUSH);
