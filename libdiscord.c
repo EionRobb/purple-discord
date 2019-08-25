@@ -2549,7 +2549,7 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 			PurpleChatConversation *chatconv = purple_conversations_find_chat(da->pc, discord_chat_hash(channel_id));
 
 			if (chatconv) {
-				purple_chat_conversation_set_topic(chatconv, NULL, json_object_get_string_member(data, (channel_type == 3 ? "topic" : "name")));
+				purple_chat_conversation_set_topic(chatconv, NULL, json_object_get_string_member(data, (channel_type == 3 ? "name" : "topic")));
 			}
 		}
 	} else if (purple_strequal(type, "RELATIONSHIP_ADD")) {
