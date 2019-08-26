@@ -5541,6 +5541,10 @@ discord_toggle_mute(PurpleBlistNode *node, gpointer data)
 
 	DiscordChannel *channel = discord_channel_from_chat(da, chat);
 
+	if (channel == NULL) {
+		return;
+	}
+	
 	/* Toggle the mute */
 	channel->muted = !channel->muted;
 
@@ -5594,10 +5598,12 @@ discord_blist_node_menu(PurpleBlistNode *node)
 	/* Find the associated channel */
 	DiscordChannel *channel = discord_channel_from_chat(da, chat);
 
-	/* Make a menu */
-	const char *mute_toggle = channel->muted ? _("Unmute") : _("Mute");
-	act = purple_menu_action_new(mute_toggle, PURPLE_CALLBACK(discord_toggle_mute), da, NULL);
-	m = g_list_append(m, act);
+	if (channel != NULL) {
+		/* Make a menu */
+		const char *mute_toggle = channel->muted ? _("Unmute") : _("Mute");
+		act = purple_menu_action_new(mute_toggle, PURPLE_CALLBACK(discord_toggle_mute), da, NULL);
+		m = g_list_append(m, act);
+	}
 
 	return m;
 }
