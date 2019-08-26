@@ -97,6 +97,13 @@ typedef enum {
 	CHANNEL_GUILD_CATEGORY = 4
 } DiscordChannelType;
 
+typedef enum {
+	NOTIFICATIONS_ALL = 0,
+	NOTIFICATIONS_MENTIONS = 1,
+	NOTIFICATIONS_NONE = 2,
+	NOTIFICATIONS_INHERIT = 3,
+} DiscordNotificationLevel;
+
 typedef struct {
 	guint64 id;
 	gchar *name;
@@ -122,6 +129,9 @@ typedef struct {
 	GHashTable *permission_user_overrides;
 	GHashTable *permission_role_overrides;
 	GList *recipients; /* For group DMs */
+	gboolean suppress_everyone;
+	gboolean muted;
+	DiscordNotificationLevel notification_level;
 } DiscordChannel;
 
 typedef struct {
@@ -1264,6 +1274,8 @@ static void discord_got_relationships(DiscordAccount *da, JsonNode *node, gpoint
 static void discord_got_private_channels(DiscordAccount *da, JsonNode *node, gpointer user_data);
 static void discord_got_presences(DiscordAccount *da, JsonNode *node, gpointer user_data);
 static void discord_got_read_states(DiscordAccount *da, JsonNode *node, gpointer user_data);
+static void discord_got_guild_setting(DiscordAccount *da, JsonObject *obj);
+static void discord_got_guild_settings(DiscordAccount *da, JsonNode *node);
 static void discord_got_history_static(DiscordAccount *da, JsonNode *node, gpointer user_data);
 static void discord_got_history_of_room(DiscordAccount *da, JsonNode *node, gpointer user_data);
 static void discord_populate_guild(DiscordAccount *da, JsonObject *guild);
@@ -1754,13 +1766,29 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 	DiscordGuild *guild = NULL;
 	DiscordChannel *channel = discord_get_channel_global_int_guild(da, channel_id, &guild);
 
+	/* Check if we should receive messages at all and shortcircuit if not,
+	 * unless the user already opened the channel */
+
+	gboolean muted = channel ? channel->muted : FALSE;
+
+	if (muted) {
+		if (purple_conversations_find_chat(da->pc, discord_chat_hash(channel_id)) == NULL)
+			return msg_id;
+	}
+
 	if (author_id == da->self_user_id) {
 		flags = PURPLE_MESSAGE_SEND | PURPLE_MESSAGE_REMOTE_SEND | PURPLE_MESSAGE_DELAYED;
 	} else {
 		flags = PURPLE_MESSAGE_RECV;
 	}
 
-	if (mentions) {
+	/* Check for mentions, but only if the user has not globally disabled
+	 * mentions for the channel. If the level is ALL or MENTIONS, it's
+	 * okay; we just check for NONE */
+
+	gboolean mentionable = channel ? (channel->notification_level != NOTIFICATIONS_NONE) : FALSE;
+
+	if (mentions && mentionable) {
 		for (i = json_array_get_length(mentions) - 1; i >= 0; i--) {
 			JsonObject *user = json_array_get_object_element(mentions, i);
 			guint64 id = to_int(json_object_get_string_member(user, "id"));
@@ -1771,7 +1799,7 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 		}
 	}
 
-	if (mention_roles && guild) {
+	if (mention_roles && guild && mentionable) {
 		DiscordUser *self = discord_get_user(da, da->self_user_id);
 		if (self) {
 			DiscordGuildMembership *membership = g_hash_table_lookup_int64(self->guild_memberships, guild->id);
@@ -1797,7 +1825,12 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 		escaped_content = discord_replace_mentions_bare(da, guild, escaped_content);
 	}
 
-	if (json_object_get_boolean_member(data, "mention_everyone")) {
+	/* Ping for @everyone, but only if we didn't suppress it in the channel */
+
+	gboolean mention_everyone = json_object_get_boolean_member(data, "mention_everyone");
+	gboolean everyone_suppressed = channel ? channel->suppress_everyone : FALSE;
+
+	if (mention_everyone && !everyone_suppressed) {
 		flags |= PURPLE_MESSAGE_NICK;
 	}
 	
@@ -2175,6 +2208,19 @@ discord_name_group_dm(DiscordAccount *da, DiscordChannel *channel) {
 	return g_string_free(name, FALSE);
 }
 
+DiscordChannel *
+discord_channel_from_chat(DiscordAccount *da, PurpleChat *chat)
+{
+	/* Grab the ID */
+	GHashTable *components = purple_chat_get_components(chat);
+	const gchar *chat_id = g_hash_table_lookup(components, "id");
+
+	if (!chat_id)
+		return NULL;
+
+	/* Lookup the channel */
+	return discord_get_channel_global(da, chat_id);
+}
 
 PurpleChat *
 discord_find_chat_from_node(PurpleAccount *account, const char *id, PurpleBlistNode *root)
@@ -2611,6 +2657,7 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		discord_got_presences(da, json_object_get_member(data, "presences"), NULL);
 		discord_got_guilds(da, json_object_get_member(data, "guilds"), NULL);
 		discord_got_read_states(da, json_object_get_member(data, "read_state"), NULL);
+		discord_got_guild_settings(da, json_object_get_member(data, "user_guild_settings"));
 
 		/* Fetch our own avatar */
 		self_user_obj = discord_get_user(da, da->self_user_id);
@@ -2778,6 +2825,8 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		}
 		
 		g_free(name);
+	} else if (purple_strequal(type, "USER_GUILD_SETTINGS_UPDATE")) {
+		discord_got_guild_setting(da, data);
 	} else {
 		purple_debug_info("discord", "Unhandled message type '%s'\n", type);
 	}
@@ -3436,6 +3485,71 @@ discord_got_read_states(DiscordAccount *da, JsonNode *node, gpointer user_data)
 		}
 		
 		g_free(last_id);
+	}
+}
+
+static void
+discord_got_guild_setting(DiscordAccount *da, JsonObject *settings)
+{
+	/* Lookup the guild in question */
+	guint64 guild_id = to_int(json_object_get_string_member(settings, "guild_id"));
+	DiscordGuild *guild = discord_get_guild(da, guild_id);
+
+	if (!guild)
+		return;
+
+	/* Grab global settings */
+	gboolean all_mute = json_object_get_boolean_member(settings, "muted");
+	gboolean all_suppressed = json_object_get_boolean_member(settings, "suppress_everyone");
+	DiscordNotificationLevel all_notification = json_object_get_int_member(settings, "message_notifications");
+
+	/* Apply the guild-global settings */
+	GHashTableIter iter;
+	gpointer key;
+	gpointer value;
+
+	g_hash_table_iter_init(&iter, guild->channels);
+
+	while (g_hash_table_iter_next(&iter, &key, &value)) {
+		DiscordChannel *channel = value;
+		channel->muted = all_mute;
+		channel->suppress_everyone = all_suppressed;
+		channel->notification_level = all_notification;
+	}
+
+	/* Apply per-channel overrides */
+	JsonArray *overrides = json_object_get_array_member(settings, "channel_overrides");
+	guint olen = json_array_get_length(overrides);
+
+	for (int j = olen - 1; j >= 0; j--) {
+		JsonObject *override = json_array_get_object_element(overrides, j);
+
+		/* Lookup overriden channel */
+		guint64 channel_id = to_int(json_object_get_string_member(override, "channel_id"));
+		DiscordChannel *channel = g_hash_table_lookup_int64(guild->channels, channel_id);
+
+		if (!channel)
+			continue;
+
+		/* Apply overrides */
+		channel->muted = json_object_get_boolean_member(override, "muted");
+		printf("%s: %smute", channel->name, channel->muted ? "" : "un");
+		DiscordNotificationLevel level = json_object_get_int_member(override, "message_notifications");
+
+		if (level != NOTIFICATIONS_INHERIT)
+			channel->notification_level = level;
+	}
+}
+
+static void
+discord_got_guild_settings(DiscordAccount *da, JsonNode *node)
+{
+	JsonArray *guilds = json_node_get_array(node);
+	guint len = json_array_get_length(guilds);
+
+	for (int i = len - 1; i >= 0; i--) {
+		JsonObject *settings = json_array_get_object_element(guilds, i);
+		discord_got_guild_setting(da, settings);
 	}
 }
 
@@ -5417,6 +5531,77 @@ discord_status_types(PurpleAccount *account)
 	return types;
 }
 
+/* If a channel is muted, unmute it, or vice verse */
+
+static void
+discord_toggle_mute(PurpleBlistNode *node, gpointer data)
+{
+	DiscordAccount *da = (DiscordAccount *) data;
+	PurpleChat *chat = PURPLE_CHAT(node);
+
+	DiscordChannel *channel = discord_channel_from_chat(da, chat);
+
+	/* Toggle the mute */
+	channel->muted = !channel->muted;
+
+	/* PATCH /users/@me/guilds/[guild id]/settings
+	 * {"channel_overrides": {"channel_id": {"muted": true}}} */
+
+	DiscordGuild *guild = discord_get_guild(da, channel->guild_id);
+
+	if (guild != NULL) {
+		gchar *channel_id = from_int(channel->id);
+
+		JsonObject *data = json_object_new();
+		JsonObject *override = json_object_new();
+		JsonObject *setting = json_object_new();
+
+		json_object_set_boolean_member(setting, "muted", channel->muted);
+		json_object_set_object_member(override, channel_id, setting);
+		json_object_set_object_member(data, "channel_overrides", override);
+
+		gchar *postdata = json_object_to_string(data);
+
+		gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/v6/users/@me/guilds/%" G_GUINT64_FORMAT "/settings", guild->id);
+		discord_fetch_url_with_method(da, "PATCH", url, postdata, NULL, NULL);
+
+		g_free(channel_id);
+		g_free(url);
+		g_free(postdata);
+
+		json_object_unref(setting);
+		json_object_unref(override);
+		json_object_unref(data);
+	}
+}
+
+static GList *
+discord_blist_node_menu(PurpleBlistNode *node)
+{
+	/* We only have a menu for chats */
+	if (!PURPLE_IS_CHAT(node))
+		return NULL;
+
+	PurpleMenuAction *act;
+	GList *m = NULL;
+
+	/* Grab a DiscordAccount */
+	PurpleChat *chat = PURPLE_CHAT(node);
+	PurpleAccount *acct = purple_chat_get_account(chat);
+	PurpleConnection *pc = purple_account_get_connection(acct);
+	DiscordAccount *da = purple_connection_get_protocol_data(pc);
+
+	/* Find the associated channel */
+	DiscordChannel *channel = discord_channel_from_chat(da, chat);
+
+	/* Make a menu */
+	const char *mute_toggle = channel->muted ? _("Unmute") : _("Mute");
+	act = purple_menu_action_new(mute_toggle, PURPLE_CALLBACK(discord_toggle_mute), da, NULL);
+	m = g_list_append(m, act);
+
+	return m;
+}
+
 static gchar *
 discord_status_text(PurpleBuddy *buddy)
 {
@@ -5790,6 +5975,7 @@ plugin_init(PurplePlugin *plugin)
 	prpl_info->set_status = discord_set_status;
 	prpl_info->set_idle = discord_set_idle;
 	prpl_info->status_types = discord_status_types;
+	prpl_info->blist_node_menu = discord_blist_node_menu;
 	prpl_info->chat_info = discord_chat_info;
 	prpl_info->chat_info_defaults = discord_chat_info_defaults;
 	prpl_info->login = discord_login;
@@ -5890,6 +6076,7 @@ discord_protocol_class_init(PurpleProtocolClass *prpl_info)
 	prpl_info->login = discord_login;
 	prpl_info->close = discord_close;
 	prpl_info->status_types = discord_status_types;
+	prpl_info->blist_node_menu = discord_blist_node_menu;
 	prpl_info->list_icon = discord_list_icon;
 }
 

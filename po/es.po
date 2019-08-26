@@ -5,8 +5,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: 0.9\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2018-12-16 11:00-0800\n"
-"PO-Revision-Date: 2018-12-16 12:23-0700\n"
+"POT-Creation-Date: 2019-08-25 17:42-0700\n"
+"PO-Revision-Date: 2019-08-25 12:23-0700\n"
 "Last-Translator: Alyssa Rosenzweig <alyssa@rosenzweig.io>\n"
 "Language-Team: es <LL@li.org>\n"
 "Language: es\n"
@@ -26,32 +26,11 @@ msgstr "EDITADO: %s"
 msgid "Group DMs"
 msgstr "MDs de grupo"
 
-msgid "Text"
-msgstr "Texto"
-
-msgid "Direct Message"
-msgstr "Mensaje Directo"
-
-msgid "Voice"
-msgstr "Voz"
-
-msgid "Group DM"
-msgstr "MD de grupo"
-
-msgid "Guild Category"
-msgstr "Categoria de servidor"
-
-msgid "Unknown"
-msgstr "Desconocido"
-
 msgid "ID"
 msgstr "Identificación"
 
-msgid "Name"
-msgstr "Nombre"
-
-msgid "Room Type"
-msgstr "Tipo de sala"
+msgid "Topic"
+msgstr "Sujeto"
 
 msgid "Cancelled 2FA auth"
 msgstr "Autenticación de dos factores cancelada"
@@ -75,6 +54,9 @@ msgstr "_Iniciar sesión"
 msgid "_Cancel"
 msgstr "_Cancelar"
 
+msgid "Need CAPTCHA to login. Consider using Harmony first, then retry."
+msgstr "CAPTCHA necesitado para autenticar. Intente con Harmony primero, y intente de nuevo después."
+
 msgid "Bad username/password"
 msgstr "Nombre de usuario o contraseña incorrecto"
 
@@ -96,6 +78,9 @@ msgstr "No se puede conectar al gateway"
 msgid "No pinned messages"
 msgstr "Ningún mensaje anclado"
 
+msgid "Name"
+msgstr "Nombre"
+
 msgid "Bad channel type"
 msgstr "Mal tipo de canal"
 
@@ -112,7 +97,8 @@ msgid "Invalid channel for this user"
 msgstr "Canal inválido para este usuario"
 
 msgid "Cannot send a message to someone who is not on your friend list."
-msgstr "No se puede enviar un mensaje a alguien que no está en su lista de amigos"
+msgstr ""
+"No se puede enviar un mensaje a alguien que no está en su lista de amigos"
 
 #, c-format
 msgid "No users with tag %s exist"
@@ -152,6 +138,12 @@ msgstr "Servidores mutuales"
 msgid "Invisible"
 msgstr "Invisible"
 
+msgid "Unmute"
+msgstr "Desenmudecer"
+
+msgid "Mute"
+msgstr "Enmudecer"
+
 #, c-format
 msgid "Playing %s"
 msgstr "Jugando %s"
@@ -167,6 +159,15 @@ msgstr "Automáticamente crear salas en la lista de amigos"
 
 msgid "Number of users in a large channel"
 msgstr "Número de usuarios en un gran canal"
+
+msgid "Display custom emoji as inline images"
+msgstr "Mostrar emoji personalizado como imagenes en línea"
+
+msgid "Open chat when you are @mention'd"
+msgstr "Abrir conversación cuando le @mencionó"
+
+msgid "Auth token"
+msgstr "Código de autenticación"
 
 msgid "Join a server"
 msgstr "Entrar a un servidor"
@@ -212,6 +213,27 @@ msgstr "Plug-in del Protocolo de Discord."
 
 msgid "Adds Discord protocol support to libpurple."
 msgstr "Añadir el protocolo de Discord a libpurple."
+
+#~ msgid "Text"
+#~ msgstr "Texto"
+
+#~ msgid "Direct Message"
+#~ msgstr "Mensaje Directo"
+
+#~ msgid "Voice"
+#~ msgstr "Voz"
+
+#~ msgid "Group DM"
+#~ msgstr "MD de grupo"
+
+#~ msgid "Guild Category"
+#~ msgstr "Categoria de servidor"
+
+#~ msgid "Unknown"
+#~ msgstr "Desconocido"
+
+#~ msgid "Room Type"
+#~ msgstr "Tipo de sala"
 
 #~ msgid "In-Game"
 #~ msgstr "En juego"
