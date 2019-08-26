@@ -2208,6 +2208,19 @@ discord_name_group_dm(DiscordAccount *da, DiscordChannel *channel) {
 	return g_string_free(name, FALSE);
 }
 
+DiscordChannel *
+discord_channel_from_chat(DiscordAccount *da, PurpleChat *chat)
+{
+	/* Grab the ID */
+	GHashTable *components = purple_chat_get_components(chat);
+	const gchar *chat_id = g_hash_table_lookup(components, "id");
+
+	if (!chat_id)
+		return NULL;
+
+	/* Lookup the channel */
+	return discord_get_channel_global(da, chat_id);
+}
 
 PurpleChat *
 discord_find_chat_from_node(PurpleAccount *account, const char *id, PurpleBlistNode *root)
