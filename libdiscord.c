@@ -5531,6 +5531,77 @@ discord_status_types(PurpleAccount *account)
 	return types;
 }
 
+/* If a channel is muted, unmute it, or vice verse */
+
+static void
+discord_toggle_mute(PurpleBlistNode *node, gpointer data)
+{
+	DiscordAccount *da = (DiscordAccount *) data;
+	PurpleChat *chat = PURPLE_CHAT(node);
+
+	DiscordChannel *channel = discord_channel_from_chat(da, chat);
+
+	/* Toggle the mute */
+	channel->muted = !channel->muted;
+
+	/* PATCH /users/@me/guilds/[guild id]/settings
+	 * {"channel_overrides": {"channel_id": {"muted": true}}} */
+
+	DiscordGuild *guild = discord_get_guild(da, channel->guild_id);
+
+	if (guild != NULL) {
+		gchar *channel_id = from_int(channel->id);
+
+		JsonObject *data = json_object_new();
+		JsonObject *override = json_object_new();
+		JsonObject *setting = json_object_new();
+
+		json_object_set_boolean_member(setting, "muted", channel->muted);
+		json_object_set_object_member(override, channel_id, setting);
+		json_object_set_object_member(data, "channel_overrides", override);
+
+		gchar *postdata = json_object_to_string(data);
+
+		gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/v6/users/@me/guilds/%" G_GUINT64_FORMAT "/settings", guild->id);
+		discord_fetch_url_with_method(da, "PATCH", url, postdata, NULL, NULL);
+
+		g_free(channel_id);
+		g_free(url);
+		g_free(postdata);
+
+		json_object_unref(setting);
+		json_object_unref(override);
+		json_object_unref(data);
+	}
+}
+
+static GList *
+discord_blist_node_menu(PurpleBlistNode *node)
+{
+	/* We only have a menu for chats */
+	if (!PURPLE_IS_CHAT(node))
+		return NULL;
+
+	PurpleMenuAction *act;
+	GList *m = NULL;
+
+	/* Grab a DiscordAccount */
+	PurpleChat *chat = PURPLE_CHAT(node);
+	PurpleAccount *acct = purple_chat_get_account(chat);
+	PurpleConnection *pc = purple_account_get_connection(acct);
+	DiscordAccount *da = purple_connection_get_protocol_data(pc);
+
+	/* Find the associated channel */
+	DiscordChannel *channel = discord_channel_from_chat(da, chat);
+
+	/* Make a menu */
+	const char *mute_toggle = channel->muted ? _("Unmute") : _("Mute");
+	act = purple_menu_action_new(mute_toggle, PURPLE_CALLBACK(discord_toggle_mute), da, NULL);
+	m = g_list_append(m, act);
+
+	return m;
+}
+
 static gchar *
 discord_status_text(PurpleBuddy *buddy)
 {
@@ -5904,6 +5975,7 @@ plugin_init(PurplePlugin *plugin)
 	prpl_info->set_status = discord_set_status;
 	prpl_info->set_idle = discord_set_idle;
 	prpl_info->status_types = discord_status_types;
+	prpl_info->blist_node_menu = discord_blist_node_menu;
 	prpl_info->chat_info = discord_chat_info;
 	prpl_info->chat_info_defaults = discord_chat_info_defaults;
 	prpl_info->login = discord_login;
@@ -6004,6 +6076,7 @@ discord_protocol_class_init(PurpleProtocolClass *prpl_info)
 	prpl_info->login = discord_login;
 	prpl_info->close = discord_close;
 	prpl_info->status_types = discord_status_types;
+	prpl_info->blist_node_menu = discord_blist_node_menu;
 	prpl_info->list_icon = discord_list_icon;
 }
 
