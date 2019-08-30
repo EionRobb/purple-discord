@@ -44,6 +44,7 @@ ifeq ($(OS),Windows_NT)
   DISCORD_DEST = "$(PROGFILES32)/Pidgin/plugins"
   DISCORD_ICONS_DEST = "$(PROGFILES32)/Pidgin/pixmaps/pidgin/protocols"
   LOCALEDIR = "$(PROGFILES32)/Pidgin/locale"
+  LOCALE_DEST = $(LOCALEDIR)
 else
   UNAME_S := $(shell uname -s)
 
@@ -67,17 +68,20 @@ else
       DISCORD_TARGET = FAILNOPURPLE
       DISCORD_DEST =
       DISCORD_ICONS_DEST =
+	  LOCALE_DEST = 
     else
       DISCORD_TARGET = libdiscord.so
       DISCORD_DEST = $(DESTDIR)`$(PKG_CONFIG) --variable=plugindir purple`
       DISCORD_ICONS_DEST = $(DESTDIR)`$(PKG_CONFIG) --variable=datadir purple`/pixmaps/pidgin/protocols
-      LOCALEDIR = $(DESTDIR)$(shell $(PKG_CONFIG) --variable=datadir purple)/locale
+      LOCALEDIR = $(shell $(PKG_CONFIG) --variable=datadir purple)/locale
+	  LOCALE_DEST = $(DESTDIR)$(LOCALEDIR)
     endif
   else
     DISCORD_TARGET = libdiscord3.so
     DISCORD_DEST = $(DESTDIR)`$(PKG_CONFIG) --variable=plugindir purple-3`
     DISCORD_ICONS_DEST = $(DESTDIR)`$(PKG_CONFIG) --variable=datadir purple-3`/pixmaps/pidgin/protocols
-    LOCALEDIR = $(DESTDIR)$(shell $(PKG_CONFIG) --variable=datadir purple-3)/locale
+    LOCALEDIR = $(shell $(PKG_CONFIG) --variable=datadir purple-3)/locale
+	LOCALE_DEST = $(DESTDIR)$(LOCALEDIR)
   endif
 endif
 
@@ -123,8 +127,8 @@ po/%.mo: po/%.po
 	msgfmt -o $@ $^
 
 %-locale-install: po/%.mo
-	mkdir -m $(DIR_PERM) -p $(LOCALEDIR)/$(*F)/LC_MESSAGES
-	install -m $(FILE_PERM) -p po/$(*F).mo $(LOCALEDIR)/$(*F)/LC_MESSAGES/purple-discord.mo
+	mkdir -m $(DIR_PERM) -p $(LOCALE_DEST)/$(*F)/LC_MESSAGES
+	install -m $(FILE_PERM) -p po/$(*F).mo $(LOCALE_DEST)/$(*F)/LC_MESSAGES/purple-discord.mo
 
 install: $(DISCORD_TARGET) install-icons install-locales
 	mkdir -m $(DIR_PERM) -p $(DISCORD_DEST)
