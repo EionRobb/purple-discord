@@ -5586,7 +5586,6 @@ discord_blist_node_menu(PurpleBlistNode *node)
 	if (!PURPLE_IS_CHAT(node))
 		return NULL;
 
-	PurpleMenuAction *act;
 	GList *m = NULL;
 
 	/* Grab a DiscordAccount */
@@ -5601,7 +5600,7 @@ discord_blist_node_menu(PurpleBlistNode *node)
 	if (channel != NULL) {
 		/* Make a menu */
 		const char *mute_toggle = channel->muted ? _("Unmute") : _("Mute");
-		act = purple_menu_action_new(mute_toggle, PURPLE_CALLBACK(discord_toggle_mute), da, NULL);
+		PurpleMenuAction *act = purple_menu_action_new(mute_toggle, PURPLE_CALLBACK(discord_toggle_mute), da, NULL);
 		m = g_list_append(m, act);
 	}
 
