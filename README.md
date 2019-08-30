@@ -94,7 +94,7 @@ you'll need to grab an auth token from your browsers local storage:
 
 Bitlbee users can then set the token with `acc eionrobb-discord set token ......`.
 
-spectrum2 users will need to edit the accounts.xml file to add the token.
+spectrum2 users will need to edit the accounts.xml file to add the token. `<setting name='token' type='string'>...</setting>`
 
 Show your appreciation
 ----------------------
