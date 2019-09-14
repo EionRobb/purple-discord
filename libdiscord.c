@@ -567,7 +567,7 @@ discord_create_fullname_from_id(DiscordAccount *da, guint64 id)
 	return NULL;
 }
 
-static gchar *discord_create_nickname(DiscordUser *author, DiscordGuild *guild);
+static gchar *discord_create_nickname(DiscordUser *author, DiscordGuild *guild, DiscordChannel *channel);
 
 static gchar *
 discord_alloc_nickname(DiscordUser *user, DiscordGuild *guild, const gchar *suggested_nick)
@@ -607,12 +607,12 @@ discord_alloc_nickname(DiscordUser *user, DiscordGuild *guild, const gchar *sugg
 }
 
 static gchar *
-discord_create_nickname_from_id(DiscordAccount *da, DiscordGuild *g, guint64 id)
+discord_create_nickname_from_id(DiscordAccount *da, DiscordGuild *g, DiscordChannel *channel, guint64 id)
 {
 	DiscordUser *user = discord_get_user(da, id);
 
 	if (user) {
-		return discord_create_nickname(user, g);
+		return discord_create_nickname(user, g, channel);
 	}
 
 	return NULL;
@@ -1677,8 +1677,12 @@ discord_make_mentions(DiscordAccount *da, DiscordGuild *guild, gchar *message)
 	return message;
 }
 
+/* Looks up / creates a nickname for a given context. If guild is specified,
+ * channel is ignored (for guild nicknames); if guild is NULL, channel is used
+ * instead (for group DM nicknames) */
+
 static gchar *
-discord_create_nickname(DiscordUser *author, DiscordGuild *guild)
+discord_create_nickname(DiscordUser *author, DiscordGuild *guild, DiscordChannel *channel)
 {
 	if (!guild) {
 		return discord_create_fullname(author);
@@ -2074,7 +2078,7 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 			name = g_strdup(json_object_get_string_member(author_obj, "username"));
 		} else {
 			DiscordUser *author = discord_upsert_user(da->new_users, author_obj);
-			name = discord_create_nickname(author, guild);
+			name = discord_create_nickname(author, guild, channel);
 		}
 
 		if (escaped_content && *escaped_content) {
@@ -2368,7 +2372,7 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 				return;
 			}
 			
-			gchar *nickname = discord_create_nickname(user, guild);
+			gchar *nickname = discord_create_nickname(user, guild, NULL);
 
 			g_hash_table_iter_init(&iter, guild->channels);
 
@@ -2471,7 +2475,7 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		}
 
 		DiscordGuild *guild = NULL;
-		discord_get_channel_global_int_guild(da, to_int(channel_id), &guild);
+		DiscordChannel *channel = discord_get_channel_global_int_guild(da, to_int(channel_id), &guild);
 
 		guint64 tmp = to_int(channel_id);
 		PurpleChatConversation *chatconv = purple_conversations_find_chat(da->pc, discord_chat_hash(tmp));
@@ -2481,7 +2485,7 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		}
 
 		JsonObject *json = json_object_get_object_member(data, "author");
-		gchar *n = discord_create_nickname_from_id(da, guild, to_int(json_object_get_string_member(json, "id")));
+		gchar *n = discord_create_nickname_from_id(da, guild, channel, to_int(json_object_get_string_member(json, "id")));
 
 		struct discord_group_typing_data ctx = {
 			.da = da,
@@ -2511,7 +2515,7 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 
 		if (channel != NULL) {
 			DiscordGuild *guild = discord_get_guild(da, channel->guild_id);
-			gchar *username = discord_create_nickname_from_id(da, guild, user_id);
+			gchar *username = discord_create_nickname_from_id(da, guild, channel, user_id);
 
 			struct discord_group_typing_data set = {
 				.da = da,
@@ -2751,7 +2755,7 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 				/* must have READ_MESSAGES */
 				if ((permission & 0x400)) {
 					PurpleChatUserFlags cbflags = discord_get_user_flags(da, guild, user);
-					gchar *nickname = discord_create_nickname(user, guild);
+					gchar *nickname = discord_create_nickname(user, guild, channel);
 					
 					if (nickname != NULL) {
 						users = g_list_prepend(users, nickname);
@@ -4736,7 +4740,7 @@ discord_got_channel_info(DiscordAccount *da, JsonNode *node, gpointer user_data)
 		if (guild != NULL) {
 			PurpleChatConversation *chat = chatconv;
 			GList *users = NULL, *flags = NULL;
-			DiscordChannel *chnl = discord_get_channel_global_int(da, tmp);
+			DiscordChannel *channel = discord_get_channel_global_int(da, tmp);
 			GHashTableIter iter;
 			gpointer key, value;
 
@@ -4750,12 +4754,12 @@ discord_got_channel_info(DiscordAccount *da, JsonNode *node, gpointer user_data)
 				}
 				
 				/* Ensure that we actually have permissions for this channel */
-				guint64 permission = discord_compute_permission(da, user, chnl);
+				guint64 permission = discord_compute_permission(da, user, channel);
 
 				/* must have READ_MESSAGES */
 				if ((permission & 0x400)) {
 					PurpleChatUserFlags cbflags = discord_get_user_flags(da, guild, user);
-					gchar *nickname = discord_create_nickname(user, guild);
+					gchar *nickname = discord_create_nickname(user, guild, channel);
 
 					if (nickname != NULL) {
 						if (user->status != USER_OFFLINE) {
@@ -4826,7 +4830,7 @@ discord_open_chat(DiscordAccount *da, guint64 id, gboolean present)
 	g_free(url);
 	
 	if (guild != NULL) {
-		gchar *name = discord_create_nickname_from_id(da, guild, da->self_user_id);
+		gchar *name = discord_create_nickname_from_id(da, guild, channel, da->self_user_id);
 		purple_chat_conversation_set_nick(chatconv, name);
 		g_free(name);
 	}
@@ -5094,7 +5098,7 @@ discord_chat_send(PurpleConnection *pc, gint id,
 	gchar *d_message = g_strdup(message);
 
 	DiscordGuild *guild = NULL;
-	discord_get_channel_global_int_guild(da, room_id, &guild);
+	DiscordChannel *channel = discord_get_channel_global_int_guild(da, room_id, &guild);
 	
 	d_message = discord_make_mentions(da, guild, d_message);
 
@@ -5122,7 +5126,7 @@ discord_chat_send(PurpleConnection *pc, gint id,
 
 		d_message = discord_replace_mentions_bare(da, guild, d_message);
 
-		gchar *name = discord_create_nickname_from_id(da, guild, da->self_user_id);
+		gchar *name = discord_create_nickname_from_id(da, guild, channel, da->self_user_id);
 		purple_serv_got_chat_in(pc, discord_chat_hash(room_id), name, PURPLE_MESSAGE_SEND, d_message, time(NULL));
 		g_free(name);
 	}
