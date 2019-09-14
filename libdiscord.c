@@ -2351,6 +2351,8 @@ discord_got_group_dm(DiscordAccount *da, JsonObject *data)
 	 * be a collision */
 
 	channel->names = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, NULL);
+	DiscordUser *self = discord_get_user(da, da->self_user_id);
+	discord_got_group_dm_name(channel, self, TRUE);
 
 	for (int i = json_array_get_length(recipients) - 1; i >= 0; i--) {
 		DiscordUser *recipient =
