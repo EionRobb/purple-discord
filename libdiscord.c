@@ -1727,7 +1727,28 @@ discord_get_real_name(PurpleConnection *pc, gint id, const char *who)
 	guint64 room_id = *room_id_ptr;
 
 	DiscordGuild *guild = NULL;
-	discord_get_channel_global_int_guild(da, room_id, &guild);
+	DiscordChannel *channel = discord_get_channel_global_int_guild(da, room_id, &guild);
+
+	if (channel && channel->type == CHANNEL_GROUP_DM) {
+		/* TODO: use a hash map... */
+		GList *l;
+
+		DiscordUser *self = discord_get_user(da, da->self_user_id);
+
+		if (purple_strequal(self->name, who))
+			return g_strdup(da->self_username);
+
+		for (l = channel->recipients; l != NULL; l = l->next) {
+			guint64 *recipient_ptr = l->data;
+			DiscordUser *recipient = discord_get_user(da, *recipient_ptr);
+
+			if (purple_strequal(recipient->name, who))
+				return discord_create_fullname(recipient);
+		}
+
+		/* Oh well. We tried */
+		goto bail;
+	}
 
 	if (!guild) {
 		goto bail;
