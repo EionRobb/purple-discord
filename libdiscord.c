@@ -2229,16 +2229,16 @@ discord_name_group_dm(DiscordAccount *da, DiscordChannel *channel) {
 	for (l = channel->recipients; l != NULL; l = l->next) {
 		guint64 *recipient_ptr = l->data;
 		DiscordUser *recipient = discord_get_user(da, *recipient_ptr);
-		gchar *fullname = discord_create_fullname(recipient);
-		
-		if (fullname != NULL) {
-			g_string_append(name, fullname);
+		gchar *uname = discord_create_nickname(recipient, NULL, channel);
+
+		if (name != NULL) {
+			g_string_append(name, uname);
 
 			if (l->next) {
 				g_string_append(name, ", ");
 			}
-			
-			g_free(fullname);
+
+			g_free(uname);
 		}
 	}
 
