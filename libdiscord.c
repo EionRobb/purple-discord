@@ -128,10 +128,13 @@ typedef struct {
 	guint64 last_message_id;
 	GHashTable *permission_user_overrides;
 	GHashTable *permission_role_overrides;
-	GList *recipients; /* For group DMs */
 	gboolean suppress_everyone;
 	gboolean muted;
 	DiscordNotificationLevel notification_level;
+
+	/* For group DMs */
+	GList *recipients;
+	GHashTable *names; /* Undiscriminated names -> count of that name */
 } DiscordChannel;
 
 typedef struct {
@@ -2319,10 +2322,26 @@ discord_add_group_dms_to_blist(DiscordAccount *da)
 }
 
 static void
+discord_got_group_dm_name(DiscordChannel *channel, DiscordUser *recipient, gboolean joiner)
+{
+	unsigned count = (unsigned) (guintptr) g_hash_table_lookup(channel->names, recipient->name);
+	unsigned updated = joiner ? (count + 1) : (count - 1);
+	assert(updated >= 0);
+
+	g_hash_table_replace(channel->names, g_strdup(recipient->name), (void *) (guintptr) updated);
+}
+
+static void
 discord_got_group_dm(DiscordAccount *da, JsonObject *data)
 {
 	DiscordChannel *channel = discord_new_channel(data);
 	JsonArray *recipients = json_object_get_array_member(data, "recipients");
+
+	/* In order to efficiently strip discriminators, we need to maintain a
+	 * set of names, so we can check in constant-time whether there would
+	 * be a collision */
+
+	channel->names = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, NULL);
 
 	for (int i = json_array_get_length(recipients) - 1; i >= 0; i--) {
 		DiscordUser *recipient =
@@ -2330,6 +2349,8 @@ discord_got_group_dm(DiscordAccount *da, JsonObject *data)
 								json_array_get_object_element(recipients, i));
 
 		channel->recipients = g_list_prepend(channel->recipients, g_memdup(&(recipient->id), sizeof(guint64)));
+
+		discord_got_group_dm_name(channel, recipient, TRUE);
 	}
 
 	g_hash_table_replace_int64(da->group_dms, channel->id, channel);
@@ -2822,11 +2843,19 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		guint64 room_id = to_int(json_object_get_string_member(data, "channel_id"));
 		PurpleChatConversation *chat = purple_conversations_find_chat(da->pc, discord_chat_hash(room_id));
 
-		if (purple_strequal(type, "CHANNEL_RECIPIENT_ADD")) {
+		gboolean joining = purple_strequal(type, "CHANNEL_RECIPIENT_ADD");
+
+		if (joining) {
 			purple_chat_conversation_add_user(chat, name, NULL, PURPLE_CHAT_USER_NONE, TRUE);
 		} else {
 			purple_chat_conversation_remove_user(chat, name, NULL);
 		}
+
+		/* We need to update the nicknames set for group DMs */
+		DiscordChannel *channel = discord_get_channel_global_int(da, room_id);
+
+		if (channel->type == CHANNEL_GROUP_DM)
+			discord_got_group_dm_name(channel, user, joining);
 		
 		g_free(name);
 	} else if (purple_strequal(type, "USER_GUILD_SETTINGS_UPDATE")) {
