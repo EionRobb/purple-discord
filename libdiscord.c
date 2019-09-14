@@ -1688,6 +1688,15 @@ static gchar *
 discord_create_nickname(DiscordUser *author, DiscordGuild *guild, DiscordChannel *channel)
 {
 	if (!guild) {
+		/* For a group DM, try undiscriminated if unambiguous */
+
+		if (channel && channel->type == CHANNEL_GROUP_DM) {
+			unsigned count = (unsigned) (guintptr) g_hash_table_lookup(channel->names, author->name);
+
+			if (count == 1)
+				return g_strdup(author->name);
+		}
+
 		return discord_create_fullname(author);
 	}
 
