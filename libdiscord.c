@@ -1735,14 +1735,14 @@ discord_get_real_name(PurpleConnection *pc, gint id, const char *who)
 
 		DiscordUser *self = discord_get_user(da, da->self_user_id);
 
-		if (purple_strequal(self->name, who))
+		if (self && purple_strequal(self->name, who))
 			return g_strdup(da->self_username);
 
 		for (l = channel->recipients; l != NULL; l = l->next) {
 			guint64 *recipient_ptr = l->data;
 			DiscordUser *recipient = discord_get_user(da, *recipient_ptr);
 
-			if (purple_strequal(recipient->name, who))
+			if (recipient && purple_strequal(recipient->name, who))
 				return discord_create_fullname(recipient);
 		}
 
@@ -2231,7 +2231,7 @@ discord_name_group_dm(DiscordAccount *da, DiscordChannel *channel) {
 		DiscordUser *recipient = discord_get_user(da, *recipient_ptr);
 		gchar *uname = discord_create_nickname(recipient, NULL, channel);
 
-		if (name != NULL) {
+		if (uname != NULL) {
 			g_string_append(name, uname);
 
 			if (l->next) {
@@ -2354,9 +2354,10 @@ discord_add_group_dms_to_blist(DiscordAccount *da)
 static void
 discord_got_group_dm_name(DiscordChannel *channel, DiscordUser *recipient, gboolean joiner)
 {
+	g_return_if_fail(recipient != NULL);
+	
 	unsigned count = (unsigned) (guintptr) g_hash_table_lookup(channel->names, recipient->name);
 	unsigned updated = joiner ? (count + 1) : (count - 1);
-	assert(updated >= 0);
 
 	g_hash_table_replace(channel->names, g_strdup(recipient->name), (void *) (guintptr) updated);
 }
@@ -2875,22 +2876,24 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		PurpleChatConversation *chat = purple_conversations_find_chat(da->pc, discord_chat_hash(room_id));
 
 		DiscordChannel *channel = discord_get_channel_global_int(da, room_id);
-		gchar *name = discord_create_nickname(user, NULL, channel);
+		if (channel != NULL) {
+			gchar *name = discord_create_nickname(user, NULL, channel);
 
-		gboolean joining = purple_strequal(type, "CHANNEL_RECIPIENT_ADD");
+			gboolean joining = purple_strequal(type, "CHANNEL_RECIPIENT_ADD");
 
-		if (joining) {
-			purple_chat_conversation_add_user(chat, name, NULL, PURPLE_CHAT_USER_NONE, TRUE);
-		} else {
-			purple_chat_conversation_remove_user(chat, name, NULL);
+			if (joining) {
+				purple_chat_conversation_add_user(chat, name, NULL, PURPLE_CHAT_USER_NONE, TRUE);
+			} else {
+				purple_chat_conversation_remove_user(chat, name, NULL);
+			}
+
+			/* We need to update the nicknames set for group DMs */
+
+			if (channel->type == CHANNEL_GROUP_DM)
+				discord_got_group_dm_name(channel, user, joining);
+			
+			g_free(name);
 		}
-
-		/* We need to update the nicknames set for group DMs */
-
-		if (channel->type == CHANNEL_GROUP_DM)
-			discord_got_group_dm_name(channel, user, joining);
-		
-		g_free(name);
 	} else if (purple_strequal(type, "USER_GUILD_SETTINGS_UPDATE")) {
 		discord_got_guild_setting(da, data);
 	} else {
