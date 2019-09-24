@@ -2880,6 +2880,35 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 
 		/* TODO: Track role changes */
 		
+	} else if (purple_strequal(type, "GUILD_MEMBER_REMOVE")) {
+		DiscordUser *user = discord_upsert_user(da->new_users, json_object_get_object_member(data, "user"));
+		guint64 guild_id = to_int(json_object_get_string_member(data, "guild_id"));
+		DiscordGuild *guild = discord_get_guild(da, guild_id);
+		const gchar *nickname = g_hash_table_lookup_int64(guild->nicknames, user->id);
+		
+		GHashTableIter iter;
+		gpointer key, value;
+		g_hash_table_iter_init(&iter, guild->channels);
+
+		while (g_hash_table_iter_next(&iter, &key, &value)) {
+			DiscordChannel *channel = value;
+
+			PurpleChatConversation *chat = purple_conversations_find_chat(da->pc, discord_chat_hash(channel->id));
+			if (chat == NULL) {
+				//Skip over closed chats
+				continue;
+			}
+			
+			purple_chat_conversation_remove_user(chat, nickname, NULL);
+			g_hash_table_remove_int64(channel->permission_user_overrides, user->id);
+		}
+		
+		g_hash_table_remove_int64(guild->members, user->id);
+		g_hash_table_remove(guild->nicknames_rev, nickname);
+		g_hash_table_remove_int64(guild->nicknames, user->id);
+		
+		g_hash_table_remove_int64(user->guild_memberships, guild_id);
+		
 	} else if (purple_strequal(type, "CHANNEL_RECIPIENT_ADD") || purple_strequal(type, "CHANNEL_RECIPIENT_REMOVE")) {
 		DiscordUser *user = discord_upsert_user(da->new_users, json_object_get_object_member(data, "user"));
 		guint64 room_id = to_int(json_object_get_string_member(data, "channel_id"));
@@ -3619,7 +3648,7 @@ discord_got_guild_setting(DiscordAccount *da, JsonObject *settings)
 
 		/* Apply overrides */
 		channel->muted = json_object_get_boolean_member(override, "muted");
-		printf("%s: %smute", channel->name, channel->muted ? "" : "un");
+		purple_debug_info("discord", "%s: %smute", channel->name, channel->muted ? "" : "un");
 		DiscordNotificationLevel level = json_object_get_int_member(override, "message_notifications");
 
 		if (level != NOTIFICATIONS_INHERIT)
