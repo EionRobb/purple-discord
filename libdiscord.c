@@ -2440,9 +2440,16 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 						if (purple_chat_conversation_has_user(chat, nickname)) {
 							purple_chat_conversation_remove_user(chat, nickname, NULL);
 						}
+						
 					} else if (!purple_chat_conversation_has_user(chat, nickname)) {
-						PurpleChatUserFlags flags = discord_get_user_flags(da, guild, user);
-						purple_chat_conversation_add_user(chat, nickname, NULL, flags, FALSE);
+						guint64 permission = discord_compute_permission(da, user, channel);
+
+						/* must have READ_MESSAGES */
+						if ((permission & 0x400)) {
+							PurpleChatUserFlags flags = discord_get_user_flags(da, guild, user);
+							purple_chat_conversation_add_user(chat, nickname, NULL, flags, FALSE);
+						}
+						
 					}
 				}
 			}
