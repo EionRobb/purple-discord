@@ -1286,6 +1286,7 @@ static void discord_got_guilds(DiscordAccount *da, JsonNode *node, gpointer user
 static void discord_got_avatar(DiscordAccount *da, JsonNode *node, gpointer user_data);
 static void discord_get_avatar(DiscordAccount *da, DiscordUser *user, gboolean is_buddy);
 static void discord_buddy_guild(DiscordAccount *da, DiscordGuild *guild);
+static void discord_guild_get_offline_users(DiscordAccount *da, const gchar *guild_id);
 
 static const gchar *discord_normalise_room_name(const gchar *guild_name, const gchar *name);
 static guint64 discord_compute_permission(DiscordAccount *da, DiscordUser *user, DiscordChannel *channel);
@@ -2732,17 +2733,19 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		discord_add_group_dms_to_blist(da);
 		
 	} else if (purple_strequal(type, "GUILD_SYNC") || purple_strequal(type, "GUILD_CREATE") || purple_strequal(type, "GUILD_MEMBERS_CHUNK")) {
+		const gchar *guild_id_str = json_object_get_string_member(data, "id");
+		if (!guild_id_str || !*guild_id_str) {
+			guild_id_str = json_object_get_string_member(data, "guild_id");
+		}
+		
 		if (purple_strequal(type, "GUILD_CREATE")) {
 			discord_populate_guild(da, data);
+			discord_guild_get_offline_users(da, guild_id_str);
 		}
 
 		JsonArray *presences = json_object_get_array_member(data, "presences");
 		JsonArray *members = json_object_get_array_member(data, "members");
-		guint64 guild_id = to_int(json_object_get_string_member(data, "id"));
-
-		if (guild_id == 0) {
-			guild_id = to_int(json_object_get_string_member(data, "guild_id"));
-		}
+		guint64 guild_id = to_int(guild_id_str);
 
 		DiscordGuild *guild = discord_get_guild(da, guild_id);
 
@@ -3456,6 +3459,27 @@ discord_populate_guild(DiscordAccount *da, JsonObject *guild)
 }
 
 static void
+discord_guild_get_offline_users(DiscordAccount *da, const gchar *guild_id)
+{
+	JsonObject *obj;
+	JsonObject *d;
+			
+	// Try to request all offline users in this guild
+	d = json_object_new();
+	json_object_set_string_member(d, "guild_id", guild_id);
+	json_object_set_string_member(d, "query", "");
+	json_object_set_int_member(d, "limit", 0);
+	
+	obj = json_object_new();
+	json_object_set_int_member(obj, "op", 8);
+	json_object_set_object_member(obj, "d", d);
+	
+	discord_socket_write_json(da, obj);
+
+	json_object_unref(obj);
+}
+
+static void
 discord_got_guilds(DiscordAccount *da, JsonNode *node, gpointer user_data)
 {
 	JsonArray *guilds = json_node_get_array(node);
@@ -3469,23 +3493,9 @@ discord_got_guilds(DiscordAccount *da, JsonNode *node, gpointer user_data)
 		discord_populate_guild(da, guild);
 		
 		if (guild_id != NULL) {
-			JsonObject *d;
-			
 			json_array_add_string_element(guild_ids, guild_id);
 			
-			// Try to request all offline users in this guild
-			d = json_object_new();
-			json_object_set_string_member(d, "guild_id", guild_id);
-			json_object_set_string_member(d, "query", "");
-			json_object_set_int_member(d, "limit", 0);
-			
-			obj = json_object_new();
-			json_object_set_int_member(obj, "op", 8);
-			json_object_set_object_member(obj, "d", d);
-			
-			discord_socket_write_json(da, obj);
-
-			json_object_unref(obj);
+			discord_guild_get_offline_users(da, guild_id);
 		}
 	}
 
