@@ -2825,6 +2825,10 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 						users = g_list_prepend(users, nickname);
 						flags = g_list_prepend(flags, GINT_TO_POINTER(cbflags));
 					}
+					
+					if (user->id == da->self_user_id) {
+						purple_chat_conversation_set_nick(chat, nickname);
+					}
 				}
 			}
 			
