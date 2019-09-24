@@ -4798,12 +4798,14 @@ discord_got_channel_info(DiscordAccount *da, JsonNode *node, gpointer user_data)
 
 		// Add self
 		DiscordUser *self = discord_get_user(da, da->self_user_id);
-		users = g_list_prepend(users, discord_create_nickname(self, NULL, chan));
+		gchar *self_name = discord_create_nickname(self, NULL, chan);
+		users = g_list_prepend(users, self_name);
 		flags = g_list_prepend(flags, PURPLE_CHAT_USER_NONE);
 
 		purple_chat_conversation_clear_users(chatconv);
 		purple_chat_conversation_add_users(chatconv, users, NULL, flags, FALSE);
-
+		purple_chat_conversation_set_nick(chatconv, self_name);
+		
 		while (users != NULL) {
 			g_free(users->data);
 			users = g_list_delete_link(users, users);
@@ -4852,6 +4854,11 @@ discord_got_channel_info(DiscordAccount *da, JsonNode *node, gpointer user_data)
 				purple_chat_conversation_clear_users(chat);
 				purple_chat_conversation_add_users(chat, users, NULL, flags, FALSE);
 			}
+			
+			DiscordUser *self = discord_get_user(da, da->self_user_id);
+			gchar *self_name = discord_create_nickname(self, guild, chan);
+			purple_chat_conversation_set_nick(chatconv, self_name);
+			g_free(self_name);
 
 			while (users != NULL) {
 				g_free(users->data);
