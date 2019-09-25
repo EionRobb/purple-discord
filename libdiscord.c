@@ -2845,6 +2845,9 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 
 
 		discord_print_users(da->new_users);
+	} else if (purple_strequal(type, "GUILD_DELETE")) {
+		
+		
 	} else if (purple_strequal(type, "GUILD_MEMBER_ADD")) {
 		JsonObject *userdata = json_object_get_object_member(data, "user");
 		DiscordUser *user = discord_upsert_user(da->new_users, userdata);
@@ -2918,14 +2921,17 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		guint64 room_id = to_int(json_object_get_string_member(data, "channel_id"));
 		PurpleChatConversation *chat = purple_conversations_find_chat(da->pc, discord_chat_hash(room_id));
 
-		DiscordChannel *channel = discord_get_channel_global_int(da, room_id);
+		DiscordGuild *guild = NULL;
+		DiscordChannel *channel = discord_get_channel_global_int_guild(da, room_id, &guild);
+		
 		if (channel != NULL) {
-			gchar *name = discord_create_nickname(user, NULL, channel);
+			gchar *name = discord_create_nickname(user, guild, channel);
 
 			gboolean joining = purple_strequal(type, "CHANNEL_RECIPIENT_ADD");
 
 			if (joining) {
-				purple_chat_conversation_add_user(chat, name, NULL, PURPLE_CHAT_USER_NONE, TRUE);
+				PurpleChatUserFlags cbflags = discord_get_user_flags(da, guild, user);
+				purple_chat_conversation_add_user(chat, name, NULL, cbflags, TRUE);
 			} else {
 				purple_chat_conversation_remove_user(chat, name, NULL);
 			}
@@ -2937,6 +2943,7 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 			
 			g_free(name);
 		}
+		
 	} else if (purple_strequal(type, "USER_GUILD_SETTINGS_UPDATE")) {
 		discord_got_guild_setting(da, data);
 	} else {
