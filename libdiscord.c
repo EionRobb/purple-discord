@@ -2448,6 +2448,10 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 
 						/* must have READ_MESSAGES */
 						if ((permission & 0x400)) {
+							if (user->id == da->self_user_id) {
+								purple_chat_conversation_set_nick(chat, nickname);
+							}
+
 							PurpleChatUserFlags flags = discord_get_user_flags(da, guild, user);
 							purple_chat_conversation_add_user(chat, nickname, NULL, flags, FALSE);
 						}
@@ -2943,12 +2947,14 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 				
 				guint64 permission = discord_compute_permission(da, user, channel);
 				if ((permission & 0x400)) {
+					if (user->id == da->self_user_id) {
+						purple_chat_conversation_set_nick(chat, nickname);
+					}
 					purple_chat_conversation_add_user(chat, nickname, NULL, cbflags, FALSE);
 				}
 			}
 			g_free(nickname);
 			
-			//TODO check if this is ourselves that's getting updated and set our chat nick
 			//TODO check if this is ourselves that's getting updated and remove channels from the buddy list
 		}
 		
@@ -3005,6 +3011,9 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 			gboolean joining = purple_strequal(type, "CHANNEL_RECIPIENT_ADD");
 
 			if (joining) {
+				if (user->id == da->self_user_id) {
+					purple_chat_conversation_set_nick(chat, name);
+				}
 				PurpleChatUserFlags cbflags = discord_get_user_flags(da, guild, user);
 				purple_chat_conversation_add_user(chat, name, NULL, cbflags, TRUE);
 			} else {
@@ -4923,10 +4932,10 @@ discord_got_channel_info(DiscordAccount *da, JsonNode *node, gpointer user_data)
 		gchar *self_name = discord_create_nickname(self, NULL, chan);
 		users = g_list_prepend(users, self_name);
 		flags = g_list_prepend(flags, PURPLE_CHAT_USER_NONE);
-
+		purple_chat_conversation_set_nick(chatconv, self_name);
+		
 		purple_chat_conversation_clear_users(chatconv);
 		purple_chat_conversation_add_users(chatconv, users, NULL, flags, FALSE);
-		purple_chat_conversation_set_nick(chatconv, self_name);
 		
 		while (users != NULL) {
 			g_free(users->data);
@@ -4962,6 +4971,10 @@ discord_got_channel_info(DiscordAccount *da, JsonNode *node, gpointer user_data)
 					gchar *nickname = discord_create_nickname(user, guild, chan);
 
 					if (nickname != NULL) {
+						if (uid == da->self_user_id) {
+							purple_chat_conversation_set_nick(chatconv, nickname);
+						}
+						
 						if (user->status != USER_OFFLINE) {
 							users = g_list_prepend(users, nickname);
 							flags = g_list_prepend(flags, GINT_TO_POINTER(cbflags));
@@ -4975,16 +4988,11 @@ discord_got_channel_info(DiscordAccount *da, JsonNode *node, gpointer user_data)
 			if (users != NULL) {
 				purple_chat_conversation_clear_users(chat);
 				purple_chat_conversation_add_users(chat, users, NULL, flags, FALSE);
-			}
-			
-			DiscordUser *self = discord_get_user(da, da->self_user_id);
-			gchar *self_name = discord_create_nickname(self, guild, chan);
-			purple_chat_conversation_set_nick(chatconv, self_name);
-			g_free(self_name);
-
-			while (users != NULL) {
-				g_free(users->data);
-				users = g_list_delete_link(users, users);
+				
+				while (users != NULL) {
+					g_free(users->data);
+					users = g_list_delete_link(users, users);
+				}
 			}
 
 			g_list_free(flags);
