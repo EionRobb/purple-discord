@@ -2922,33 +2922,46 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 				}
 			}
 			g_free(nickname);
+			
+			//TODO check if this is ourselves that's getting updated and set our chat nick
+			//TODO check if this is ourselves that's getting updated and remove channels from the buddy list
 		}
 		
 	} else if (purple_strequal(type, "GUILD_MEMBER_REMOVE")) {
 		DiscordUser *user = discord_upsert_user(da->new_users, json_object_get_object_member(data, "user"));
 		guint64 guild_id = to_int(json_object_get_string_member(data, "guild_id"));
 		DiscordGuild *guild = discord_get_guild(da, guild_id);
+		
+		if (!guild) {
+			purple_debug_error("discord", "Unknown guild %" G_GUINT64_FORMAT "\n", guild_id);
+			return;
+		}
+		
 		const gchar *nickname = g_hash_table_lookup_int64(guild->nicknames, user->id);
 		
-		GHashTableIter iter;
-		gpointer key, value;
-		g_hash_table_iter_init(&iter, guild->channels);
+		if (nickname != NULL) {
+		
+			GHashTableIter iter;
+			gpointer key, value;
+			g_hash_table_iter_init(&iter, guild->channels);
 
-		while (g_hash_table_iter_next(&iter, &key, &value)) {
-			DiscordChannel *channel = value;
+			while (g_hash_table_iter_next(&iter, &key, &value)) {
+				DiscordChannel *channel = value;
 
-			PurpleChatConversation *chat = purple_conversations_find_chat(da->pc, discord_chat_hash(channel->id));
-			if (chat == NULL) {
-				//Skip over closed chats
-				continue;
+				PurpleChatConversation *chat = purple_conversations_find_chat(da->pc, discord_chat_hash(channel->id));
+				if (chat == NULL) {
+					//Skip over closed chats
+					continue;
+				}
+				
+				purple_chat_conversation_remove_user(chat, nickname, NULL);
+				g_hash_table_remove_int64(channel->permission_user_overrides, user->id);
 			}
 			
-			purple_chat_conversation_remove_user(chat, nickname, NULL);
-			g_hash_table_remove_int64(channel->permission_user_overrides, user->id);
+			g_hash_table_remove(guild->nicknames_rev, nickname);
 		}
 		
 		g_hash_table_remove_int64(guild->members, user->id);
-		g_hash_table_remove(guild->nicknames_rev, nickname);
 		g_hash_table_remove_int64(guild->nicknames, user->id);
 		
 		g_hash_table_remove_int64(user->guild_memberships, guild_id);
