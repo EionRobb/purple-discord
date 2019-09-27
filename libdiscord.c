@@ -2776,8 +2776,8 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 			g_free(discord_alloc_nickname(u, guild, membership->nick));
 
 			JsonArray *roles = json_object_get_array_member(member, "roles");
-
-			for (int k = json_array_get_length(roles) - 1; k >= 0; k--) {
+			int roles_len = json_array_get_length(roles);
+			for (int k = 0; k < roles_len; k++) {
 				guint64 role = to_int(json_array_get_string_element(roles, k));
 				g_array_append_val(membership->roles, role);
 			}
@@ -2868,8 +2868,8 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		g_free(discord_alloc_nickname(user, guild, membership->nick));
 
 		JsonArray *roles = json_object_get_array_member(data, "roles");
-
-		for (int k = json_array_get_length(roles) - 1; k >= 0; k--) {
+		int roles_len = json_array_get_length(roles);
+		for (int k = 0; k < roles_len; k++) {
 			guint64 role = to_int(json_array_get_string_element(roles, k));
 			g_array_append_val(membership->roles, role);
 		}
@@ -2888,12 +2888,14 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 			}
 
 			DiscordGuildMembership *guild_membership = g_hash_table_lookup_int64(user->guild_memberships, guild_id);
-			g_array_set_size(guild_membership->roles, 0);
-			JsonArray *roles = json_object_get_array_member(data, "roles");
-
-			for (int k = json_array_get_length(roles) - 1; k >= 0; k--) {
-				guint64 role = to_int(json_array_get_string_element(roles, k));
-				g_array_append_val(guild_membership->roles, role);
+			if (guild_membership != NULL) {
+				g_array_set_size(guild_membership->roles, 0);
+				JsonArray *roles = json_object_get_array_member(data, "roles");
+				int roles_len = json_array_get_length(roles);
+				for (int k = 0; k < roles_len; k++) {
+					guint64 role = to_int(json_array_get_string_element(roles, k));
+					g_array_append_val(guild_membership->roles, role);
+				}
 			}
 			
 			//Refresh the user list of all open chats
