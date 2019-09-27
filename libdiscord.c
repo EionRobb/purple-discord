@@ -2848,7 +2848,32 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 
 		discord_print_users(da->new_users);
 	} else if (purple_strequal(type, "GUILD_DELETE")) {
+		guint64 guild_id = to_int(json_object_get_string_member(data, "guild_id"));
+		DiscordGuild *guild = discord_get_guild(da, guild_id);
 		
+		if (!guild) {
+			purple_debug_error("discord", "Unknown guild %" G_GUINT64_FORMAT "\n", guild_id);
+			return;
+		}
+		
+		GHashTableIter iter;
+		gpointer key, value;
+		g_hash_table_iter_init(&iter, guild->channels);
+
+		while (g_hash_table_iter_next(&iter, &key, &value)) {
+			DiscordChannel *channel = value;
+
+			PurpleChatConversation *chat = purple_conversations_find_chat(da->pc, discord_chat_hash(channel->id));
+			if (chat == NULL) {
+				//Skip over closed chats
+				continue;
+			}
+			
+			purple_serv_got_chat_left(da->pc, discord_chat_hash(channel->id));
+		}
+		
+		g_hash_table_remove_int64(da->new_guilds, guild_id);
+		//TODO remove this guild's channels from the buddy list
 		
 	} else if (purple_strequal(type, "GUILD_MEMBER_ADD")) {
 		JsonObject *userdata = json_object_get_object_member(data, "user");
