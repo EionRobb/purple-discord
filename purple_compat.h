@@ -64,6 +64,7 @@
 #define PURPLE_CHAT_CONVERSATION(conv) PURPLE_CONV_CHAT(conv)
 #define purple_conversation_present_error purple_conv_present_error
 #define purple_serv_got_joined_chat(pc, id, name) PURPLE_CONV_CHAT(serv_got_joined_chat(pc, id, name))
+#define purple_serv_got_chat_left serv_got_chat_left
 static inline PurpleConvChat *
 purple_conversations_find_chat(PurpleConnection *pc, int id)
 {
