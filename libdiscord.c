@@ -4582,7 +4582,7 @@ discord_chat_invite(PurpleConnection *pc, int id, const char *message, const cha
 }
 
 static void
-discord_chat_nick(PurpleConnection *pc, int id, gchar *new_nick)
+discord_chat_nick(PurpleConnection *pc, int id, const gchar *new_nick)
 {
 	PurpleChatConversation *chatconv;
 	/* TODO check source */
@@ -4614,6 +4614,92 @@ discord_chat_nick(PurpleConnection *pc, int id, gchar *new_nick)
 		/* Propagate locally as well */
 		const gchar *old_nick = g_hash_table_lookup_int64(guild->nicknames, da->self_user_id);
 		discord_got_nick_change(da, discord_get_user(da, da->self_user_id), guild, new_nick, old_nick, TRUE);
+	}
+}
+
+static void
+discord_chat_kick_username(PurpleConnection *pc, int id, const gchar *username)
+{
+	PurpleChatConversation *chatconv;
+	/* TODO check source */
+	chatconv = purple_conversations_find_chat(pc, id);
+	guint64 room_id = *(guint64 *) purple_conversation_get_data(PURPLE_CONVERSATION(chatconv), "id");
+
+	if (!room_id) {
+		room_id = to_int(purple_conversation_get_name(PURPLE_CONVERSATION(chatconv)));
+	}
+
+	DiscordAccount *da = purple_connection_get_protocol_data(pc);
+
+	DiscordGuild *guild = NULL;
+	discord_get_channel_global_int_guild(da, room_id, &guild);
+
+	if (guild != NULL) {
+		DiscordUser *user = discord_get_user_fullname(da, username);
+		guint64 user_id = 0;
+		
+		if (user != NULL) {
+			user_id = user->id;
+		} else {
+			guint64 *uid = g_hash_table_lookup(guild->nicknames_rev, username);
+
+			if (uid) {
+				user_id = *uid;
+			}
+		}
+		
+		if (user_id) {
+			gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/v6/guilds/%" G_GUINT64_FORMAT "/members/%" G_GUINT64_FORMAT, guild->id, user_id);
+			discord_fetch_url_with_method(da, "DELETE", url, NULL, NULL, NULL);
+			g_free(url);
+		}
+	}
+}
+
+static void
+discord_chat_ban_username(PurpleConnection *pc, int id, const gchar *username)
+{
+	PurpleChatConversation *chatconv;
+	/* TODO check source */
+	chatconv = purple_conversations_find_chat(pc, id);
+	guint64 room_id = *(guint64 *) purple_conversation_get_data(PURPLE_CONVERSATION(chatconv), "id");
+
+	if (!room_id) {
+		room_id = to_int(purple_conversation_get_name(PURPLE_CONVERSATION(chatconv)));
+	}
+
+	DiscordAccount *da = purple_connection_get_protocol_data(pc);
+
+	DiscordGuild *guild = NULL;
+	discord_get_channel_global_int_guild(da, room_id, &guild);
+
+	if (guild != NULL) {
+		DiscordUser *user = discord_get_user_fullname(da, username);
+		guint64 user_id = 0;
+		
+		if (user != NULL) {
+			user_id = user->id;
+		} else {
+			guint64 *uid = g_hash_table_lookup(guild->nicknames_rev, username);
+
+			if (uid) {
+				user_id = *uid;
+			}
+		}
+		
+		if (user_id) {
+			JsonObject *data = json_object_new();
+			//json_object_set_string_member(data, "reason", reason);
+			//json_object_set_int_member(data, "delete-message-days", numdays);
+			gchar *postdata = json_object_to_string(data);
+
+			gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/v6/guilds/%" G_GUINT64_FORMAT "/bans/%" G_GUINT64_FORMAT, guild->id, user_id);
+			discord_fetch_url_with_method(da, "PUT", url, postdata, NULL, NULL);
+
+			g_free(url);
+			g_free(postdata);
+			json_object_unref(data);
+		}
 	}
 }
 
@@ -6058,6 +6144,36 @@ discord_cmd_nick(PurpleConversation *conv, const gchar *cmd, gchar **args, gchar
 	return PURPLE_CMD_RET_OK;
 }
 
+static PurpleCmdRet
+discord_cmd_kick(PurpleConversation *conv, const gchar *cmd, gchar **args, gchar **error, gpointer data)
+{
+	PurpleConnection *pc = purple_conversation_get_connection(conv);
+	int id = purple_chat_conversation_get_id(PURPLE_CHAT_CONVERSATION(conv));
+
+	if (pc == NULL || id == -1) {
+		return PURPLE_CMD_RET_FAILED;
+	}
+
+	discord_chat_kick_username(pc, id, args[0]);
+
+	return PURPLE_CMD_RET_OK;
+}
+
+static PurpleCmdRet
+discord_cmd_ban(PurpleConversation *conv, const gchar *cmd, gchar **args, gchar **error, gpointer data)
+{
+	PurpleConnection *pc = purple_conversation_get_connection(conv);
+	int id = purple_chat_conversation_get_id(PURPLE_CHAT_CONVERSATION(conv));
+
+	if (pc == NULL || id == -1) {
+		return PURPLE_CMD_RET_FAILED;
+	}
+
+	discord_chat_ban_username(pc, id, args[0]);
+
+	return PURPLE_CMD_RET_OK;
+}
+
 static gboolean
 plugin_load(PurplePlugin *plugin, GError **error)
 {
@@ -6077,12 +6193,15 @@ plugin_load(PurplePlugin *plugin, GError **error)
 						DISCORD_PLUGIN_ID, discord_cmd_nick,
 						_("nick <new nickname>:  Changes nickname on a server"), NULL);
 
-#if 0
 	purple_cmd_register("kick", "s", PURPLE_CMD_P_PLUGIN, PURPLE_CMD_FLAG_CHAT |
-	PURPLE_CMD_FLAG_PROTOCOL_ONLY | PURPLE_CMD_FLAG_ALLOW_WRONG_ARGS,
-	DISCORD_PLUGIN_ID, discord_slash_command,
-	_("kick <username>:  Remove someone from channel"), NULL);
-#endif
+															PURPLE_CMD_FLAG_PROTOCOL_ONLY | PURPLE_CMD_FLAG_ALLOW_WRONG_ARGS,
+						DISCORD_PLUGIN_ID, discord_cmd_kick,
+						_("kick <username>:  Remove someone from a server"), NULL);
+
+	purple_cmd_register("ban", "s", PURPLE_CMD_P_PLUGIN, PURPLE_CMD_FLAG_CHAT |
+															PURPLE_CMD_FLAG_PROTOCOL_ONLY | PURPLE_CMD_FLAG_ALLOW_WRONG_ARGS,
+						DISCORD_PLUGIN_ID, discord_cmd_ban,
+						_("ban <username>:  Remove someone from a server and prevent them rejoining"), NULL);
 
 	purple_cmd_register("leave", "", PURPLE_CMD_P_PLUGIN, PURPLE_CMD_FLAG_CHAT |
 															PURPLE_CMD_FLAG_PROTOCOL_ONLY | PURPLE_CMD_FLAG_ALLOW_WRONG_ARGS,
