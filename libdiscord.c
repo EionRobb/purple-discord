@@ -3030,6 +3030,16 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		
 	} else if (purple_strequal(type, "USER_GUILD_SETTINGS_UPDATE")) {
 		discord_got_guild_setting(da, data);
+		
+	} else if (purple_strequal(type, "GUILD_ROLE_CREATE")) {
+		guint64 guild_id = to_int(json_object_get_string_member(data, "guild_id"));
+		JsonObject *role = json_object_get_object_member(data, "role");
+		DiscordGuild *guild = discord_get_guild(da, guild_id);
+		
+		if (guild != NULL && role != NULL) {
+			discord_add_guild_role(guild, role);
+		}
+		
 	} else {
 		purple_debug_info("discord", "Unhandled message type '%s'\n", type);
 	}
