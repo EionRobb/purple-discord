@@ -4555,14 +4555,14 @@ discord_chat_pinned(PurpleConnection *pc, int id)
 static void
 discord_chat_invite(PurpleConnection *pc, int id, const char *message, const char *who)
 {
-	DiscordAccount *ya;
+	DiscordAccount *da;
 	guint64 room_id;
 	PurpleChatConversation *chatconv;
 	DiscordUser *user;
 
 	JsonObject *data;
 
-	ya = purple_connection_get_protocol_data(pc);
+	da = purple_connection_get_protocol_data(pc);
 	chatconv = purple_conversations_find_chat(pc, id);
 	guint64 *room_id_ptr = purple_conversation_get_data(PURPLE_CONVERSATION(chatconv), "id");
 
@@ -4571,7 +4571,7 @@ discord_chat_invite(PurpleConnection *pc, int id, const char *message, const cha
 	}
 
 	room_id = *room_id_ptr;
-	user = discord_get_user_fullname(ya, who);
+	user = discord_get_user_fullname(da, who);
 
 	if (!user) {
 		purple_debug_info("discord", "Missing user in invitation for %s", who);
@@ -4584,7 +4584,7 @@ discord_chat_invite(PurpleConnection *pc, int id, const char *message, const cha
 		gchar *postdata = json_object_to_string(data);
 
 		gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/v6/channels/%" G_GUINT64_FORMAT "/recipients/%" G_GUINT64_FORMAT, room_id, user->id);
-		discord_fetch_url_with_method(ya, "PUT", url, postdata, NULL, NULL);
+		discord_fetch_url_with_method(da, "PUT", url, postdata, NULL, NULL);
 		g_free(url);
 
 		g_free(postdata);
@@ -4594,7 +4594,7 @@ discord_chat_invite(PurpleConnection *pc, int id, const char *message, const cha
 		//TODO /channels/{channel.id}/invites
 		//TODO max_age, max_uses, temporary, unique options
 		gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/v6/channels/%" G_GUINT64_FORMAT "/invites", room_id);
-		discord_fetch_url_with_method(ya, "POST", url, "{}", NULL, NULL);
+		discord_fetch_url_with_method(da, "POST", url, "{}", NULL, NULL);
 		g_free(url);
 		
 	}
