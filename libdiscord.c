@@ -4578,16 +4578,26 @@ discord_chat_invite(PurpleConnection *pc, int id, const char *message, const cha
 		return;
 	}
 
-	data = json_object_new();
-	json_object_set_string_member(data, "recipient", from_int(user->id));
-	gchar *postdata = json_object_to_string(data);
+	if (g_hash_table_contains_int64(da->group_dms, id)) {
+		data = json_object_new();
+		json_object_set_string_member(data, "recipient", from_int(user->id));
+		gchar *postdata = json_object_to_string(data);
 
-	gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/v6/channels/%" G_GUINT64_FORMAT "/recipients/%" G_GUINT64_FORMAT, room_id, user->id);
-	discord_fetch_url_with_method(ya, "PUT", url, postdata, NULL, NULL);
-	g_free(url);
+		gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/v6/channels/%" G_GUINT64_FORMAT "/recipients/%" G_GUINT64_FORMAT, room_id, user->id);
+		discord_fetch_url_with_method(ya, "PUT", url, postdata, NULL, NULL);
+		g_free(url);
 
-	g_free(postdata);
-	json_object_unref(data);
+		g_free(postdata);
+		json_object_unref(data);
+		
+	} else {
+		//TODO /channels/{channel.id}/invites
+		//TODO max_age, max_uses, temporary, unique options
+		gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/v6/channels/%" G_GUINT64_FORMAT "/invites", room_id);
+		discord_fetch_url_with_method(ya, "POST", url, "{}", NULL, NULL);
+		g_free(url);
+		
+	}
 
 }
 
