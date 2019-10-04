@@ -3040,6 +3040,20 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 			discord_add_guild_role(guild, role);
 		}
 		
+	} else if (purple_strequal(type, "GUILD_EMOJIS_UPDATE")) {
+		guint64 guild_id = to_int(json_object_get_string_member(data, "guild_id"));
+		DiscordGuild *guild = discord_get_guild(da, guild_id);
+		JsonArray *emojis = json_object_get_array_member(data, "emojis");
+
+		g_hash_table_remove_all(guild->emojis);
+		for (int i = json_array_get_length(emojis) - 1; i >= 0; i--) {
+			JsonObject *emoji = json_array_get_object_element(emojis, i);
+
+			gchar *id = g_strdup(json_object_get_string_member(emoji, "id"));
+			gchar *name = g_strdup(json_object_get_string_member(emoji, "name"));
+			g_hash_table_replace(guild->emojis, name, id);
+		}
+		
 	} else {
 		purple_debug_info("discord", "Unhandled message type '%s'\n", type);
 	}
