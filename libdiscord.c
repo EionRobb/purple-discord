@@ -4699,6 +4699,9 @@ static void
 discord_chat_ban_username(PurpleConnection *pc, int id, const gchar *username)
 {
 	PurpleChatConversation *chatconv;
+	
+	g_return_if_fail(username && *username);
+	
 	/* TODO check source */
 	chatconv = purple_conversations_find_chat(pc, id);
 	guint64 room_id = *(guint64 *) purple_conversation_get_data(PURPLE_CONVERSATION(chatconv), "id");
@@ -4706,6 +4709,8 @@ discord_chat_ban_username(PurpleConnection *pc, int id, const gchar *username)
 	if (!room_id) {
 		room_id = to_int(purple_conversation_get_name(PURPLE_CONVERSATION(chatconv)));
 	}
+	
+	g_return_if_fail(room_id);
 
 	DiscordAccount *da = purple_connection_get_protocol_data(pc);
 
