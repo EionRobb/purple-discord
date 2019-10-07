@@ -90,7 +90,7 @@ Discord doesn't like you trying to connect from remote IP addresses so
 you'll need to grab an auth token from your browsers local storage:
 
 * Chrome: Developer Tools -> Application -> Local Storage -> https://discordapp.com -> token
-* Firefox: Web Developer -> Storage Inspector -> Local Storage -> http://discordapp.com -> token
+* Firefox: Web Developer -> Storage Inspector -> Local Storage -> https://discordapp.com -> token
 
 Bitlbee users can then set the token with `acc eionrobb-discord set token ......`.
 
