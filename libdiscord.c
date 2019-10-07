@@ -4574,8 +4574,6 @@ discord_chat_invite(PurpleConnection *pc, int id, const char *message, const cha
 	PurpleChatConversation *chatconv;
 	DiscordUser *user;
 
-	JsonObject *data;
-
 	da = purple_connection_get_protocol_data(pc);
 	chatconv = purple_conversations_find_chat(pc, id);
 	guint64 *room_id_ptr = purple_conversation_get_data(PURPLE_CONVERSATION(chatconv), "id");
@@ -4593,7 +4591,7 @@ discord_chat_invite(PurpleConnection *pc, int id, const char *message, const cha
 	}
 
 	if (g_hash_table_contains_int64(da->group_dms, id)) {
-		data = json_object_new();
+		JsonObject *data = json_object_new();
 		json_object_set_string_member(data, "recipient", from_int(user->id));
 		gchar *postdata = json_object_to_string(data);
 
