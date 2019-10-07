@@ -3758,7 +3758,7 @@ discord_got_guild_setting(DiscordAccount *da, JsonObject *settings)
 	for (int j = olen - 1; j >= 0; j--) {
 		JsonObject *override = json_array_get_object_element(overrides, j);
 
-		/* Lookup overriden channel */
+		/* Lookup overridden channel */
 		guint64 channel_id = to_int(json_object_get_string_member(override, "channel_id"));
 		DiscordChannel *channel = g_hash_table_lookup_int64(guild->channels, channel_id);
 
