@@ -171,6 +171,7 @@ typedef struct {
 	gchar *avatar;
 	GHashTable *guild_memberships;
 	gboolean bot;
+	gchar *custom_status;
 } DiscordUser;
 
 typedef struct {
@@ -395,6 +396,7 @@ discord_free_user(gpointer data)
 	g_free(user->name);
 	g_free(user->game);
 	g_free(user->avatar);
+	g_free(user->custom_status);
 
 	g_hash_table_unref(user->guild_memberships);
 	g_free(user);
@@ -457,9 +459,12 @@ discord_update_status(DiscordUser *user, JsonObject *json)
 		const gchar *game_id = json_object_get_string_member(game, "id");
 		
 		g_free(user->game);
+		g_free(user->custom_status);
 		if (!purple_strequal(game_id, "custom")) {
 			user->game = g_strdup(game_name);
+			user->custom_status = NULL;
 		} else {
+			user->custom_status = g_strdup(game_name);
 			user->game = NULL;
 		}
 	}
@@ -843,6 +848,7 @@ discord_print_users(GHashTable *users)
 		discord_print_append(1, buffer, row_buffer, "Name: %s", user->name);
 		discord_print_append(1, buffer, row_buffer, "Discriminator: %d", user->discriminator);
 		discord_print_append(1, buffer, row_buffer, "Game: %s", user->game);
+		discord_print_append(1, buffer, row_buffer, "Custom Status: %s", user->custom_status);
 		discord_print_append(1, buffer, row_buffer, "Avatar: %s", user->avatar);
 		discord_print_append(1, buffer, row_buffer, "Status: %d", user->status);
 
@@ -2470,7 +2476,7 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 			
 		} else if (username) {
 			const gchar *status = json_object_get_string_member(data, "status");
-			purple_protocol_got_user_status(da->account, username, status, "message", user->game, NULL);
+			purple_protocol_got_user_status(da->account, username, status, "message", user->game ? user->game : user->custom_status, NULL);
 			purple_protocol_got_user_idle(da->account, username, idle_since ? TRUE : FALSE, 0);
 			
 			// Check avatar updates
@@ -2516,7 +2522,7 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 				}
 				
 				// Change status to the new user
-				purple_protocol_got_user_status(da->account, new_username_full, status, "message", user->game, NULL);
+				purple_protocol_got_user_status(da->account, new_username_full, status, "message", user->game ? user->game : user->custom_status, NULL);
 				purple_protocol_got_user_idle(da->account, new_username_full, idle_since ? TRUE : FALSE, 0);
 				purple_protocol_got_user_status(da->account, username, "offline", NULL);
 				
@@ -3290,11 +3296,16 @@ discord_set_status(PurpleAccount *account, PurpleStatus *status)
 	json_object_set_string_member(data, "status", status_id);
 	
 	if (purple_account_get_bool(account, "use-status-as-custom-status", TRUE)) {
-		JsonObject *custom_status = json_object_new();
 		const gchar *message = purple_status_get_attr_string(status, "message");
 
-		json_object_set_string_member(custom_status, "text", message);
-		json_object_set_object_member(data, "custom_status", custom_status);
+		if (message && *message) {
+			JsonObject *custom_status = json_object_new();
+			json_object_set_string_member(custom_status, "text", message);
+			json_object_set_object_member(data, "custom_status", custom_status);
+			
+		} else {
+			json_object_set_null_member(data, "custom_status");
+		}
 	}
 	
 	postdata = json_object_to_string(data);
@@ -5778,6 +5789,9 @@ discord_got_info(DiscordAccount *da, JsonNode *node, gpointer user_data)
 	if (user->game != NULL) {
 		purple_notify_user_info_add_pair_html(user_info, _("Playing"), user->game);
 	}
+	if (user->custom_status != NULL) {
+		purple_notify_user_info_add_pair_html(user_info, _("Custom Status"), user->custom_status);
+	}
 
 	if (json_array_get_length(connected_accounts)) {
 		purple_notify_user_info_add_section_break(user_info);
@@ -5985,11 +5999,15 @@ discord_status_text(PurpleBuddy *buddy)
 		DiscordAccount *da = purple_connection_get_protocol_data(pc);
 		DiscordUser *user = discord_get_user_fullname(da, purple_buddy_get_name(buddy));
 
-		if (user == NULL || user->game == NULL) {
+		if (user == NULL) {
 			return NULL;
 		}
-
-		return g_markup_printf_escaped(_("Playing %s"), user->game);
+		
+		if (user->game != NULL) {
+			return g_markup_printf_escaped(_("Playing %s"), user->game);
+		} else if (user->custom_status != NULL) {
+			return g_markup_printf_escaped(_("%s"), user->custom_status);
+		}
 	}
 
 	return NULL;

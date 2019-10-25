@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2019-08-05 19:07+1200\n"
+"POT-Creation-Date: 2019-10-26 12:55+1300\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -28,31 +28,10 @@ msgstr ""
 msgid "Group DMs"
 msgstr ""
 
-msgid "Text"
-msgstr ""
-
-msgid "Direct Message"
-msgstr ""
-
-msgid "Voice"
-msgstr ""
-
-msgid "Group DM"
-msgstr ""
-
-msgid "Guild Category"
-msgstr ""
-
-msgid "Unknown"
-msgstr ""
-
 msgid "ID"
 msgstr ""
 
-msgid "Name"
-msgstr ""
-
-msgid "Room Type"
+msgid "Topic"
 msgstr ""
 
 msgid "Cancelled 2FA auth"
@@ -95,6 +74,9 @@ msgid "Couldn't connect to gateway"
 msgstr ""
 
 msgid "No pinned messages"
+msgstr ""
+
+msgid "Name"
 msgstr ""
 
 msgid "Bad channel type"
@@ -143,6 +125,9 @@ msgstr ""
 msgid "Playing"
 msgstr ""
 
+msgid "Custom Status"
+msgstr ""
+
 msgid "Connected Accounts"
 msgstr ""
 
@@ -152,8 +137,18 @@ msgstr ""
 msgid "Invisible"
 msgstr ""
 
+msgid "Unmute"
+msgstr ""
+
+msgid "Mute"
+msgstr ""
+
 #, c-format
 msgid "Playing %s"
+msgstr ""
+
+#, c-format
+msgid "%s"
 msgstr ""
 
 msgid "Email address..."
@@ -174,6 +169,9 @@ msgstr ""
 msgid "Open chat when you are @mention'd"
 msgstr ""
 
+msgid "Auth token"
+msgstr ""
+
 msgid "Join a server"
 msgstr ""
 
@@ -189,7 +187,11 @@ msgstr ""
 msgid "nick <new nickname>:  Changes nickname on a server"
 msgstr ""
 
-msgid "kick <username>:  Remove someone from channel"
+msgid "kick <username>:  Remove someone from a server"
+msgstr ""
+
+msgid ""
+"ban <username>:  Remove someone from a server and prevent them rejoining"
 msgstr ""
 
 msgid "leave:  Leave the channel"
