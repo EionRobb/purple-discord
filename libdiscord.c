@@ -3045,13 +3045,15 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		DiscordGuild *guild = discord_get_guild(da, guild_id);
 		JsonArray *emojis = json_object_get_array_member(data, "emojis");
 
-		g_hash_table_remove_all(guild->emojis);
-		for (int i = json_array_get_length(emojis) - 1; i >= 0; i--) {
-			JsonObject *emoji = json_array_get_object_element(emojis, i);
+		if (guild != NULL) {
+			g_hash_table_remove_all(guild->emojis);
+			for (int i = json_array_get_length(emojis) - 1; i >= 0; i--) {
+				JsonObject *emoji = json_array_get_object_element(emojis, i);
 
-			gchar *id = g_strdup(json_object_get_string_member(emoji, "id"));
-			gchar *name = g_strdup(json_object_get_string_member(emoji, "name"));
-			g_hash_table_replace(guild->emojis, name, id);
+				gchar *id = g_strdup(json_object_get_string_member(emoji, "id"));
+				gchar *name = g_strdup(json_object_get_string_member(emoji, "name"));
+				g_hash_table_replace(guild->emojis, name, id);
+			}
 		}
 		
 	} else {
