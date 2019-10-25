@@ -452,9 +452,16 @@ discord_update_status(DiscordUser *user, JsonObject *json)
 	}
 
 	if (json_object_has_member(json, "game")) {
-		const gchar *game = json_object_get_string_member(json_object_get_object_member(json, "game"), "name");
+		JsonObject *game = json_object_get_object_member(json, "game");
+		const gchar *game_name = json_object_get_string_member(game, "name");
+		const gchar *game_id = json_object_get_string_member(game, "id");
+		
 		g_free(user->game);
-		user->game = g_strdup(game);
+		if (!purple_strequal(game_id, "custom")) {
+			user->game = g_strdup(game_name);
+		} else {
+			user->game = NULL;
+		}
 	}
 }
 
@@ -3281,6 +3288,15 @@ discord_set_status(PurpleAccount *account, PurpleStatus *status)
 
 	data = json_object_new();
 	json_object_set_string_member(data, "status", status_id);
+	
+	if (purple_account_get_bool(account, "use-status-as-custom-status", TRUE)) {
+		JsonObject *custom_status = json_object_new();
+		const gchar *message = purple_status_get_attr_string(status, "message");
+
+		json_object_set_string_member(custom_status, "text", message);
+		json_object_set_object_member(data, "custom_status", custom_status);
+	}
+	
 	postdata = json_object_to_string(data);
 
 	discord_fetch_url_with_method(ya, "PATCH", "https://" DISCORD_API_SERVER "/api/v6/users/@me/settings", postdata, NULL, NULL);
@@ -3509,8 +3525,13 @@ discord_got_presences(DiscordAccount *da, JsonNode *node, gpointer user_data)
 		const gchar *username = json_object_get_string_member(user, "username");
 		const gchar *discriminator = json_object_get_string_member(user, "discriminator");
 		JsonObject *game = json_object_get_object_member(presence, "game");
+		const gchar *game_id = json_object_get_string_member(game, "id");
 		const gchar *game_name = json_object_get_string_member(game, "name");
 		gchar *merged_username = discord_combine_username(username, discriminator);
+
+		if (purple_strequal(game_id, "custom")) {
+			game_name = json_object_get_string_member(game, "state");
+		}
 
 		purple_protocol_got_user_status(da->account, merged_username, status, "message", game_name, NULL);
 		purple_protocol_got_user_idle(da->account, merged_username, purple_strequal(status, "idle"), 0);
