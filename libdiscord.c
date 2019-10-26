@@ -6072,16 +6072,28 @@ discord_tooltip_text(PurpleBuddy *buddy, PurpleNotifyUserInfo *user_info, gboole
 {
 	PurplePresence *presence = purple_buddy_get_presence(buddy);
 	PurpleStatus *status = purple_presence_get_active_status(presence);
-	const gchar *message = purple_status_get_attr_string(status, "message");
 
 	purple_notify_user_info_add_pair_html(user_info, _("Status"), purple_status_get_name(status));
 
-	if (message != NULL) {
-		gchar *escaped = g_markup_printf_escaped("%s", message);
+	PurpleAccount *account = purple_buddy_get_account(buddy);
 
-		purple_notify_user_info_add_pair_html(user_info, _("Playing"), escaped);
-
-		g_free(escaped);
+	if (purple_account_is_connected(account)) {
+		PurpleConnection *pc = purple_account_get_connection(account);
+		DiscordAccount *da = purple_connection_get_protocol_data(pc);
+		DiscordUser *user = discord_get_user_fullname(da, purple_buddy_get_name(buddy));
+		
+		if (user != NULL) {
+			if (user->game != NULL) {
+				gchar *escaped = g_markup_printf_escaped("%s", user->game);
+				purple_notify_user_info_add_pair_html(user_info, _("Playing"), escaped);
+				g_free(escaped);
+			}
+			if (user->custom_status != NULL) {
+				gchar *escaped = g_markup_printf_escaped("%s", user->custom_status);
+				purple_notify_user_info_add_pair_html(user_info, _("Custom Status"), escaped);
+				g_free(escaped);
+			}
+		}
 	}
 }
 
