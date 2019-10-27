@@ -104,6 +104,14 @@ typedef enum {
 	NOTIFICATIONS_INHERIT = 3,
 } DiscordNotificationLevel;
 
+typedef enum {
+	GAME_TYPE_PLAYING = 0,
+	GAME_TYPE_STREAMING = 1,
+	GAME_TYPE_LISTENING = 2,
+	GAME_TYPE_WATCHING = 3,
+	GAME_TYPE_CUSTOM_STATUS = 4,
+} DiscordGameType;
+
 typedef struct {
 	guint64 id;
 	gchar *name;
@@ -3265,6 +3273,7 @@ discord_set_status(PurpleAccount *account, PurpleStatus *status)
 	DiscordAccount *ya = purple_connection_get_protocol_data(pc);
 	const gchar *status_id = purple_status_get_id(status);
 	gchar *postdata;
+	const gchar *message = purple_status_get_attr_string(status, "message");
 
 	JsonObject *obj = json_object_new();
 	JsonObject *data = json_object_new();
@@ -3277,11 +3286,15 @@ discord_set_status(PurpleAccount *account, PurpleStatus *status)
 	json_object_set_string_member(data, "status", status_id);
 	json_object_set_int_member(data, "since", 0);
 
-	if (purple_account_get_bool(account, "use-status-as-game", FALSE)) {
+	if (message && *message) {
 		JsonObject *game = json_object_new();
-		const gchar *message = purple_status_get_attr_string(status, "message");
-
-		json_object_set_int_member(game, "type", 0); /* 0 = Playing, 1 = Streaming */
+		
+		if (purple_account_get_bool(account, "use-status-as-game", FALSE)) {
+			json_object_set_int_member(game, "type", GAME_TYPE_PLAYING);
+		} else if (purple_account_get_bool(account, "use-status-as-custom-status", TRUE)) {
+			json_object_set_int_member(game, "type", GAME_TYPE_CUSTOM_STATUS);
+		}
+		
 		json_object_set_string_member(game, "name", message);
 		json_object_set_object_member(data, "game", game);
 	} else {
@@ -3297,8 +3310,6 @@ discord_set_status(PurpleAccount *account, PurpleStatus *status)
 	json_object_set_string_member(data, "status", status_id);
 	
 	if (purple_account_get_bool(account, "use-status-as-custom-status", TRUE)) {
-		const gchar *message = purple_status_get_attr_string(status, "message");
-
 		if (message && *message) {
 			JsonObject *custom_status = json_object_new();
 			json_object_set_string_member(custom_status, "text", message);
@@ -5881,19 +5892,6 @@ discord_status_types(PurpleAccount *account)
 	GList *types = NULL;
 	PurpleStatusType *status;
 
-	/* We can only set statuses without in-game info */
-	status = purple_status_type_new_full(PURPLE_STATUS_AVAILABLE, "set-online", _("Online"), TRUE, FALSE, FALSE);
-	types = g_list_append(types, status);
-
-	status = purple_status_type_new_full(PURPLE_STATUS_AWAY, "set-idle", _("Idle"), TRUE, FALSE, FALSE);
-	types = g_list_append(types, status);
-
-	status = purple_status_type_new_full(PURPLE_STATUS_UNAVAILABLE, "set-dnd", _("Do Not Disturb"), TRUE, FALSE, FALSE);
-	types = g_list_append(types, status);
-
-	status = purple_status_type_new_full(PURPLE_STATUS_OFFLINE, "set-offline", _("Offline"), TRUE, FALSE, FALSE);
-	types = g_list_append(types, status);
-
 	/* Other people can have an in-game display */
 	status = purple_status_type_new_with_attrs(PURPLE_STATUS_AVAILABLE, "online", _("Online"), TRUE, TRUE, FALSE, "message", _("Playing"), purple_value_new(PURPLE_TYPE_STRING), NULL);
 	types = g_list_append(types, status);
@@ -5907,7 +5905,22 @@ discord_status_types(PurpleAccount *account)
 	status = purple_status_type_new_full(PURPLE_STATUS_INVISIBLE, "set-invisible", _("Invisible"), TRUE, TRUE, FALSE);
 	types = g_list_append(types, status);
 
-	status = purple_status_type_new_with_attrs(PURPLE_STATUS_OFFLINE, "offline", _("Offline"), TRUE, TRUE, FALSE, "message", _("Playing"), purple_value_new(PURPLE_TYPE_STRING), NULL);
+	status = purple_status_type_new_with_attrs(PURPLE_STATUS_OFFLINE, "offline", _("Offline"), TRUE, FALSE, FALSE, "message", _("Playing"), purple_value_new(PURPLE_TYPE_STRING), NULL);
+	types = g_list_append(types, status);
+
+
+
+	// Legacy statuses - add last for backwards compat, without the UI trying to use them
+	status = purple_status_type_new_full(PURPLE_STATUS_AVAILABLE, "set-online", _("Online"), TRUE, FALSE, FALSE);
+	types = g_list_append(types, status);
+
+	status = purple_status_type_new_full(PURPLE_STATUS_AWAY, "set-idle", _("Idle"), TRUE, FALSE, FALSE);
+	types = g_list_append(types, status);
+
+	status = purple_status_type_new_full(PURPLE_STATUS_UNAVAILABLE, "set-dnd", _("Do Not Disturb"), TRUE, FALSE, FALSE);
+	types = g_list_append(types, status);
+
+	status = purple_status_type_new_full(PURPLE_STATUS_OFFLINE, "set-offline", _("Offline"), TRUE, TRUE, FALSE);
 	types = g_list_append(types, status);
 
 	return types;
