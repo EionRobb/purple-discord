@@ -3291,11 +3291,13 @@ discord_set_status(PurpleAccount *account, PurpleStatus *status)
 		
 		if (purple_account_get_bool(account, "use-status-as-game", FALSE)) {
 			json_object_set_int_member(game, "type", GAME_TYPE_PLAYING);
+			json_object_set_string_member(game, "name", message);
 		} else if (purple_account_get_bool(account, "use-status-as-custom-status", TRUE)) {
 			json_object_set_int_member(game, "type", GAME_TYPE_CUSTOM_STATUS);
+			json_object_set_string_member(game, "name", "Custom Status");
+			json_object_set_string_member(game, "state", message);
 		}
 		
-		json_object_set_string_member(game, "name", message);
 		json_object_set_object_member(data, "game", game);
 	} else {
 		json_object_set_null_member(data, "game");
