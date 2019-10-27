@@ -455,16 +455,17 @@ discord_update_status(DiscordUser *user, JsonObject *json)
 
 	if (json_object_has_member(json, "game")) {
 		JsonObject *game = json_object_get_object_member(json, "game");
-		const gchar *game_name = json_object_get_string_member(game, "name");
 		const gchar *game_id = json_object_get_string_member(game, "id");
 		
 		g_free(user->game);
 		g_free(user->custom_status);
 		if (!purple_strequal(game_id, "custom")) {
+			const gchar *game_name = json_object_get_string_member(game, "name");
 			user->game = g_strdup(game_name);
 			user->custom_status = NULL;
 		} else {
-			user->custom_status = g_strdup(game_name);
+			const gchar *state = json_object_get_string_member(game, "state");
+			user->custom_status = g_strdup(state);
 			user->game = NULL;
 		}
 	}
