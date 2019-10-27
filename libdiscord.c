@@ -5879,35 +5879,34 @@ discord_status_types(PurpleAccount *account)
 {
 	GList *types = NULL;
 	PurpleStatusType *status;
-	gboolean use_status_as_game = purple_account_get_bool(account, "use-status-as-game", FALSE);
 
 	/* We can only set statuses without in-game info */
-	status = purple_status_type_new_full(PURPLE_STATUS_AVAILABLE, "set-online", _("Online"), TRUE, !use_status_as_game, FALSE);
+	status = purple_status_type_new_full(PURPLE_STATUS_AVAILABLE, "set-online", _("Online"), TRUE, FALSE, FALSE);
 	types = g_list_append(types, status);
 
-	status = purple_status_type_new_full(PURPLE_STATUS_AWAY, "set-idle", _("Idle"), TRUE, !use_status_as_game, FALSE);
+	status = purple_status_type_new_full(PURPLE_STATUS_AWAY, "set-idle", _("Idle"), TRUE, FALSE, FALSE);
 	types = g_list_append(types, status);
 
-	status = purple_status_type_new_full(PURPLE_STATUS_UNAVAILABLE, "set-dnd", _("Do Not Disturb"), TRUE, !use_status_as_game, FALSE);
+	status = purple_status_type_new_full(PURPLE_STATUS_UNAVAILABLE, "set-dnd", _("Do Not Disturb"), TRUE, FALSE, FALSE);
+	types = g_list_append(types, status);
+
+	status = purple_status_type_new_full(PURPLE_STATUS_OFFLINE, "set-offline", _("Offline"), TRUE, FALSE, FALSE);
+	types = g_list_append(types, status);
+
+	/* Other people can have an in-game display */
+	status = purple_status_type_new_with_attrs(PURPLE_STATUS_AVAILABLE, "online", _("Online"), TRUE, TRUE, FALSE, "message", _("Playing"), purple_value_new(PURPLE_TYPE_STRING), NULL);
+	types = g_list_append(types, status);
+
+	status = purple_status_type_new_with_attrs(PURPLE_STATUS_AWAY, "idle", _("Idle"), TRUE, TRUE, FALSE, "message", _("Playing"), purple_value_new(PURPLE_TYPE_STRING), NULL);
+	types = g_list_append(types, status);
+
+	status = purple_status_type_new_with_attrs(PURPLE_STATUS_UNAVAILABLE, "dnd", _("Do Not Disturb"), TRUE, TRUE, FALSE, "message", _("Playing"), purple_value_new(PURPLE_TYPE_STRING), NULL);
 	types = g_list_append(types, status);
 
 	status = purple_status_type_new_full(PURPLE_STATUS_INVISIBLE, "set-invisible", _("Invisible"), TRUE, TRUE, FALSE);
 	types = g_list_append(types, status);
 
-	status = purple_status_type_new_full(PURPLE_STATUS_OFFLINE, "set-offline", _("Offline"), TRUE, TRUE, FALSE);
-	types = g_list_append(types, status);
-
-	/* Other people can have an in-game display */
-	status = purple_status_type_new_with_attrs(PURPLE_STATUS_AVAILABLE, "online", _("Online"), TRUE, use_status_as_game, FALSE, "message", _("Playing"), purple_value_new(PURPLE_TYPE_STRING), NULL);
-	types = g_list_append(types, status);
-
-	status = purple_status_type_new_with_attrs(PURPLE_STATUS_AWAY, "idle", _("Idle"), TRUE, use_status_as_game, FALSE, "message", _("Playing"), purple_value_new(PURPLE_TYPE_STRING), NULL);
-	types = g_list_append(types, status);
-
-	status = purple_status_type_new_with_attrs(PURPLE_STATUS_UNAVAILABLE, "dnd", _("Do Not Disturb"), TRUE, use_status_as_game, FALSE, "message", _("Playing"), purple_value_new(PURPLE_TYPE_STRING), NULL);
-	types = g_list_append(types, status);
-
-	status = purple_status_type_new_with_attrs(PURPLE_STATUS_OFFLINE, "offline", _("Offline"), TRUE, FALSE, FALSE, "message", _("Playing"), purple_value_new(PURPLE_TYPE_STRING), NULL);
+	status = purple_status_type_new_with_attrs(PURPLE_STATUS_OFFLINE, "offline", _("Offline"), TRUE, TRUE, FALSE, "message", _("Playing"), purple_value_new(PURPLE_TYPE_STRING), NULL);
 	types = g_list_append(types, status);
 
 	return types;
