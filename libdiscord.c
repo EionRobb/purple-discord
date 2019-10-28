@@ -5026,15 +5026,6 @@ discord_permission_role(DiscordGuild *guild, guint64 r, guint64 permission)
 }
 
 static guint64
-discord_permission_role_override(DiscordChannel *channel, guint64 role, guint64 permission)
-{
-	DiscordPermissionOverride *ro =
-	  g_hash_table_lookup_int64(channel->permission_role_overrides, role);
-
-	return ro ? ((permission & ~(ro->deny)) | ro->allow) : permission;
-}
-
-static guint64
 discord_compute_permission(DiscordAccount *da, DiscordUser *user, DiscordChannel *channel)
 {
 	g_return_val_if_fail(channel && user, 0);
@@ -5048,7 +5039,11 @@ discord_compute_permission(DiscordAccount *da, DiscordUser *user, DiscordChannel
 		/* Should always exist, but just in case... */
 
 		DiscordGuild *guild = discord_get_guild(da, channel->guild_id);
+		
+		if (guild && user->id == guild->owner)
+			return G_MAXUINT64; // All permissions for the server owner
 
+		// Calculate the server permissions
 		/* @everyone */
 		permissions = discord_permission_role(guild, channel->guild_id, permissions);
 
@@ -5056,13 +5051,32 @@ discord_compute_permission(DiscordAccount *da, DiscordUser *user, DiscordChannel
 			guint64 r = g_array_index(guild_membership->roles, guint64, i);
 			permissions = discord_permission_role(guild, r, permissions);
 		}
+		
+		if (permissions & 0x8)
+			return G_MAXUINT64; // All permissions for admins
 
-		permissions = discord_permission_role_override(channel, channel->guild_id, permissions);
-
+		// Calculate the channel permissions
+		
+		// @everyone
+		DiscordPermissionOverride *ro = g_hash_table_lookup_int64(channel->permission_role_overrides, channel->guild_id);
+		if (ro != NULL) {
+			permissions = ((permissions & ~(ro->deny)) | ro->allow);
+		}
+		
+		guint64 channel_deny = 0;
+		guint64 channel_allow = 0;
+		
 		for (guint i = 0; i < guild_membership->roles->len; i++) {
 			guint64 role = g_array_index(guild_membership->roles, guint64, i);
-			permissions = discord_permission_role_override(channel, role, permissions);
+			
+			ro = g_hash_table_lookup_int64(channel->permission_role_overrides, role);
+			if (ro != NULL) {
+				channel_deny |= ro->deny;
+				channel_allow |= ro->allow;
+			}
 		}
+		
+		permissions = ((permissions & ~(channel_deny)) | channel_allow);
 	}
 
 	/* Check special permission overrides just for us */
