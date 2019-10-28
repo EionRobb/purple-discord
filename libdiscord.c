@@ -886,6 +886,26 @@ discord_print_users(GHashTable *users)
 }
 
 PurpleChatUserFlags
+discord_get_user_flags_from_permissions(DiscordUser *user, guint64 permissions)
+{
+	if (permissions & 0x8) { // Admin
+		return PURPLE_CHAT_USER_OP;
+	}
+	if (permissions & (0x2 | 0x4)) { // Ban or Kick
+		return PURPLE_CHAT_USER_HALFOP;
+	}
+	
+	if (user == NULL) {
+		return PURPLE_CHAT_USER_NONE;
+	}
+	if (user->bot) {
+		return PURPLE_CHAT_USER_VOICE;
+	}
+	
+	return PURPLE_CHAT_USER_NONE;
+}
+
+PurpleChatUserFlags
 discord_get_user_flags(DiscordAccount *da, DiscordGuild *guild, DiscordUser *user)
 {
 	if (user == NULL) {
@@ -2474,8 +2494,8 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 								purple_chat_conversation_set_nick(chat, nickname);
 							}
 
-							PurpleChatUserFlags flags = discord_get_user_flags(da, guild, user);
-							purple_chat_conversation_add_user(chat, nickname, NULL, flags, FALSE);
+							PurpleChatUserFlags cbflags = discord_get_user_flags_from_permissions(user, permission);
+							purple_chat_conversation_add_user(chat, nickname, NULL, cbflags, FALSE);
 						}
 						
 					}
@@ -2846,7 +2866,7 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 
 				/* must have READ_MESSAGES */
 				if ((permission & 0x400)) {
-					PurpleChatUserFlags cbflags = discord_get_user_flags(da, guild, user);
+					PurpleChatUserFlags cbflags = discord_get_user_flags_from_permissions(user, permission);
 					gchar *nickname = discord_create_nickname(user, guild, channel);
 					
 					if (nickname != NULL) {
@@ -2950,7 +2970,6 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 			}
 			
 			//Refresh the user list of all open chats
-			PurpleChatUserFlags cbflags = discord_get_user_flags(da, guild, user);
 			GHashTableIter iter;
 			gpointer key, value;
 			g_hash_table_iter_init(&iter, guild->channels);
@@ -2972,6 +2991,8 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 					if (user->id == da->self_user_id) {
 						purple_chat_conversation_set_nick(chat, nickname);
 					}
+					
+					PurpleChatUserFlags cbflags = discord_get_user_flags_from_permissions(user, permission);
 					purple_chat_conversation_add_user(chat, nickname, NULL, cbflags, FALSE);
 				}
 			}
@@ -5143,7 +5164,7 @@ discord_got_channel_info(DiscordAccount *da, JsonNode *node, gpointer user_data)
 
 				/* must have READ_MESSAGES */
 				if ((permission & 0x400)) {
-					PurpleChatUserFlags cbflags = discord_get_user_flags(da, guild, user);
+					PurpleChatUserFlags cbflags = discord_get_user_flags_from_permissions(user, permission);
 					gchar *nickname = discord_create_nickname(user, guild, chan);
 
 					if (nickname != NULL) {
