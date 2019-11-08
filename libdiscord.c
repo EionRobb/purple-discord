@@ -2720,10 +2720,10 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 
 		if (user) {
 			gchar *username = discord_create_fullname(user);
-			gint64 type = json_object_get_int_member(data, "type");
+			gint64 relationship_type = json_object_get_int_member(data, "type");
 			
 			if (username != NULL) {
-				if (type == 2) {
+				if (relationship_type == 2) {
 					/* remove user from blocklist */
 					purple_account_privacy_deny_remove(da->account, username, TRUE);
 					
@@ -5966,9 +5966,9 @@ discord_status_types(PurpleAccount *account)
 /* If a channel is muted, unmute it, or vice verse */
 
 static void
-discord_toggle_mute(PurpleBlistNode *node, gpointer data)
+discord_toggle_mute(PurpleBlistNode *node, gpointer userdata)
 {
-	DiscordAccount *da = (DiscordAccount *) data;
+	DiscordAccount *da = (DiscordAccount *) userdata;
 	PurpleChat *chat = PURPLE_CHAT(node);
 
 	DiscordChannel *channel = discord_channel_from_chat(da, chat);
