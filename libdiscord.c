@@ -1128,7 +1128,7 @@ discord_fetch_url_with_method(DiscordAccount *ya, const gchar *method, const gch
 
 	account = ya->account;
 
-	if (purple_account_is_disconnected(account)) {
+	if (!PURPLE_CONNECTION_IS_VALID(ya->pc) || purple_account_is_disconnected(account)) {
 		return;
 	}
 
