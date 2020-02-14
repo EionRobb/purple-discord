@@ -1285,6 +1285,8 @@ discord_send_auth(DiscordAccount *da)
 		/* TODO real presence */
 		json_object_set_string_member(presence, "status", "online");
 		json_object_set_object_member(data, "presence", presence);
+	
+		json_object_set_boolean_member(data, "guild_subscriptions", TRUE);
 	}
 
 	json_object_set_object_member(obj, "d", data);
@@ -2448,6 +2450,82 @@ discord_got_group_dm(DiscordAccount *da, JsonObject *data)
 }
 
 static void
+discord_handle_guild_member_update(DiscordAccount *da, guint64 guild_id, JsonObject *data) {
+	DiscordUser *user = discord_upsert_user(da->new_users, json_object_get_object_member(data, "user"));
+	DiscordGuild *guild = discord_get_guild(da, guild_id);
+
+	if (guild && user) {
+		discord_update_status(user, json_object_get_object_member(data, "presence"));
+		
+		const gchar *new_nick = json_object_get_string_member(data, "nick");
+		const gchar *old_nick = g_hash_table_lookup_int64(guild->nicknames, user->id);
+
+		if (!purple_strequal(new_nick, old_nick)) {
+			discord_got_nick_change(da, user, guild, new_nick, old_nick, FALSE);
+		}
+
+		DiscordGuildMembership *guild_membership = g_hash_table_lookup_int64(user->guild_memberships, guild_id);
+		if (guild_membership == NULL) {
+			
+			guild_membership = discord_new_guild_membership(guild_id, data);
+			g_hash_table_replace_int64(user->guild_memberships, guild_membership->id, guild_membership);
+			g_hash_table_replace_int64(guild->members, user->id, NULL);
+
+			g_free(discord_alloc_nickname(user, guild, guild_membership->nick));
+		}
+		
+		if (guild_membership != NULL) {
+			g_array_set_size(guild_membership->roles, 0);
+			JsonArray *roles = json_object_get_array_member(data, "roles");
+			int roles_len = json_array_get_length(roles);
+			for (int k = 0; k < roles_len; k++) {
+				guint64 role = to_int(json_array_get_string_element(roles, k));
+				g_array_append_val(guild_membership->roles, role);
+			}
+		}
+		
+		//Refresh the user list of all open chats
+		GHashTableIter iter;
+		gpointer key, value;
+		g_hash_table_iter_init(&iter, guild->channels);
+		gchar *nickname = discord_create_nickname(user, guild, NULL);
+
+		while (g_hash_table_iter_next(&iter, &key, &value)) {
+			DiscordChannel *channel = value;
+
+			PurpleChatConversation *chat = purple_conversations_find_chat(da->pc, discord_chat_hash(channel->id));
+			if (chat == NULL) {
+				//Skip over closed chats
+				continue;
+			}
+			
+			if (user->status == USER_OFFLINE) {
+				if (purple_chat_conversation_has_user(chat, nickname)) {
+					purple_chat_conversation_remove_user(chat, nickname, NULL);
+				}
+				
+			} else if (!purple_chat_conversation_has_user(chat, nickname)) {
+				guint64 permission = discord_compute_permission(da, user, channel);
+
+				/* must have READ_MESSAGES */
+				if ((permission & 0x400)) {
+					if (user->id == da->self_user_id) {
+						purple_chat_conversation_set_nick(chat, nickname);
+					}
+
+					PurpleChatUserFlags cbflags = discord_get_user_flags_from_permissions(user, permission);
+					purple_chat_conversation_add_user(chat, nickname, NULL, cbflags, FALSE);
+				}
+				
+			}
+		}
+		g_free(nickname);
+		
+		//TODO check if this is ourselves that's getting updated and remove channels from the buddy list
+	}
+}
+
+static void
 discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data)
 {
 	if (purple_strequal(type, "PRESENCE_UPDATE")) {
@@ -2946,60 +3024,9 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		}
 		
 	} else if (purple_strequal(type, "GUILD_MEMBER_UPDATE")) {
-		DiscordUser *user = discord_upsert_user(da->new_users, json_object_get_object_member(data, "user"));
 		guint64 guild_id = to_int(json_object_get_string_member(data, "guild_id"));
-		DiscordGuild *guild = discord_get_guild(da, guild_id);
-
-		if (guild && user) {
-			const gchar *new_nick = json_object_get_string_member(data, "nick");
-			const gchar *old_nick = g_hash_table_lookup_int64(guild->nicknames, user->id);
-
-			if (!purple_strequal(new_nick, old_nick)) {
-				discord_got_nick_change(da, user, guild, new_nick, old_nick, FALSE);
-			}
-
-			DiscordGuildMembership *guild_membership = g_hash_table_lookup_int64(user->guild_memberships, guild_id);
-			if (guild_membership != NULL) {
-				g_array_set_size(guild_membership->roles, 0);
-				JsonArray *roles = json_object_get_array_member(data, "roles");
-				int roles_len = json_array_get_length(roles);
-				for (int k = 0; k < roles_len; k++) {
-					guint64 role = to_int(json_array_get_string_element(roles, k));
-					g_array_append_val(guild_membership->roles, role);
-				}
-			}
-			
-			//Refresh the user list of all open chats
-			GHashTableIter iter;
-			gpointer key, value;
-			g_hash_table_iter_init(&iter, guild->channels);
-			gchar *nickname = discord_create_nickname(user, guild, NULL);
-
-			while (g_hash_table_iter_next(&iter, &key, &value)) {
-				DiscordChannel *channel = value;
-
-				PurpleChatConversation *chat = purple_conversations_find_chat(da->pc, discord_chat_hash(channel->id));
-				if (chat == NULL) {
-					//Skip over closed chats
-					continue;
-				}
-				
-				purple_chat_conversation_remove_user(chat, nickname, NULL);
-				
-				guint64 permission = discord_compute_permission(da, user, channel);
-				if ((permission & 0x400)) {
-					if (user->id == da->self_user_id) {
-						purple_chat_conversation_set_nick(chat, nickname);
-					}
-					
-					PurpleChatUserFlags cbflags = discord_get_user_flags_from_permissions(user, permission);
-					purple_chat_conversation_add_user(chat, nickname, NULL, cbflags, FALSE);
-				}
-			}
-			g_free(nickname);
-			
-			//TODO check if this is ourselves that's getting updated and remove channels from the buddy list
-		}
+		
+		discord_handle_guild_member_update(da, guild_id, json_object_get_object_member(data, "user"));
 		
 	} else if (purple_strequal(type, "GUILD_MEMBER_REMOVE")) {
 		DiscordUser *user = discord_upsert_user(da->new_users, json_object_get_object_member(data, "user"));
@@ -3096,6 +3123,37 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 				gchar *id = g_strdup(json_object_get_string_member(emoji, "id"));
 				gchar *name = g_strdup(json_object_get_string_member(emoji, "name"));
 				g_hash_table_replace(guild->emojis, name, id);
+			}
+		}
+		
+	} else if (purple_strequal(type, "GUILD_MEMBER_LIST_UPDATE")) {
+		
+		guint64 guild_id = to_int(json_object_get_string_member(data, "guild_id"));
+		JsonArray *ops = json_object_get_array_member(data, "ops");
+		int ops_len = json_array_get_length(ops);
+		for (int i = 0; i < ops_len; i++) {
+			JsonObject *op = json_array_get_object_element(ops, i);
+			const gchar *optype = json_object_get_string_member(op, "op");
+			
+			if (purple_strequal(optype, "UPDATE") || purple_strequal(optype, "INSERT")) {
+				JsonObject *item = json_object_get_object_member(op, "item");
+				JsonObject *member = json_object_get_object_member(item, "member");
+				
+				if (member != NULL) {
+					discord_handle_guild_member_update(da, guild_id, member);
+				}
+				
+			} else if (purple_strequal(optype, "SYNC")) {
+				JsonArray *items = json_object_get_array_member(op, "items");
+				int items_len = json_array_get_length(items);
+				for (int j = 0; j < items_len; j++) {
+					JsonObject *item = json_array_get_object_element(items, j);
+					JsonObject *member = json_object_get_object_member(item, "member");
+					
+					if (member != NULL) {
+						discord_handle_guild_member_update(da, guild_id, member);
+					}
+				}
 			}
 		}
 		
@@ -3693,9 +3751,37 @@ discord_guild_get_offline_users(DiscordAccount *da, const gchar *guild_id)
 	json_object_set_string_member(d, "guild_id", guild_id);
 	json_object_set_string_member(d, "query", "");
 	json_object_set_int_member(d, "limit", 0);
+	json_object_set_boolean_member(d, "presences", TRUE);
 	
 	obj = json_object_new();
 	json_object_set_int_member(obj, "op", 8);
+	json_object_set_object_member(obj, "d", d);
+	
+	discord_socket_write_json(da, obj);
+
+	json_object_unref(obj);
+	
+	//Request typing notifications
+	d = json_object_new();
+	json_object_set_string_member(d, "guild_id", guild_id);
+	json_object_set_boolean_member(d, "typing", TRUE);
+	json_object_set_boolean_member(d, "activities", TRUE);
+	json_object_set_boolean_member(d, "presences", TRUE);
+	
+	// Cheat and use the 'general' channel
+	JsonObject *channels = json_object_new();
+	JsonArray *user_ranges = json_array_new();
+	JsonArray *user_range = json_array_new();
+	json_array_add_int_element(user_range, 0);
+	json_array_add_int_element(user_range, 99);
+	json_array_add_array_element(user_ranges, user_range);
+	
+	json_object_set_array_member(channels, guild_id, user_ranges);
+	json_object_set_object_member(d, "channels", channels);
+	//{"op":14,"d":{"guild_id":"269692406255976448","channels":{"627075972474208256":[[0,99],[200,299]],"627749073272832010":[[0,99]]}}}
+	
+	obj = json_object_new();
+	json_object_set_int_member(obj, "op", 14);
 	json_object_set_object_member(obj, "d", d);
 	
 	discord_socket_write_json(da, obj);
