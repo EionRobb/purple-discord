@@ -4313,14 +4313,16 @@ discord_socket_write_data(DiscordAccount *ya, guchar *data, gsize data_len, guch
 	memmove(full_data + (1 + len_size), &mkey, 4);
 	memmove(full_data + (1 + len_size + 4), data, data_len);
 
-	ret = purple_ssl_write(ya->websocket, full_data, 1 + data_len + len_size + 4);
-	if (ret < 0) {
-		purple_debug_error("discord", "websocket sending error: %d\n", errno);
-		purple_connection_error(ya->pc, PURPLE_CONNECTION_ERROR_NETWORK_ERROR, _("Websocket failed to send"));
-		
-		// We can't just restart the socket because that would mean we lose this packet as a pending write
-		//discord_start_socket(ya);
-	}
+	do {
+		ret = purple_ssl_write(ya->websocket, full_data, 1 + data_len + len_size + 4);
+		if (ret < 0 && errno != EAGAIN) {
+			purple_debug_error("discord", "websocket sending error: %d\n", errno);
+			purple_connection_error(ya->pc, PURPLE_CONNECTION_ERROR_NETWORK_ERROR, _("Websocket failed to send"));
+			
+			// We can't just restart the socket because that would mean we lose this packet as a pending write
+			//discord_start_socket(ya);
+		}
+	} while(ret < 0 && errno == EAGAIN);
 
 	g_free(full_data);
 	g_free(data);
