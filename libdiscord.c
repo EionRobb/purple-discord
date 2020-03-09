@@ -3720,6 +3720,7 @@ discord_populate_guild(DiscordAccount *da, JsonObject *guild)
 
 	JsonArray *channels = json_object_get_array_member(guild, "channels");
 	JsonArray *roles = json_object_get_array_member(guild, "roles");
+	JsonArray *members = json_object_get_array_member(guild, "members");
 
 	for (int j = json_array_get_length(roles) - 1; j >= 0; j--) {
 		JsonObject *role = json_array_get_object_element(roles, j);
@@ -3736,6 +3737,25 @@ discord_populate_guild(DiscordAccount *da, JsonObject *guild)
 		for (int k = json_array_get_length(permission_overrides) - 1; k >= 0; k--) {
 			JsonObject *permission_override = json_array_get_object_element(permission_overrides, k);
 			discord_add_permission_override(c, permission_override);
+		}
+	}
+	
+	for (int j = json_array_get_length(members) - 1; j >= 0; j--) {
+		JsonObject *member = json_array_get_object_element(members, j);
+		JsonObject *user = json_object_get_object_member(member, "user");
+
+		DiscordUser *u = discord_upsert_user(da->new_users, user);
+		DiscordGuildMembership *membership = discord_new_guild_membership(g->id, member);
+		g_hash_table_replace_int64(u->guild_memberships, membership->id, membership);
+		g_hash_table_replace_int64(g->members, u->id, NULL);
+
+		g_free(discord_alloc_nickname(u, g, membership->nick));
+
+		JsonArray *roles = json_object_get_array_member(member, "roles");
+		int roles_len = json_array_get_length(roles);
+		for (int k = 0; k < roles_len; k++) {
+			guint64 role = to_int(json_array_get_string_element(roles, k));
+			g_array_append_val(membership->roles, role);
 		}
 	}
 }
