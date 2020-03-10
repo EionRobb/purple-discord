@@ -161,6 +161,7 @@ typedef struct {
 	const gchar *afk_voice_channel;
 
 	GHashTable *emojis;
+	guint64 system_channel_id; // the primary/general channel
 } DiscordGuild;
 
 typedef struct {
@@ -3758,6 +3759,10 @@ discord_populate_guild(DiscordAccount *da, JsonObject *guild)
 			g_array_append_val(membership->roles, role);
 		}
 	}
+	
+	if (json_object_has_member(guild, "system_channel_id")) {
+		g->system_channel_id = to_int(json_object_get_string_member(guild, "system_channel_id"));
+	}
 }
 
 static void
@@ -3788,17 +3793,55 @@ discord_guild_get_offline_users(DiscordAccount *da, const gchar *guild_id)
 	json_object_set_boolean_member(d, "activities", TRUE);
 	json_object_set_boolean_member(d, "presences", TRUE);
 	
-	// Cheat and use the 'general' channel
+
 	JsonObject *channels = json_object_new();
-	JsonArray *user_ranges = json_array_new();
-	JsonArray *user_range = json_array_new();
-	json_array_add_int_element(user_range, 0);
-	json_array_add_int_element(user_range, 99);
-	json_array_add_array_element(user_ranges, user_range);
+	DiscordGuild *guild = discord_get_guild(da, to_int(guild_id));
+	DiscordUser *user = discord_get_user(da, da->self_user_id);
 	
-	json_object_set_array_member(channels, guild_id, user_ranges);
+	// We can only request status updates for one channel at a time, try:
+	//  1. the 'system_channel_id'
+	//  2. the default channel when creating a server
+	//  3. the first visible server
+	
+	DiscordChannel *channel = NULL;
+	
+	if (guild->system_channel_id) {
+		channel = g_hash_table_lookup_int64(guild->channels, guild->system_channel_id);
+	}
+	if (!channel || !discord_is_channel_visible(da, user, channel)) {
+		channel = g_hash_table_lookup_int64(guild->channels, guild->id);
+	}
+	if (!channel || !discord_is_channel_visible(da, user, channel)) {
+		GHashTableIter iter;
+		gpointer key;
+		gpointer value;
+		g_hash_table_iter_init(&iter, guild->channels);
+		while (g_hash_table_iter_next(&iter, &key, &value)) {
+			DiscordChannel *iter_channel = value;
+			
+			if (iter_channel->type == CHANNEL_GUILD_TEXT) {
+				channel = iter_channel;
+				break;
+			}
+		}
+	}
+	
+	if (channel && discord_is_channel_visible(da, user, channel)) {
+		JsonArray *user_ranges = json_array_new();
+		//guint guild_member_count = g_hash_table_size(guild->members);//
+		for (guint i = 0; i < 100; i += 100) {
+			JsonArray *user_range = json_array_new();
+			json_array_add_int_element(user_range, i);
+			json_array_add_int_element(user_range, i + 99);
+			json_array_add_array_element(user_ranges, user_range);
+		}
+		
+		gchar *channel_id = from_int(channel->id);
+		json_object_set_array_member(channels, channel_id, user_ranges);
+		g_free(channel_id);
+	}
+	
 	json_object_set_object_member(d, "channels", channels);
-	//{"op":14,"d":{"guild_id":"269692406255976448","channels":{"627075972474208256":[[0,99],[200,299]],"627749073272832010":[[0,99]]}}}
 	
 	obj = json_object_new();
 	json_object_set_int_member(obj, "op", 14);
