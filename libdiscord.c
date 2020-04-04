@@ -4498,7 +4498,7 @@ discord_socket_got_data(gpointer userdata, PurpleSslConnection *conn, PurpleInpu
 		}
 	}
 
-	while (ya->frame || (read_len = purple_ssl_read(conn, &ya->packet_code, 1)) == 1) {
+	while (ya->frame || (conn && conn->private_data && (read_len = purple_ssl_read(conn, &ya->packet_code, 1)) == 1)) {
 		if (!ya->frame) {
 			if (ya->packet_code != 129 && ya->packet_code != 130) {
 				if (ya->packet_code == 136) {
