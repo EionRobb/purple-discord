@@ -51,6 +51,9 @@
 
 #include "markdown.h"
 
+// Prevent segfault in libpurple ssl plugins
+#define purple_ssl_read(a, b, c)  ((a) && (a)->private_data ? purple_ssl_read((a), (b), (c)) : 0)
+
 #define DISCORD_PLUGIN_ID "prpl-eionrobb-discord"
 #ifndef DISCORD_PLUGIN_VERSION
 #define DISCORD_PLUGIN_VERSION "0.1"
@@ -4498,7 +4501,7 @@ discord_socket_got_data(gpointer userdata, PurpleSslConnection *conn, PurpleInpu
 		}
 	}
 
-	while (ya->frame || (conn && conn->private_data && (read_len = purple_ssl_read(conn, &ya->packet_code, 1)) == 1)) {
+	while (ya->frame || (read_len = purple_ssl_read(conn, &ya->packet_code, 1) == 1)) {
 		if (!ya->frame) {
 			if (ya->packet_code != 129 && ya->packet_code != 130) {
 				if (ya->packet_code == 136) {
