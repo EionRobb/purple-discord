@@ -1291,6 +1291,8 @@ discord_send_auth(DiscordAccount *da)
 		json_object_set_object_member(data, "presence", presence);
 	
 		json_object_set_boolean_member(data, "guild_subscriptions", TRUE);
+		
+		json_object_set_int_member(data, "intents", 0x3FFF); //14bit mask
 	}
 
 	json_object_set_object_member(obj, "d", data);
