@@ -64,7 +64,7 @@
 
 #define DISCORD_BUFFER_DEFAULT_SIZE 40960
 
-#define DISCORD_API_SERVER "discordapp.com"
+#define DISCORD_API_SERVER "discord.com"
 #define DISCORD_GATEWAY_SERVER "gateway.discord.gg"
 #define DISCORD_GATEWAY_PORT 443
 #define DISCORD_GATEWAY_SERVER_PATH "/?encoding=json&v=6"
@@ -1468,8 +1468,8 @@ discord_fetch_emoji(PurpleConversation *conv, const gchar *emoji, guint64 id)
 	
 	data->shortcut = shortcut;
 	data->conv = conv;  //TODO g_object_ref(conv); for purple3?
-
-	GString *url = g_string_new("https://cdn.discordapp.com/emojis/");
+	GString *url = g_string_new("https://cdn.discordapp.com/emojis/");	// Remove this line if Discord moves their CDN to their new domain.
+//	GString *url = g_string_new("https://cdn.discord.com/emojis/");		// Uncomment this if Discord moves their CDN to their new domain.
 	g_string_append_printf(url, "%" G_GUINT64_FORMAT, id);
 	g_string_append(url, ".png");
 
@@ -1491,7 +1491,8 @@ discord_replace_emoji(const GMatchInfo *match, GString *result, gpointer user_da
 		discord_fetch_emoji(conv, alt_text, to_int(emoji_id));
 
 	} else {
-		g_string_append_printf(result, "<img src=\"https://cdn.discordapp.com/emojis/%s\" alt=\":%s:\"/>", emoji_id, alt_text);
+		g_string_append_printf(result, "<img src=\"https://cdn.discordapp.com/emojis/%s\" alt=\":%s:\"/>", emoji_id, alt_text);	// Remove this line if Discord moves their CDN to their new domain.
+//		g_string_append_printf(result, "<img src=\"https://cdn.discord.com/emojis/%s\" alt=\":%s:\"/>", emoji_id, alt_text)	// Uncomment this line if Discord moves their CDN to their new domain.
 	}
 
 	g_free(emoji_id);
@@ -5170,7 +5171,7 @@ discord_set_room_last_id(DiscordAccount *da, guint64 id, guint64 last_id)
 
 /* TODO: Cache better, sane defaults */
 
-/* https://support.discordapp.com/hc/en-us/articles/206141927-How-is-the-permission-hierarchy-structured- */
+/* https://support.discord.com/hc/en-us/articles/206141927-How-is-the-permission-hierarchy-structured- */
 
 static guint64
 discord_permission_role(DiscordGuild *guild, guint64 r, guint64 permission)
@@ -5875,7 +5876,8 @@ discord_get_avatar(DiscordAccount *da, DiscordUser *user, gboolean is_buddy)
 	 * anyway, we specifically request the png version, for the best
 	 * balance of quality and non-animated-ness */
 
-	GString *url = g_string_new("https://cdn.discordapp.com/avatars/");
+	GString *url = g_string_new("https://cdn.discordapp.com/avatars/");	// Remove this line if Discord moves their CDN to their new domain.
+//	GString *url = g_string_new("https://cdn.discord.com/avatars/");	// Uncomment this line if Discord moves their CDN to their new domain.
 	g_string_append_printf(url, "%" G_GUINT64_FORMAT, user->id);
 	g_string_append_c(url, '/');
 	g_string_append_printf(url, "%s.png", purple_url_encode(user->avatar));
