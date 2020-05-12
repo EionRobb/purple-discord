@@ -68,6 +68,7 @@
 #define DISCORD_GATEWAY_SERVER "gateway.discord.gg"
 #define DISCORD_GATEWAY_PORT 443
 #define DISCORD_GATEWAY_SERVER_PATH "/?encoding=json&v=6"
+#define DISCORD_CDN_SERVER "cdn.discordapp.com"
 
 #define DISCORD_MESSAGE_NORMAL (0)
 #define DISCORD_MESSAGE_EDITED (1)
@@ -1468,8 +1469,7 @@ discord_fetch_emoji(PurpleConversation *conv, const gchar *emoji, guint64 id)
 	
 	data->shortcut = shortcut;
 	data->conv = conv;  //TODO g_object_ref(conv); for purple3?
-	GString *url = g_string_new("https://cdn.discordapp.com/emojis/");	// Remove this line if Discord moves their CDN to their new domain.
-//	GString *url = g_string_new("https://cdn.discord.com/emojis/");		// Uncomment this if Discord moves their CDN to their new domain.
+	GString *url = g_string_new("https://" DISCORD_CDN_SERVER "/emojis/");
 	g_string_append_printf(url, "%" G_GUINT64_FORMAT, id);
 	g_string_append(url, ".png");
 
@@ -1491,8 +1491,7 @@ discord_replace_emoji(const GMatchInfo *match, GString *result, gpointer user_da
 		discord_fetch_emoji(conv, alt_text, to_int(emoji_id));
 
 	} else {
-		g_string_append_printf(result, "<img src=\"https://cdn.discordapp.com/emojis/%s\" alt=\":%s:\"/>", emoji_id, alt_text);	// Remove this line if Discord moves their CDN to their new domain.
-//		g_string_append_printf(result, "<img src=\"https://cdn.discord.com/emojis/%s\" alt=\":%s:\"/>", emoji_id, alt_text)	// Uncomment this line if Discord moves their CDN to their new domain.
+		g_string_append_printf(result, "<img src=\"https://" DISCORD_CDN_SERVER "/emojis/%s\" alt=\":%s:\"/>", emoji_id, alt_text);
 	}
 
 	g_free(emoji_id);
@@ -5888,8 +5887,7 @@ discord_get_avatar(DiscordAccount *da, DiscordUser *user, gboolean is_buddy)
 	 * anyway, we specifically request the png version, for the best
 	 * balance of quality and non-animated-ness */
 
-	GString *url = g_string_new("https://cdn.discordapp.com/avatars/");	// Remove this line if Discord moves their CDN to their new domain.
-//	GString *url = g_string_new("https://cdn.discord.com/avatars/");	// Uncomment this line if Discord moves their CDN to their new domain.
+	GString *url = g_string_new("https://" DISCORD_CDN_SERVER "/avatars/");
 	g_string_append_printf(url, "%" G_GUINT64_FORMAT, user->id);
 	g_string_append_c(url, '/');
 	g_string_append_printf(url, "%s.png", purple_url_encode(user->avatar));
