@@ -2871,6 +2871,18 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		purple_connection_set_state(da->pc, PURPLE_CONNECTION_CONNECTED);
 		
 		discord_add_group_dms_to_blist(da);
+		if (purple_account_get_bool(da->account, "populate-blist", TRUE)) {
+			GHashTableIter iter;
+			gpointer key, value;
+			g_hash_table_iter_init(&iter, da->new_guilds);
+
+			while (g_hash_table_iter_next(&iter, &key, &value)) {
+				DiscordGuild *guild = value;
+				
+				discord_buddy_guild(da, guild);
+			}
+		}
+		
 		
 	} else if (purple_strequal(type, "GUILD_SYNC") || purple_strequal(type, "GUILD_CREATE") || purple_strequal(type, "GUILD_MEMBERS_CHUNK")) {
 		const gchar *guild_id_str = json_object_get_string_member(data, "id");
