@@ -26,7 +26,6 @@ PLUGIN_VERSION ?= 0.9.$(shell date +%Y.%m.%d)
 endif
 
 CFLAGS	?= -O2 -g -pipe -Wall
-LDFLAGS ?= -Wl,-z,relro
 
 CFLAGS  += -std=c99 -DDISCORD_PLUGIN_VERSION='"$(PLUGIN_VERSION)"' -DMARKDOWN_PIDGIN
 
@@ -61,6 +60,7 @@ else
     CC = gcc
   else
     CC ?= gcc
+    LDFLAGS ?= -Wl,-z,relro
   endif
 
   ifeq ($(shell $(PKG_CONFIG) --exists purple-3 2>/dev/null && echo "true"),)
@@ -81,7 +81,7 @@ else
     DISCORD_DEST = $(DESTDIR)`$(PKG_CONFIG) --variable=plugindir purple-3`
     DISCORD_ICONS_DEST = $(DESTDIR)`$(PKG_CONFIG) --variable=datadir purple-3`/pixmaps/pidgin/protocols
     LOCALEDIR = $(shell $(PKG_CONFIG) --variable=datadir purple-3)/locale
-	LOCALE_DEST = $(DESTDIR)$(LOCALEDIR)
+    LOCALE_DEST = $(DESTDIR)$(LOCALEDIR)
   endif
 endif
 
