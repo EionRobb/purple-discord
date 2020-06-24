@@ -47,7 +47,7 @@ Requires devel headers/libs for libpurple and libjson-glib [libglib2.0-dev, libj
 ```bash
 	git clone git://github.com/EionRobb/purple-discord.git
 	cd purple-discord
-	make
+	make -j4
 	sudo make install
 ```
 
