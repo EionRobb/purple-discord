@@ -3668,7 +3668,7 @@ discord_grab_group(const char *guild_name, const char *category_name)
 	/* Create the combined name */
 
 	gchar *combined_name = NULL;
-	assert(guild_name != NULL);
+	g_return_val_if_fail(guild_name != NULL, NULL);
 
 	if (category_name != NULL)
 		combined_name = g_strdup_printf("%s: %s", guild_name, category_name);
