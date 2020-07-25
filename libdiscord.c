@@ -1875,6 +1875,8 @@ discord_download_file_from_uri (const gchar *uri) {
     }
     g_object_unref (remote_file);
     g_object_unref (tmp_file);
+    g_object_unref (fis);
+    g_object_unref (fios);
     return local_filename;
   }
   local_filename = g_strdup (g_file_peek_path (tmp_file));
