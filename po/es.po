@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: 0.9\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2019-08-25 17:42-0700\n"
+"POT-Creation-Date: 2020-07-25 16:46-0500\n"
 "PO-Revision-Date: 2019-08-25 12:23-0700\n"
 "Last-Translator: Alyssa Rosenzweig <alyssa@rosenzweig.io>\n"
 "Language-Team: es <LL@li.org>\n"
@@ -55,7 +55,9 @@ msgid "_Cancel"
 msgstr "_Cancelar"
 
 msgid "Need CAPTCHA to login. Consider using Harmony first, then retry."
-msgstr "CAPTCHA necesitado para autenticar. Intente con Harmony primero, y intente de nuevo después."
+msgstr ""
+"CAPTCHA necesitado para autenticar. Intente con Harmony primero, y intente "
+"de nuevo después."
 
 msgid "Bad username/password"
 msgstr "Nombre de usuario o contraseña incorrecto"
@@ -129,6 +131,10 @@ msgid "Playing"
 msgstr "Jugando"
 
 #, fuzzy
+msgid "Custom Status"
+msgstr "Status"
+
+#, fuzzy
 msgid "Connected Accounts"
 msgstr "Cuentas conectadas"
 
@@ -147,6 +153,10 @@ msgstr "Enmudecer"
 #, c-format
 msgid "Playing %s"
 msgstr "Jugando %s"
+
+#, c-format
+msgid "%s"
+msgstr ""
 
 msgid "Email address..."
 msgstr "Dirección de correo electrónico..."
@@ -184,7 +194,13 @@ msgstr "Entrar un servidor..."
 msgid "nick <new nickname>:  Changes nickname on a server"
 msgstr "nick <nombre nuevo>:  Cambiar el nombre en un servidor"
 
-msgid "kick <username>:  Remove someone from channel"
+#, fuzzy
+msgid "kick <username>:  Remove someone from a server"
+msgstr "kick <nombre>:  Quitar alguien del canal"
+
+#, fuzzy
+msgid ""
+"ban <username>:  Remove someone from a server and prevent them rejoining"
 msgstr "kick <nombre>:  Quitar alguien del canal"
 
 msgid "leave:  Leave the channel"

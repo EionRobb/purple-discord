@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Libpurple-Discord\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2018-12-16 11:00-0800\n"
+"POT-Creation-Date: 2020-07-25 16:46-0500\n"
 "PO-Revision-Date: 2018-03-30 16:37+0300\n"
 "Last-Translator: Дмитрий Барандов <bardimnik@rambler.ru>\n"
 "Language-Team: Only me! <bardimnik@rambler.ru>\n"
@@ -30,32 +30,11 @@ msgstr ""
 msgid "Group DMs"
 msgstr "Групповые переписки"
 
-msgid "Text"
-msgstr "Текст"
-
-msgid "Direct Message"
-msgstr "Личное сообщение"
-
-msgid "Voice"
-msgstr "Голос"
-
-msgid "Group DM"
-msgstr "Групповая переписка"
-
-msgid "Guild Category"
-msgstr "Категория гильдии"
-
-msgid "Unknown"
-msgstr "неизвестный"
-
 msgid "ID"
 msgstr "ИД"
 
-msgid "Name"
-msgstr "Имя"
-
-msgid "Room Type"
-msgstr "Тип комнаты"
+msgid "Topic"
+msgstr ""
 
 msgid "Cancelled 2FA auth"
 msgstr "Отменено двухфакторной аутентификацией"
@@ -77,6 +56,9 @@ msgstr "_Логин"
 msgid "_Cancel"
 msgstr "_Отмена"
 
+msgid "Need CAPTCHA to login. Consider using Harmony first, then retry."
+msgstr ""
+
 msgid "Bad username/password"
 msgstr "Неправильные логин или пароль"
 
@@ -97,6 +79,9 @@ msgstr "Не удалось подключиться к шлюзу"
 
 msgid "No pinned messages"
 msgstr ""
+
+msgid "Name"
+msgstr "Имя"
 
 msgid "Bad channel type"
 msgstr "Неправильный тип канала"
@@ -145,6 +130,10 @@ msgstr "Статус"
 msgid "Playing"
 msgstr "Воспроизведение"
 
+#, fuzzy
+msgid "Custom Status"
+msgstr "Статус"
+
 msgid "Connected Accounts"
 msgstr "Подключенные учетные записи"
 
@@ -154,9 +143,19 @@ msgstr "Общие (совместные) сервера"
 msgid "Invisible"
 msgstr "Невидимый"
 
+msgid "Unmute"
+msgstr ""
+
+msgid "Mute"
+msgstr ""
+
 #, c-format
 msgid "Playing %s"
 msgstr "Воспроизведение %s"
+
+#, c-format
+msgid "%s"
+msgstr ""
 
 msgid "Email address..."
 msgstr "Адрес электронной почты..."
@@ -169,6 +168,15 @@ msgstr "Автоматическое создание комнат в списк
 
 msgid "Number of users in a large channel"
 msgstr "Количество пользователей в большом канале"
+
+msgid "Display custom emoji as inline images"
+msgstr ""
+
+msgid "Open chat when you are @mention'd"
+msgstr ""
+
+msgid "Auth token"
+msgstr ""
 
 msgid "Join a server"
 msgstr "Присоединиться к серверу"
@@ -185,7 +193,13 @@ msgstr "Присоединиться к серверу..."
 msgid "nick <new nickname>:  Changes nickname on a server"
 msgstr "nick <new nickname>: Меняет ник на сервере"
 
-msgid "kick <username>:  Remove someone from channel"
+#, fuzzy
+msgid "kick <username>:  Remove someone from a server"
+msgstr "kick <username>:  Удаляет пользователя из канала"
+
+#, fuzzy
+msgid ""
+"ban <username>:  Remove someone from a server and prevent them rejoining"
 msgstr "kick <username>:  Удаляет пользователя из канала"
 
 msgid "leave:  Leave the channel"
@@ -215,3 +229,24 @@ msgstr "Протокол плагинов Discord"
 
 msgid "Adds Discord protocol support to libpurple."
 msgstr "Добавляет поддержку протокола Discord в libpurple."
+
+#~ msgid "Text"
+#~ msgstr "Текст"
+
+#~ msgid "Direct Message"
+#~ msgstr "Личное сообщение"
+
+#~ msgid "Voice"
+#~ msgstr "Голос"
+
+#~ msgid "Group DM"
+#~ msgstr "Групповая переписка"
+
+#~ msgid "Guild Category"
+#~ msgstr "Категория гильдии"
+
+#~ msgid "Unknown"
+#~ msgstr "неизвестный"
+
+#~ msgid "Room Type"
+#~ msgstr "Тип комнаты"

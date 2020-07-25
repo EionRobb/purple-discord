@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2018-12-16 11:00-0800\n"
+"POT-Creation-Date: 2020-07-25 16:46-0500\n"
 "PO-Revision-Date: 2019-04-27 17:12\n"
 "Last-Translator: draelenax <draelenax@protonmail.com>\n"
 "Language-Team: fr\n"
@@ -29,32 +29,11 @@ msgstr "Édition : %s"
 msgid "Group DMs"
 msgstr "Groupe privé"
 
-msgid "Text"
-msgstr "Texte"
-
-msgid "Direct Message"
-msgstr "Message privé"
-
-msgid "Voice"
-msgstr "Vocal"
-
-msgid "Group DM"
-msgstr "Groupe privé"
-
-msgid "Guild Category"
-msgstr "Catégorie de guilde"
-
-msgid "Unknown"
-msgstr "Inconnu"
-
 msgid "ID"
 msgstr "ID"
 
-msgid "Name"
-msgstr "Nom"
-
-msgid "Room Type"
-msgstr "Type de salon"
+msgid "Topic"
+msgstr ""
 
 msgid "Cancelled 2FA auth"
 msgstr "Double authentification annulé"
@@ -75,6 +54,9 @@ msgstr "_Connexion"
 
 msgid "_Cancel"
 msgstr "_Annuler"
+
+msgid "Need CAPTCHA to login. Consider using Harmony first, then retry."
+msgstr ""
 
 msgid "Bad username/password"
 msgstr "Mauvais identifiant/mot de passe"
@@ -97,6 +79,9 @@ msgstr "Impossible de se connecter au portail"
 msgid "No pinned messages"
 msgstr "Aucun message épinglé"
 
+msgid "Name"
+msgstr "Nom"
+
 msgid "Bad channel type"
 msgstr "Mauvais type de salon"
 
@@ -113,7 +98,9 @@ msgid "Invalid channel for this user"
 msgstr "Salon invalide pour cet utilisateur"
 
 msgid "Cannot send a message to someone who is not on your friend list."
-msgstr "Impossible d’envoyer le message aux personnes qui ne sont pas dans votre liste d’ami"
+msgstr ""
+"Impossible d’envoyer le message aux personnes qui ne sont pas dans votre "
+"liste d’ami"
 
 #, c-format
 msgid "No users with tag %s exist"
@@ -144,6 +131,10 @@ msgstr "Statut"
 msgid "Playing"
 msgstr "Joue"
 
+#, fuzzy
+msgid "Custom Status"
+msgstr "Statut"
+
 msgid "Connected Accounts"
 msgstr "Comptes connectés"
 
@@ -153,9 +144,19 @@ msgstr "Serveurs mutuels"
 msgid "Invisible"
 msgstr "Invisible"
 
+msgid "Unmute"
+msgstr ""
+
+msgid "Mute"
+msgstr ""
+
 #, c-format
 msgid "Playing %s"
 msgstr "Joue à %s"
+
+#, c-format
+msgid "%s"
+msgstr ""
 
 msgid "Email address..."
 msgstr "Adresse mail..."
@@ -168,6 +169,15 @@ msgstr "Auto-création de salon à partir de la liste d'ami"
 
 msgid "Number of users in a large channel"
 msgstr "Nombre d'utilisateurs dans les salon peuplé"
+
+msgid "Display custom emoji as inline images"
+msgstr ""
+
+msgid "Open chat when you are @mention'd"
+msgstr ""
+
+msgid "Auth token"
+msgstr ""
 
 msgid "Join a server"
 msgstr "Rejoindre un serveur"
@@ -184,7 +194,13 @@ msgstr "Rejoindre un serveur..."
 msgid "nick <new nickname>:  Changes nickname on a server"
 msgstr "nick <nouveau pseudo>: Changer le pseudonyme sur le serveur"
 
-msgid "kick <username>:  Remove someone from channel"
+#, fuzzy
+msgid "kick <username>:  Remove someone from a server"
+msgstr "kick <pseudo>: Bannir quelqu'un du salon"
+
+#, fuzzy
+msgid ""
+"ban <username>:  Remove someone from a server and prevent them rejoining"
 msgstr "kick <pseudo>: Bannir quelqu'un du salon"
 
 msgid "leave:  Leave the channel"
@@ -214,3 +230,24 @@ msgstr "Protocole du plugin Discord."
 
 msgid "Adds Discord protocol support to libpurple."
 msgstr "Ajouter le support du protocole Discord à libpurple."
+
+#~ msgid "Text"
+#~ msgstr "Texte"
+
+#~ msgid "Direct Message"
+#~ msgstr "Message privé"
+
+#~ msgid "Voice"
+#~ msgstr "Vocal"
+
+#~ msgid "Group DM"
+#~ msgstr "Groupe privé"
+
+#~ msgid "Guild Category"
+#~ msgstr "Catégorie de guilde"
+
+#~ msgid "Unknown"
+#~ msgstr "Inconnu"
+
+#~ msgid "Room Type"
+#~ msgstr "Type de salon"

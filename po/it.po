@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: 0.9\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2018-12-16 11:00-0800\n"
+"POT-Creation-Date: 2020-07-25 16:46-0500\n"
 "PO-Revision-Date: 2018-12-19 23:20+0200\n"
 "Last-Translator: Penaz <penazarea@altervista.org>\n"
 "Language-Team: Italian <>\n"
@@ -27,32 +27,11 @@ msgstr "MODIFICATO: %s"
 msgid "Group DMs"
 msgstr "Messaggi di gruppo"
 
-msgid "Text"
-msgstr "Testo"
-
-msgid "Direct Message"
-msgstr "Messaggio Diretto"
-
-msgid "Voice"
-msgstr "Voce"
-
-msgid "Group DM"
-msgstr "Messaggio di Gruppo"
-
-msgid "Guild Category"
-msgstr "Categoria Gilda"
-
-msgid "Unknown"
-msgstr "Sconosciuto"
-
 msgid "ID"
 msgstr "Identificatore"
 
-msgid "Name"
-msgstr "Nome"
-
-msgid "Room Type"
-msgstr "Tipo di Stanza"
+msgid "Topic"
+msgstr ""
 
 msgid "Cancelled 2FA auth"
 msgstr "Autorizzazione in 2 passaggi annullata"
@@ -71,6 +50,9 @@ msgstr "_Inizio sessione"
 
 msgid "_Cancel"
 msgstr "_Annulla"
+
+msgid "Need CAPTCHA to login. Consider using Harmony first, then retry."
+msgstr ""
 
 msgid "Bad username/password"
 msgstr "Nome Utente/Password errati"
@@ -93,6 +75,9 @@ msgstr "Impossibile connettersi al gateway"
 msgid "No pinned messages"
 msgstr "Nessun messaggio fissato"
 
+msgid "Name"
+msgstr "Nome"
+
 msgid "Bad channel type"
 msgstr "Tipo di canale errato"
 
@@ -109,7 +94,9 @@ msgid "Invalid channel for this user"
 msgstr "Canale non valido per questo utente"
 
 msgid "Cannot send a message to someone who is not on your friend list."
-msgstr "Impossibile inviare un messaggio a qualcuno che non fa parte della tua lista amici."
+msgstr ""
+"Impossibile inviare un messaggio a qualcuno che non fa parte della tua lista "
+"amici."
 
 #, c-format
 msgid "No users with tag %s exist"
@@ -140,6 +127,10 @@ msgid "Playing"
 msgstr "In Gioco"
 
 #, fuzzy
+msgid "Custom Status"
+msgstr "Stato"
+
+#, fuzzy
 msgid "Connected Accounts"
 msgstr "Account Connessi"
 
@@ -149,9 +140,19 @@ msgstr "Server in comune"
 msgid "Invisible"
 msgstr "Invisibile"
 
+msgid "Unmute"
+msgstr ""
+
+msgid "Mute"
+msgstr ""
+
 #, c-format
 msgid "Playing %s"
 msgstr "In gioco: %s"
+
+#, c-format
+msgid "%s"
+msgstr ""
 
 msgid "Email address..."
 msgstr "Indirizzo email..."
@@ -164,6 +165,15 @@ msgstr "Inserisci le stanze nella lista dei contatti automaticamente"
 
 msgid "Number of users in a large channel"
 msgstr "Numero di utenti per considerare un canale come \"grande\""
+
+msgid "Display custom emoji as inline images"
+msgstr ""
+
+msgid "Open chat when you are @mention'd"
+msgstr ""
+
+msgid "Auth token"
+msgstr ""
 
 msgid "Join a server"
 msgstr "Unisciti ad un server"
@@ -180,7 +190,13 @@ msgstr "Unisciti ad un server..."
 msgid "nick <new nickname>:  Changes nickname on a server"
 msgstr "nick <nuovo nome>:  Cambia il nickname nel server"
 
-msgid "kick <username>:  Remove someone from channel"
+#, fuzzy
+msgid "kick <username>:  Remove someone from a server"
+msgstr "kick <nome>:  Espelli qualcuno dal canale"
+
+#, fuzzy
+msgid ""
+"ban <username>:  Remove someone from a server and prevent them rejoining"
 msgstr "kick <nome>:  Espelli qualcuno dal canale"
 
 msgid "leave:  Leave the channel"
@@ -209,6 +225,27 @@ msgstr "Plug-in del Protocollo di Discord."
 
 msgid "Adds Discord protocol support to libpurple."
 msgstr "Aggiunge il supporto per il protocollo Discord a LibPurple"
+
+#~ msgid "Text"
+#~ msgstr "Testo"
+
+#~ msgid "Direct Message"
+#~ msgstr "Messaggio Diretto"
+
+#~ msgid "Voice"
+#~ msgstr "Voce"
+
+#~ msgid "Group DM"
+#~ msgstr "Messaggio di Gruppo"
+
+#~ msgid "Guild Category"
+#~ msgstr "Categoria Gilda"
+
+#~ msgid "Unknown"
+#~ msgstr "Sconosciuto"
+
+#~ msgid "Room Type"
+#~ msgstr "Tipo di Stanza"
 
 #~ msgid "In-Game"
 #~ msgstr "In gioco"
