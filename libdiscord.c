@@ -2264,7 +2264,7 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
             discord_chat_hash(channel_id),
             name,
             flags,
-            g_strdup_printf ("<br><img id=\"%u\">", img_store_id),
+            attachment_show,
             timestamp );
       }
     }
