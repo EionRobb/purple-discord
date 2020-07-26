@@ -1817,76 +1817,70 @@ bail:
 	return g_strdup(who);
 }
 
-static gchar *
-discord_download_file_from_uri (const gchar *uri) {
-  gchar *local_filename = NULL;
-  GFileInputStream *fis = NULL;
+static int
+discord_download_image_from_uri (const gchar *uri) {
+  purple_debug_info ("discord", "entered discord_download_image_from_uri");
+  int img_id = -1;
+  gchar *local_path = NULL, *img_data = NULL;
+  size_t img_data_len;
+  GFile *source_file = NULL;
   GFileIOStream *fios = NULL;
-  GFile *remote_file = NULL;
-  GFile *tmp_file = NULL;
-  GFileInfo *info;
+  GFile *target_file = NULL;
   GError *err = NULL;
-  int total_size = -1;
 
-  remote_file = g_file_new_for_uri (uri);
-  fis = g_file_read (remote_file, NULL, &err);
-  if (NULL != err) {
-    purple_debug_error ("discord", "Error reading remote file: %s", err->message);
-    g_error_free (err); err = NULL;
-    g_object_unref (remote_file);
-    return local_filename;
-  }
-
-  info = g_file_input_stream_query_info
-    ( G_FILE_INPUT_STREAM (fis),
-      G_FILE_ATTRIBUTE_STANDARD_SIZE,
-      NULL,
-      &err );
-  if (info) {
-    if (g_file_info_has_attribute (info, G_FILE_ATTRIBUTE_STANDARD_SIZE)) {
-      total_size = g_file_info_get_size (info);
-    }
-    g_object_unref (info);
-  }
-
-  if (total_size < 0) {
-    g_object_unref (remote_file);
-    return local_filename;
-  }
-
-  tmp_file = g_file_new_tmp (NULL, &fios, &err);
+  /* Create the source and target files */
+  source_file = g_file_new_for_uri (uri);
+  target_file = g_file_new_tmp (NULL, &fios, &err);
   if (NULL != err) {
     purple_debug_error ("discord", "Error creating temporary file: %s", err->message);
     g_error_free (err); err = NULL;
-    g_object_unref (fis);
-    g_object_unref (remote_file);
-    return local_filename;
+    g_object_unref (source_file);
+    return img_id;
   }
 
-  if ( -1 == g_output_stream_splice
-    ( g_io_stream_get_output_stream (fios),
-      G_INPUT_STREAM (fis),
-      G_OUTPUT_STREAM_SPLICE_CLOSE_SOURCE | G_OUTPUT_STREAM_SPLICE_CLOSE_TARGET,
-      NULL,
-      &err )) {
+  if (!g_file_copy
+      ( source_file,
+        target_file,
+        G_FILE_COPY_OVERWRITE,
+        NULL, NULL, NULL, &err)) {
     if (NULL != err) {
       purple_debug_error ("discord", "Error downloading file: %s", err->message);
       g_error_free (err); err = NULL;
     }
-    g_object_unref (remote_file);
-    g_object_unref (tmp_file);
-    g_object_unref (fis);
     g_object_unref (fios);
-    return local_filename;
+    g_object_unref (source_file);
+    g_object_unref (target_file);
+    return img_id;
   }
-  local_filename = g_strdup (g_file_peek_path (tmp_file));
 
-  g_object_unref (remote_file);
-  g_object_unref (fis);
+  local_path = g_file_peek_path (target_file);
+  purple_debug_info ("discord", "inline image local path: %s", local_path);
+  g_file_get_contents (local_path, &img_data, &img_data_len, &err);
+  if (NULL != err) {
+    purple_debug_error ("discord", "Error fetching data: %s", err->message);
+    g_error_free (err); err = NULL;
+    g_object_unref (source_file);
+    g_object_unref (target_file);
+    g_object_unref (fios);
+    return img_id;
+  }
+
+  img_id = purple_imgstore_add_with_id (img_data, img_data_len, &err);
+  if (NULL != err) {
+    purple_debug_error ("discord", "Error adding image to store: %s", err->message);
+    g_error_free (err); err = NULL;
+  }
+
   g_object_unref (fios);
-  g_object_unref (tmp_file);
-
-  return local_filename;
+  g_object_unref (source_file);
+  if (!g_file_delete (target_file, NULL, &err)) {
+    if (NULL != err) {
+      purple_debug_error ("discord", "Error deleting temporary image: %s", err->message);
+      g_error_free (err); err = NULL;
+    }
+  }
+  g_object_unref (target_file);
+  return img_id;
 }
 
 static guint64
@@ -2242,34 +2236,22 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 		if (attachments) {
 			for (i = json_array_get_length(attachments) - 1; i >= 0; i--) {
 				JsonObject *attachment = json_array_get_object_element(attachments, i);
+        int img_store_id = -1;
+
 				const gchar *url = json_object_get_string_member(attachment, "url");
-        // TODO how do we know this is an image?
-        GFile *remote_file = g_file_new_for_uri (url);
-        gchar *local_path = discord_download_file_from_uri (url);
-        purple_debug_info ("discord", "local path: %s", local_path);
-        gchar *img_data = NULL;
-        size_t img_data_len ;
-        GError *local_err = NULL;
-        g_file_get_contents (local_path, &img_data, &img_data_len, &local_err);
-        if (NULL != local_err) {
-          purple_debug_error ("discord", "Error fetching data: %s", local_err->message);
-          g_error_free (local_err); local_err = NULL;
+        purple_debug_info ("discord", "iterating attachment: %s", url);
+        img_store_id = discord_download_image_from_uri (url);
+        purple_debug_info ("discord", "image downloaded: %d", img_store_id);
+
+        if (img_store_id >= 0) {
+          purple_serv_got_chat_in
+            ( da->pc,
+              discord_chat_hash(channel_id),
+              name,
+              flags,
+              g_strdup_printf ("<br><img id=\"%u\">", img_store_id),
+              timestamp );
         }
-        g_free (local_path);
-        int img_id = purple_imgstore_add_with_id (img_data, img_data_len, &local_err);
-        if (NULL != local_err) {
-          purple_debug_error ("discord", "Error adding image to imgstore: %s", local_err->message);
-          g_error_free (local_err); local_err = NULL;
-        }
-        purple_debug_info ("discord", "attachment url: %s [%d]", url, img_data_len);
-        g_object_unref (remote_file);
-				purple_serv_got_chat_in
-          ( da->pc,
-            discord_chat_hash(channel_id),
-            name,
-            flags,
-            g_strdup_printf ("<br><img id=\"%u\">", img_id),
-            timestamp );
 			}
 		}
 
