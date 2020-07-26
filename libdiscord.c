@@ -2239,7 +2239,6 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
         int img_store_id = -1;
 
 				const gchar *url = json_object_get_string_member(attachment, "url");
-        purple_debug_info ("discord", "iterating attachment: %s", url);
         img_store_id = discord_download_image_from_uri (url);
         purple_debug_info ("discord", "image downloaded: %d", img_store_id);
 
@@ -2250,6 +2249,15 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
               name,
               flags,
               g_strdup_printf ("<br><img id=\"%u\">", img_store_id),
+              timestamp );
+        }
+        else {
+          purple_serv_got_chat_in
+            ( da->pc,
+              discord_chat_hash(channel_id),
+              name,
+              flags,
+              g_strdup (url),
               timestamp );
         }
 			}
