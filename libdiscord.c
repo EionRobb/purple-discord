@@ -1817,19 +1817,22 @@ bail:
   return g_strdup(who);
 }
 
+/* Download the image at the specified URL, add to the libpurple image store,
+ * and return the image store ID (or -1).
+ *
+ * This function does not free the `url` argument.
+ * */
 static int
-discord_download_image_from_uri (const gchar *uri) {
-  purple_debug_info ("discord", "entered discord_download_image_from_uri");
+discord_download_image_from_url (const gchar *url) {
   int img_id = -1;
-  gchar *local_path = NULL, *img_data = NULL;
   size_t img_data_len;
-  GFile *source_file = NULL;
-  GFileIOStream *fios = NULL;
-  GFile *target_file = NULL;
+  gchar *local_path = NULL, *img_data = NULL;
+  GFile *source_file = NULL, *target_file = NULL;
+  GFileIOStream *fios = NULL; /* required for g_file_new_tmp */
   GError *err = NULL;
 
-  /* Create the source and target files */
-  source_file = g_file_new_for_uri (uri);
+  /* Create the source and target files. */
+  source_file = g_file_new_for_uri (url);
   target_file = g_file_new_tmp (NULL, &fios, &err);
   if (NULL != err) {
     purple_debug_error ("discord", "Error creating temporary file: %s", err->message);
@@ -1837,7 +1840,7 @@ discord_download_image_from_uri (const gchar *uri) {
     g_object_unref (source_file);
     return img_id;
   }
-
+  /* Copy the remote file to the local temporary file. */
   if (!g_file_copy
       ( source_file,
         target_file,
@@ -1853,6 +1856,7 @@ discord_download_image_from_uri (const gchar *uri) {
     return img_id;
   }
 
+  /* Read the temporary image file into memory. */
   local_path = g_file_peek_path (target_file);
   purple_debug_info ("discord", "inline image local path: %s", local_path);
   g_file_get_contents (local_path, &img_data, &img_data_len, &err);
@@ -1865,12 +1869,14 @@ discord_download_image_from_uri (const gchar *uri) {
     return img_id;
   }
 
+  /* Add the image data to the store and retrieve the image ID. */
   img_id = purple_imgstore_add_with_id (img_data, img_data_len, &err);
   if (NULL != err) {
     purple_debug_error ("discord", "Error adding image to store: %s", err->message);
     g_error_free (err); err = NULL;
   }
 
+  /* Cleanup. Attempt to delete the temp file, too. */
   g_object_unref (fios);
   g_object_unref (source_file);
   if (!g_file_delete (target_file, NULL, &err)) {
@@ -2239,27 +2245,27 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
         int img_store_id = -1;
 
         const gchar *url = json_object_get_string_member(attachment, "url");
-        img_store_id = discord_download_image_from_uri (url);
-        purple_debug_info ("discord", "image downloaded: %d", img_store_id);
+        gchar *attachment_show;
 
+#if PURPLE_VERSION_CHECK (3, 0, 0)
+        attachment_show = g_strdup (url);
+#else
+        img_store_id = discord_download_image_from_url (url);
+        purple_debug_info ("discord", "image downloaded: %d", img_store_id);
         if (img_store_id >= 0) {
-          purple_serv_got_chat_in
-            ( da->pc,
-              discord_chat_hash(channel_id),
-              name,
-              flags,
-              g_strdup_printf ("<br><img id=\"%u\">", img_store_id),
-              timestamp );
+          attachment_show = g_strdup_printf ("<br /><img id=\"%u\">", img_store_id);
         }
         else {
-          purple_serv_got_chat_in
-            ( da->pc,
-              discord_chat_hash(channel_id),
-              name,
-              flags,
-              g_strdup (url),
-              timestamp );
+          attachment_show = g_strdup (url);
         }
+#endif
+        purple_serv_got_chat_in
+          ( da->pc,
+            discord_chat_hash(channel_id),
+            name,
+            flags,
+            g_strdup_printf ("<br><img id=\"%u\">", img_store_id),
+            timestamp );
       }
     }
 
