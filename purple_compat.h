@@ -184,10 +184,10 @@ purple_conversation_add_smiley(PurpleConversation *conv, PurpleSmiley *smiley)
 	gsize len;
 	const guchar *data;
 	const gchar *shortcut;
-	
+
 	data = purple_smiley_get_data(smiley, &len);
 	shortcut = purple_smiley_get_shortcut(smiley);
-	
+
 	purple_conv_custom_smiley_write(conv, shortcut, data, len);
 	purple_conv_custom_smiley_close(conv, shortcut);
 }
@@ -208,7 +208,7 @@ purple_smiley_new_from_data(const gchar *shortcut, const guchar *data, gsize siz
 
 	stored_img = purple_imgstore_add(g_memdup(data, size), size, filename);
 	g_free(filename);
-	
+
 	return purple_smiley_new(stored_img, shortcut);
 }
 

@@ -68,7 +68,7 @@ else
       DISCORD_TARGET = FAILNOPURPLE
       DISCORD_DEST =
       DISCORD_ICONS_DEST =
-	  LOCALE_DEST = 
+	  LOCALE_DEST =
     else
       DISCORD_TARGET = libdiscord.so
       DISCORD_DEST = $(DESTDIR)`$(PKG_CONFIG) --variable=plugindir purple`

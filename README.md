@@ -60,7 +60,7 @@ used as the game info for Discord "Playing ...".
 **Auto-create rooms on buddy list**: If enabled, the plugin will add the
 channels (rooms) from the servers you're on as chats on your buddy list.
 This is preferred if you're using Pidgin, so you don't need to access
-the room list manually (from the buddy list, Tools->Room List). If 
+the room list manually (from the buddy list, Tools->Room List). If
 you're not using Pidgin (or finch), you probably don't want this, since
 they have different buddy list APIs.
 Note: If the room list changes, it won't recreate the list unless you
