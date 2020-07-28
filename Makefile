@@ -25,9 +25,9 @@ else
 PLUGIN_VERSION ?= 0.9.$(shell date +%Y.%m.%d)
 endif
 
-CFLAGS	?= -O2 -g -pipe -Wall
+CFLAGS ?= -O2 -g -pipe -Wall
 
-CFLAGS  += -std=c99 -DDISCORD_PLUGIN_VERSION='"$(PLUGIN_VERSION)"' -DMARKDOWN_PIDGIN
+CFLAGS += -std=c99 -DDISCORD_PLUGIN_VERSION='"$(PLUGIN_VERSION)"' -DMARKDOWN_PIDGIN
 
 # Comment out to disable localisation
 CFLAGS += -DENABLE_NLS
@@ -68,13 +68,13 @@ else
       DISCORD_TARGET = FAILNOPURPLE
       DISCORD_DEST =
       DISCORD_ICONS_DEST =
-	  LOCALE_DEST =
+      LOCALE_DEST =
     else
       DISCORD_TARGET = libdiscord.so
       DISCORD_DEST = $(DESTDIR)`$(PKG_CONFIG) --variable=plugindir purple`
       DISCORD_ICONS_DEST = $(DESTDIR)`$(PKG_CONFIG) --variable=datadir purple`/pixmaps/pidgin/protocols
       LOCALEDIR = $(shell $(PKG_CONFIG) --variable=datadir purple)/locale
-	  LOCALE_DEST = $(DESTDIR)$(LOCALEDIR)
+      LOCALE_DEST = $(DESTDIR)$(LOCALEDIR)
     endif
   else
     DISCORD_TARGET = libdiscord3.so
@@ -98,7 +98,7 @@ C_FILES := markdown.c
 PURPLE_COMPAT_FILES :=
 PURPLE_C_FILES := libdiscord.c $(C_FILES)
 
-.PHONY:	all install FAILNOPURPLE clean install-icons install-locales %-locale-install
+.PHONY: all install FAILNOPURPLE clean install-icons install-locales %-locale-install
 
 LOCALES = $(patsubst %.po, %.mo, $(wildcard po/*.po))
 
