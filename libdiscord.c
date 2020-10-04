@@ -4801,6 +4801,45 @@ discord_chat_pinned(PurpleConnection *pc, int id)
 	discord_chat_pinned_by_room_id(pc, chatconv, room_id);
 }
 
+static void
+discord_chat_roles(PurpleConnection *pc, int id)
+{
+	DiscordAccount *da = purple_connection_get_protocol_data(pc);
+	PurpleChatConversation *chatconv;
+	chatconv = purple_conversations_find_chat(pc, id);
+	guint64 room_id = *(guint64 *) purple_conversation_get_data(PURPLE_CONVERSATION(chatconv), "id");
+
+	if (!room_id) {
+		/* TODO FIXME? */
+		room_id = to_int(purple_conversation_get_name(PURPLE_CONVERSATION(chatconv)));
+	}
+	
+	DiscordGuild *guild = NULL;
+	discord_get_channel_global_int_guild(da, room_id, &guild);
+	
+	if (guild != NULL) {
+		PurpleConversation *conv = PURPLE_CONVERSATION(chatconv);
+		
+		if (g_hash_table_size(guild->roles)) {
+			GHashTableIter role_iter;
+			gpointer key, value;
+			
+			purple_conversation_write_system_message(conv, _("Server Roles:"), PURPLE_MESSAGE_NO_LOG);
+			g_hash_table_iter_init(&role_iter, guild->roles);
+
+			while (g_hash_table_iter_next(&role_iter, &key, &value)) {
+				DiscordGuildRole *role = value;
+				gchar *role_text = g_strdup_printf("%" G_GUINT64_FORMAT " - %s", role->id, role->name);
+				purple_conversation_write_system_message(conv, role_text, PURPLE_MESSAGE_NO_LOG);
+			}
+			
+		} else {
+			/* Don't make the user think we forget about them */
+			purple_conversation_write_system_message(conv, _("No server roles"), PURPLE_MESSAGE_NO_LOG);
+		}
+	}
+}
+
 /* Invite to a _group DM_
  * The API for inviting to a guild is different, TODO implement that one too */
 
@@ -6444,6 +6483,21 @@ discord_cmd_pinned(PurpleConversation *conv, const gchar *cmd, gchar **args, gch
 }
 
 static PurpleCmdRet
+discord_cmd_roles(PurpleConversation *conv, const gchar *cmd, gchar **args, gchar **error, gpointer data)
+{
+	PurpleConnection *pc = purple_conversation_get_connection(conv);
+	int id = purple_chat_conversation_get_id(PURPLE_CHAT_CONVERSATION(conv));
+
+	if (pc == NULL || id == -1) {
+		return PURPLE_CMD_RET_FAILED;
+	}
+
+	discord_chat_roles(pc, id);
+
+	return PURPLE_CMD_RET_OK;
+}
+
+static PurpleCmdRet
 discord_cmd_nick(PurpleConversation *conv, const gchar *cmd, gchar **args, gchar **error, gpointer data)
 {
 	PurpleConnection *pc = purple_conversation_get_connection(conv);
@@ -6530,6 +6584,11 @@ plugin_load(PurplePlugin *plugin, GError **error)
 														   PURPLE_CMD_FLAG_PROTOCOL_ONLY | PURPLE_CMD_FLAG_ALLOW_WRONG_ARGS,
 						DISCORD_PLUGIN_ID, discord_cmd_pinned,
 						_("pinned:  Display pinned messages"), NULL);
+
+	purple_cmd_register("roles", "", PURPLE_CMD_P_PLUGIN, PURPLE_CMD_FLAG_CHAT |
+														   PURPLE_CMD_FLAG_PROTOCOL_ONLY | PURPLE_CMD_FLAG_ALLOW_WRONG_ARGS,
+						DISCORD_PLUGIN_ID, discord_cmd_roles,
+						_("roles:  Display server roles"), NULL);
 
 
 
