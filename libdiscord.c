@@ -1120,6 +1120,9 @@ discord_fetch_url_with_method_len(DiscordAccount *ya, const gchar *method, const
 
 		if (postdata[0] == '{') {
 			purple_http_request_header_set(request, "Content-Type", "application/json");
+		} else if (postdata[0] == '-' && postdata[1] == '-') {
+			const gchar *boundary = g_strndup(&postdata[2], strchr(&postdata[2], '\r') - postdata - 2);
+			purple_http_request_header_set_printf(request, "Content-Type", "multipart/form-data; boundary=%s", boundary);
 		} else {
 			purple_http_request_header_set(request, "Content-Type", "application/x-www-form-urlencoded");
 		}
@@ -4021,6 +4024,7 @@ discord_login(PurpleAccount *account)
 	pc_flags |= PURPLE_CONNECTION_FLAG_HTML;
 	pc_flags |= PURPLE_CONNECTION_FLAG_NO_FONTSIZE;
 	pc_flags |= PURPLE_CONNECTION_FLAG_NO_BGCOLOR;
+	pc_flags &= ~PURPLE_CONNECTION_FLAG_NO_IMAGES;
 	purple_connection_set_flags(pc, pc_flags);
 
 	da = g_new0(DiscordAccount, 1);
@@ -5550,6 +5554,71 @@ discord_replace_natural_emoji(const GMatchInfo *match, GString *result, gpointer
 	return FALSE;
 }
 
+static void
+discord_conversation_send_image(DiscordAccount *da, guint64 room_id, PurpleImage *image)
+{
+	GString *postdata;
+	gchar *filename;
+	gchar *mimetype;
+	gchar *url;
+	gchar *nonce;
+	
+	nonce = g_strdup_printf("%" G_GUINT32_FORMAT, g_random_int());
+	g_hash_table_insert(da->sent_message_ids, nonce, nonce);
+	
+	filename = (gchar *)purple_image_get_path(image);
+	if (filename != NULL) {
+		filename = g_path_get_basename(filename);
+	} else {
+		filename = g_strdup_printf("purple%u.%s", g_random_int(), purple_image_get_extension(image));
+	}
+	mimetype = g_strdup(purple_image_get_mimetype(image));
+	
+	postdata = g_string_new(NULL);
+	g_string_append_printf(postdata, "------PurpleBoundary\r\nContent-Disposition: form-data; name=\"file\"; filename=\"%s\"\r\nContent-Type: %s\r\n\r\n", purple_url_encode(filename), mimetype);
+	g_string_append_len(postdata, purple_image_get_data(image), purple_image_get_data_size(image));
+	g_string_append_printf(postdata, "\r\n------PurpleBoundary\r\nContent-Disposition: form-data; name=\"payload_json\"\r\n\r\n{\"content\":\"\",\"nonce\":\"%s\",\"tts\":false}\r\n", nonce);
+	g_string_append(postdata, "------PurpleBoundary--\r\n");
+	
+	url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/channels/%" G_GUINT64_FORMAT "/messages", room_id);
+	
+	discord_fetch_url_with_method_len(da, "POST", url, postdata->str, postdata->len, NULL, NULL);
+	
+	g_free(url);
+	g_string_free(postdata, TRUE);
+}
+
+static void
+discord_conversation_check_message_for_images(DiscordAccount *da, guint64 room_id, const gchar *message)
+{
+	const gchar *img;
+	
+	if ((img = strstr(message, "<img ")) || (img = strstr(message, "<IMG "))) {
+		const gchar *id, *src;
+		const gchar *close = strchr(img, '>');
+		
+		if (((id = strstr(img, "ID=\"")) || (id = strstr(img, "id=\""))) &&
+				id < close) {
+			int imgid = atoi(id + 4);
+			PurpleImage *image = purple_image_store_get(imgid);
+			
+			if (image != NULL) {
+				discord_conversation_send_image(da, room_id, image);
+			}
+		} else if (((src = strstr(img, "SRC=\"")) || (src = strstr(img, "src=\""))) &&
+				src < close) {
+			// purple3 embeds images using src="purple-image:1"
+			if (strncmp(src + 5, "purple-image:", 13) == 0) {
+				int imgid = atoi(src + 5 + 13);
+				PurpleImage *image = purple_image_store_get(imgid);
+				
+				if (image != NULL) {
+					discord_conversation_send_image(da, room_id, image);
+				}
+			}
+		}
+	}
+}
 
 static gint
 discord_conversation_send_message(DiscordAccount *da, guint64 room_id, const gchar *message)
@@ -5560,6 +5629,8 @@ discord_conversation_send_message(DiscordAccount *da, guint64 room_id, const gch
 	gchar *stripped;
 	gchar *final;
 	gint final_len;
+	
+	discord_conversation_check_message_for_images(da, room_id, message);
 
 	nonce = g_strdup_printf("%" G_GUINT32_FORMAT, g_random_int());
 
@@ -6584,7 +6655,7 @@ plugin_init(PurplePlugin *plugin)
 /* prpl_info->add_buddy_with_invite = discord_add_buddy_with_invite; */
 #endif
 
-	prpl_info->options = OPT_PROTO_CHAT_TOPIC | OPT_PROTO_SLASH_COMMANDS_NATIVE | OPT_PROTO_UNIQUE_CHATNAME;
+	prpl_info->options = OPT_PROTO_CHAT_TOPIC | OPT_PROTO_SLASH_COMMANDS_NATIVE | OPT_PROTO_UNIQUE_CHATNAME | OPT_PROTO_IM_IMAGE;
 	prpl_info->protocol_options = discord_add_account_options(prpl_info->protocol_options);
 	prpl_info->icon_spec.format = "png,gif,jpeg";
 	prpl_info->icon_spec.min_width = 0;
