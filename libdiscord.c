@@ -234,6 +234,8 @@ typedef struct {
 
 	gboolean compress;
 	z_stream *zstream;
+	
+	PurpleHttpKeepalivePool *http_keepalive_pool;
 } DiscordAccount;
 
 typedef struct {
@@ -967,7 +969,6 @@ discord_combine_username(const gchar *username, const gchar *discriminator)
 	return g_strconcat(username, "#", discriminator, NULL);
 }
 
-#if PURPLE_VERSION_CHECK(3, 0, 0)
 static void
 discord_update_cookies(DiscordAccount *ya, const GList *cookie_headers)
 {
@@ -997,44 +998,6 @@ discord_update_cookies(DiscordAccount *ya, const GList *cookie_headers)
 	}
 }
 
-#else
-static void
-discord_update_cookies(DiscordAccount *ya, const gchar *headers)
-{
-	const gchar *cookie_start;
-	const gchar *cookie_end;
-	gchar *cookie_name;
-	gchar *cookie_value;
-	int header_len;
-
-	g_return_if_fail(headers != NULL);
-
-	header_len = strlen(headers);
-
-	/* look for the next "Set-Cookie: " */
-	/* grab the data up until ';' */
-	cookie_start = headers;
-
-	while ((cookie_start = strstr(cookie_start, "\r\nSet-Cookie: ")) && (cookie_start - headers) < header_len) {
-		cookie_start += 14;
-		cookie_end = strchr(cookie_start, '=');
-
-		if (cookie_end != NULL) {
-			cookie_name = g_strndup(cookie_start, cookie_end - cookie_start);
-			cookie_start = cookie_end + 1;
-			cookie_end = strchr(cookie_start, ';');
-
-			if (cookie_end != NULL) {
-				cookie_value = g_strndup(cookie_start, cookie_end - cookie_start);
-				cookie_start = cookie_end;
-
-				g_hash_table_replace(ya->cookie_table, cookie_name, cookie_value);
-			}
-		}
-	}
-}
-#endif
-
 static void
 discord_cookie_foreach_cb(gchar *cookie_name, gchar *cookie_value, GString *str)
 {
@@ -1055,16 +1018,11 @@ discord_cookies_to_string(DiscordAccount *ya)
 
 static void
 discord_response_callback(PurpleHttpConnection *http_conn,
-#if PURPLE_VERSION_CHECK(3, 0, 0)
 						  PurpleHttpResponse *response, gpointer user_data)
 {
 	gsize len;
 	const gchar *url_text = purple_http_response_get_data(response, &len);
 	const gchar *error_message = purple_http_response_get_error(response);
-#else
-						  gpointer user_data, const gchar *url_text, gsize len, const gchar *error_message)
-{
-#endif
 	const gchar *body;
 	gsize body_len;
 	DiscordProxyConnection *conn = user_data;
@@ -1072,18 +1030,10 @@ discord_response_callback(PurpleHttpConnection *http_conn,
 
 	conn->ya->http_conns = g_slist_remove(conn->ya->http_conns, http_conn);
 
-#if !PURPLE_VERSION_CHECK(3, 0, 0)
-	discord_update_cookies(conn->ya, url_text);
-
-	body = g_strstr_len(url_text, len, "\r\n\r\n");
-	body = body ? body + 4 : body;
-	body_len = body ? len - (body - url_text) : 0;
-#else
 	discord_update_cookies(conn->ya, purple_http_response_get_headers_by_name(response, "Set-Cookie"));
 
 	body = url_text;
 	body_len = len;
-#endif
 
 	if (body == NULL && error_message != NULL) {
 		/* connection error - unersolvable dns name, non existing server */
@@ -1125,7 +1075,7 @@ discord_response_callback(PurpleHttpConnection *http_conn,
 }
 
 static void
-discord_fetch_url_with_method(DiscordAccount *ya, const gchar *method, const gchar *url, const gchar *postdata, DiscordProxyCallbackFunc callback, gpointer user_data)
+discord_fetch_url_with_method_len(DiscordAccount *ya, const gchar *method, const gchar *url, const gchar *postdata, gsize postdata_len, DiscordProxyCallbackFunc callback, gpointer user_data)
 {
 	PurpleAccount *account;
 	DiscordProxyConnection *conn;
@@ -1151,8 +1101,6 @@ discord_fetch_url_with_method(DiscordAccount *ya, const gchar *method, const gch
 
 	purple_debug_info("discord", "Fetching url %s\n", url);
 
-#if PURPLE_VERSION_CHECK(3, 0, 0)
-
 	PurpleHttpRequest *request = purple_http_request_new(url);
 	purple_http_request_set_method(request, method);
 	purple_http_request_header_set(request, "Accept", "*/*");
@@ -1176,7 +1124,7 @@ discord_fetch_url_with_method(DiscordAccount *ya, const gchar *method, const gch
 			purple_http_request_header_set(request, "Content-Type", "application/x-www-form-urlencoded");
 		}
 
-		purple_http_request_set_contents(request, postdata, -1);
+		purple_http_request_set_contents(request, postdata, postdata_len);
 	}
 
 	http_conn = purple_http_request(ya->pc, request, discord_response_callback, conn);
@@ -1186,62 +1134,13 @@ discord_fetch_url_with_method(DiscordAccount *ya, const gchar *method, const gch
 		ya->http_conns = g_slist_prepend(ya->http_conns, http_conn);
 	}
 
-#else
-	GString *headers;
-	gchar *host = NULL, *path = NULL, *user = NULL, *password = NULL;
-	int port;
-	purple_url_parse(url, &host, &port, &path, &user, &password);
-
-	headers = g_string_new(NULL);
-
-	/* Use the full 'url' until libpurple can handle path's longer than 256 chars */
-	g_string_append_printf(headers, "%s /%s HTTP/1.0\r\n", method, path);
-	g_string_append_printf(headers, "Connection: close\r\n");
-	g_string_append_printf(headers, "Host: %s\r\n", host);
-	g_string_append_printf(headers, "Accept: */*\r\n");
-	g_string_append_printf(headers, "User-Agent: " DISCORD_USERAGENT "\r\n");
-	g_string_append_printf(headers, "Cookie: %s\r\n", cookies);
-
-	if (ya->token) {
-		g_string_append_printf(headers, "Authorization: %s\r\n", ya->token);
-	}
-
-	if (postdata) {
-		if (strstr(url, "/login") && strstr(postdata, "password")) {
-			purple_debug_info("discord", "With postdata ###PASSWORD REMOVED###\n");
-		} else {
-			purple_debug_info("discord", "With postdata %s\n", postdata);
-		}
-
-		if (postdata[0] == '{') {
-			g_string_append(headers, "Content-Type: application/json\r\n");
-		} else {
-			g_string_append(headers, "Content-Type: application/x-www-form-urlencoded\r\n");
-		}
-
-		g_string_append_printf(headers, "Content-Length: %" G_GSIZE_FORMAT "\r\n", strlen(postdata));
-		g_string_append(headers, "\r\n");
-
-		g_string_append(headers, postdata);
-	} else {
-		g_string_append(headers, "\r\n");
-	}
-
-	g_free(host);
-	g_free(path);
-	g_free(user);
-	g_free(password);
-
-	http_conn = purple_util_fetch_url_request_len_with_account(ya->account, url, FALSE, DISCORD_USERAGENT, TRUE, headers->str, TRUE, 6553500, discord_response_callback, conn);
-
-	if (http_conn != NULL) {
-		ya->http_conns = g_slist_prepend(ya->http_conns, http_conn);
-	}
-
-	g_string_free(headers, TRUE);
-#endif
-
 	g_free(cookies);
+}
+
+static void
+discord_fetch_url_with_method(DiscordAccount *da, const gchar *method, const gchar *url, const gchar *postdata, DiscordProxyCallbackFunc callback, gpointer user_data)
+{
+	discord_fetch_url_with_method_len(da, method, url, postdata, -1, callback, user_data);
 }
 
 static void
@@ -4129,6 +4028,7 @@ discord_login(PurpleAccount *account)
 	da->account = account;
 	da->pc = pc;
 	da->cookie_table = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
+	da->http_keepalive_pool = purple_http_keepalive_pool_new();
 
 	da->last_load_last_message_id = purple_account_get_int(account, "last_message_id_high", 0);
 
@@ -4229,13 +4129,11 @@ discord_close(PurpleConnection *pc)
 	da->received_message_queue = NULL;
 
 	while (da->http_conns) {
-#if !PURPLE_VERSION_CHECK(3, 0, 0)
-		purple_util_fetch_url_cancel(da->http_conns->data);
-#else
 		purple_http_conn_cancel(da->http_conns->data);
-#endif
 		da->http_conns = g_slist_delete_link(da->http_conns, da->http_conns);
 	}
+	
+	purple_http_keepalive_pool_unref(da->http_keepalive_pool);
 
 	while (da->pending_writes) {
 		json_object_unref(da->pending_writes->data);
@@ -5664,7 +5562,6 @@ discord_conversation_send_message(DiscordAccount *da, guint64 room_id, const gch
 	gint final_len;
 
 	nonce = g_strdup_printf("%" G_GUINT32_FORMAT, g_random_int());
-	g_hash_table_insert(da->sent_message_ids, nonce, nonce);
 
 	/* Convert to Discord-flavour markdown */
 	marked = markdown_html_to_markdown(markdown_escape_md(message, TRUE));
@@ -5678,12 +5575,14 @@ discord_conversation_send_message(DiscordAccount *da, guint64 room_id, const gch
 	}
 
 	final_len = strlen(final);
-	if (final_len <= 2000) {
+	if (final_len <= 2000 && final_len > 0) {
 		gchar *url;
 		gchar *postdata;
 		json_object_set_string_member(data, "content", final);
 		json_object_set_string_member(data, "nonce", nonce);
 		json_object_set_boolean_member(data, "tts", FALSE);
+		
+		g_hash_table_insert(da->sent_message_ids, nonce, nonce);
 
 		url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/channels/%" G_GUINT64_FORMAT "/messages", room_id);
 		postdata = json_object_to_string(data);
@@ -6635,15 +6534,27 @@ plugin_unload(PurplePlugin *plugin, GError **error)
 
 /* Purple2 Plugin Load Functions */
 #if !PURPLE_VERSION_CHECK(3, 0, 0)
+
+	
+// Normally set in core.c in purple3
+void _purple_socket_init(void);
+void _purple_socket_uninit(void);
+
 static gboolean
 libpurple2_plugin_load(PurplePlugin *plugin)
 {
+	_purple_socket_init();
+	purple_http_init();
+	
 	return plugin_load(plugin, NULL);
 }
 
 static gboolean
 libpurple2_plugin_unload(PurplePlugin *plugin)
 {
+	_purple_socket_uninit();
+	purple_http_uninit();
+	
 	return plugin_unload(plugin, NULL);
 }
 

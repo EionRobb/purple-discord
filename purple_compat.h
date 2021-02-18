@@ -19,6 +19,7 @@
 #include <purple.h>
 #if PURPLE_VERSION_CHECK(3, 0, 0)
 #include <http.h>
+#include <image.h>
 #endif
 
 #ifndef PURPLE_PLUGINS
@@ -31,6 +32,9 @@
 
 // Purple2 compat functions
 #if !PURPLE_VERSION_CHECK(3, 0, 0)
+#include "purple2compat/http.h"
+#include "purple2compat/image.h"
+#include "purple2compat/image-store.h"
 
 #define purple_buddy_get_local_alias  purple_buddy_get_local_buddy_alias
 #define purple_buddy_set_local_alias  purple_blist_alias_buddy
@@ -161,9 +165,10 @@ purple_message_destroy(PurpleMessage *message)
 #define PURPLE_MESSAGE_REMOTE_SEND 0x10000
 #endif
 
+#define purple_proxy_info_get_proxy_type        purple_proxy_info_get_type
+
 #define purple_account_privacy_deny_add purple_privacy_deny_add
 #define purple_account_privacy_deny_remove purple_privacy_deny_remove
-#define PurpleHttpConnection PurpleUtilFetchUrlData
 #define purple_buddy_set_name purple_blist_rename_buddy
 #define purple_request_cpar_from_connection(a) purple_connection_get_account(a), NULL, NULL
 #define purple_notify_user_info_add_pair_html purple_notify_user_info_add_pair

@@ -95,7 +95,7 @@ WIN32_PIDGIN3_LDFLAGS = -L$(PIDGIN3_TREE_TOP)/libpurple -L$(WIN32_DEV_TOP)/gplug
 CFLAGS += -DLOCALEDIR=\"$(LOCALEDIR)\"
 
 C_FILES := markdown.c
-PURPLE_COMPAT_FILES :=
+PURPLE_COMPAT_FILES := purple2compat/*.c
 PURPLE_C_FILES := libdiscord.c $(C_FILES)
 
 .PHONY: all install FAILNOPURPLE clean install-icons install-locales %-locale-install
