@@ -3739,7 +3739,7 @@ discord_guild_get_offline_users(DiscordAccount *da, const gchar *guild_id)
 		while (g_hash_table_iter_next(&iter, &key, &value)) {
 			DiscordChannel *iter_channel = value;
 
-			if (iter_channel->type == CHANNEL_GUILD_TEXT) {
+			if (iter_channel->type == CHANNEL_GUILD_TEXT && discord_is_channel_visible(da, user, iter_channel)) {
 				channel = iter_channel;
 				break;
 			}
@@ -3748,7 +3748,6 @@ discord_guild_get_offline_users(DiscordAccount *da, const gchar *guild_id)
 
 	if (channel && discord_is_channel_visible(da, user, channel)) {
 		JsonArray *user_ranges = json_array_new();
-		//guint guild_member_count = g_hash_table_size(guild->members);//
 		for (guint i = 0; i < 100; i += 100) {
 			JsonArray *user_range = json_array_new();
 			json_array_add_int_element(user_range, i);
