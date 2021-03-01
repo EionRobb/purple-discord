@@ -972,15 +972,15 @@ discord_combine_username(const gchar *username, const gchar *discriminator)
 static void
 discord_update_cookies(DiscordAccount *ya, const GList *cookie_headers)
 {
-	const gchar *cookie_start;
-	const gchar *cookie_end;
-	gchar *cookie_name;
-	gchar *cookie_value;
 	const GList *cur;
 
 	for (cur = cookie_headers; cur != NULL; cur = g_list_next(cur)) {
+		const gchar *cookie_start;
+		const gchar *cookie_end;
+		gchar *cookie_name;
+		gchar *cookie_value;
+		
 		cookie_start = cur->data;
-
 		cookie_end = strchr(cookie_start, '=');
 
 		if (cookie_end != NULL) {
@@ -3639,11 +3639,11 @@ discord_populate_guild(DiscordAccount *da, JsonObject *guild)
 	DiscordGuild *g = discord_upsert_guild(da->new_guilds, guild);
 
 	JsonArray *channels = json_object_get_array_member(guild, "channels");
-	JsonArray *roles = json_object_get_array_member(guild, "roles");
+	JsonArray *guild_roles = json_object_get_array_member(guild, "roles");
 	JsonArray *members = json_object_get_array_member(guild, "members");
 
-	for (int j = json_array_get_length(roles) - 1; j >= 0; j--) {
-		JsonObject *role = json_array_get_object_element(roles, j);
+	for (int j = json_array_get_length(guild_roles) - 1; j >= 0; j--) {
+		JsonObject *role = json_array_get_object_element(guild_roles, j);
 		discord_add_guild_role(g, role);
 	}
 
