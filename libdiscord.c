@@ -990,8 +990,7 @@ discord_update_cookies(DiscordAccount *ya, const GList *cookie_headers)
 
 			if (cookie_end != NULL) {
 				cookie_value = g_strndup(cookie_start, cookie_end - cookie_start);
-				cookie_start = cookie_end;
-
+				
 				g_hash_table_replace(ya->cookie_table, cookie_name, cookie_value);
 			}
 		}
@@ -4397,7 +4396,7 @@ discord_socket_got_data(gpointer userdata, PurpleSslConnection *conn, PurpleInpu
 		gint nlbr_count = 0;
 		gchar nextchar;
 
-		while (nlbr_count < 4 && (read_len = purple_ssl_read(conn, &nextchar, 1)) == 1) {
+		while (nlbr_count < 4 && purple_ssl_read(conn, &nextchar, 1) == 1) {
 			if (nextchar == '\r' || nextchar == '\n') {
 				nlbr_count++;
 			} else {
@@ -4456,9 +4455,8 @@ discord_socket_got_data(gpointer userdata, PurpleSslConnection *conn, PurpleInpu
 					if (length_code <= 125) {
 						ping_frame_len = length_code;
 					} else if (length_code == 126) {
-						guchar len_buf[2];
-						purple_ssl_read(conn, len_buf, 2);
-						ping_frame_len = (len_buf[0] << 8) + len_buf[1];
+						purple_ssl_read(conn, &ping_frame_len, 2);
+						ping_frame_len = GUINT16_FROM_BE(ping_frame_len);
 					} else if (length_code == 127) {
 						purple_ssl_read(conn, &ping_frame_len, 8);
 						ping_frame_len = GUINT64_FROM_BE(ping_frame_len);
@@ -4490,9 +4488,8 @@ discord_socket_got_data(gpointer userdata, PurpleSslConnection *conn, PurpleInpu
 			if (length_code <= 125) {
 				ya->frame_len = length_code;
 			} else if (length_code == 126) {
-				guchar len_buf[2];
-				purple_ssl_read(conn, len_buf, 2);
-				ya->frame_len = (len_buf[0] << 8) + len_buf[1];
+				purple_ssl_read(conn, &ya->frame_len, 2);
+				ya->frame_len = GUINT16_FROM_BE(ya->frame_len);
 			} else if (length_code == 127) {
 				purple_ssl_read(conn, &ya->frame_len, 8);
 				ya->frame_len = GUINT64_FROM_BE(ya->frame_len);
