@@ -5742,6 +5742,7 @@ discord_created_direct_message_send(DiscordAccount *da, JsonNode *node, gpointer
 	const gchar *message;
 	const gchar *room_id;
 	PurpleBuddy *buddy;
+	gint64 result_code;
 
 	if (node == NULL) {
 		purple_conversation_present_error(who, da->account, _("Could not create conversation"));
@@ -5750,9 +5751,13 @@ discord_created_direct_message_send(DiscordAccount *da, JsonNode *node, gpointer
 	}
 
 	result = json_node_get_object(node);
-
-	if (json_object_get_int_member(result, "code") == 50007) {
-		purple_conversation_present_error(who, da->account, _("Could not send message to this user"));
+	result_code = json_object_get_int_member(result, "code");
+	
+	if (result_code / 10000 == 4 || result_code / 10000 == 5) {
+		const gchar *result_message = json_object_get_string_member(result, "message");
+		if (!result_message || !*result_message) result_message = _("Could not send message to this user");
+		
+		purple_conversation_present_error(who, da->account, result_message);
 		purple_message_destroy(msg);
 		return;
 	}

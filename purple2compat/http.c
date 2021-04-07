@@ -1280,6 +1280,7 @@ static gboolean _purple_http_recv_loopbody(PurpleHttpConnection *hc, gint fd)
 					purple_debug_warning("http",
 						"Invalid redirect\n");
 				_purple_http_error(hc, _("Error parsing HTTP"));
+				return FALSE;
 			}
 
 			purple_http_url_relative(hc->url, url);
