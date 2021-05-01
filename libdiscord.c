@@ -1244,6 +1244,7 @@ void discord_handle_add_new_user(DiscordAccount *ya, JsonObject *obj);
 
 PurpleGroup *discord_get_or_create_default_group();
 
+static void discord_got_initial_load_users(DiscordAccount *da, JsonNode *node, gpointer user_data);
 static void discord_create_relationship(DiscordAccount *da, JsonObject *json);
 static void discord_got_relationships(DiscordAccount *da, JsonNode *node, gpointer user_data);
 static void discord_got_private_channels(DiscordAccount *da, JsonNode *node, gpointer user_data);
@@ -2771,6 +2772,7 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 			discord_upsert_user(da->new_users, self_user);
 		}
 
+		discord_got_initial_load_users(da, json_object_get_member(data, "users"), NULL);
 		discord_got_relationships(da, json_object_get_member(data, "relationships"), NULL);
 		discord_got_private_channels(da, json_object_get_member(data, "private_channels"), NULL);
 		discord_got_presences(da, json_object_get_member(data, "presences"), NULL);
@@ -3518,6 +3520,17 @@ discord_create_relationship(DiscordAccount *da, JsonObject *json)
 	}
 
 	g_free(merged_username);
+}
+
+static void
+discord_got_initial_load_users(DiscordAccount *da, JsonNode *node, gpointer user_data)
+{
+	JsonArray *users = json_node_get_array(node);
+	guint len = json_array_get_length(users);
+
+	for (int i = len - 1; i >= 0; i--) {
+		discord_upsert_user(da->new_users, json_array_get_object_element(users, i));
+	}
 }
 
 static void
