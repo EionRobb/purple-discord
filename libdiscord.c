@@ -204,6 +204,7 @@ typedef struct {
 	gchar *token;
 	gchar *session_id;
 	gchar *mfa_ticket;
+	gchar *ack_token;
 
 	PurpleSslConnection *websocket;
 	gboolean websocket_header_received;
@@ -5425,6 +5426,18 @@ discord_join_chat(PurpleConnection *pc, GHashTable *chatdata)
 }
 
 static void
+discord_got_ack_token(DiscordAccount *da, JsonNode *node, gpointer user_data)
+{
+	JsonObject *ack_response = json_node_get_object(node);
+	const gchar *token = json_object_get_string_member(ack_response, "token");
+	
+	if (token != NULL) {
+		g_free(da->ack_token);
+		da->ack_token = g_strdup(token);
+	}
+}
+
+static void
 discord_mark_room_messages_read(DiscordAccount *da, guint64 channel_id)
 {
 	if (!channel_id) {
@@ -5468,7 +5481,9 @@ discord_mark_room_messages_read(DiscordAccount *da, guint64 channel_id)
 	gchar *url;
 
 	url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/channels/%" G_GUINT64_FORMAT "/messages/%" G_GUINT64_FORMAT "/ack", channel_id, last_message_id);
-	discord_fetch_url(da, url, "{\"token\":null}", NULL, NULL);
+	gchar *postdata = g_strconcat("{\"token\":\"", da->ack_token, "\"}", NULL);
+	discord_fetch_url(da, url, postdata, discord_got_ack_token, NULL);
+	g_free(postdata);
 	g_free(url);
 }
 
