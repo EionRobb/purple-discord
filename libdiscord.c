@@ -3479,7 +3479,14 @@ discord_friends_auth_reject(
 static void
 discord_create_relationship(DiscordAccount *da, JsonObject *json)
 {
-	DiscordUser *user = discord_upsert_user(da->new_users, json_object_get_object_member(json, "user"));
+	DiscordUser *user;
+	if (json_object_has_member(json, "user")) {
+		user = discord_upsert_user(da->new_users, json_object_get_object_member(json, "user"));
+	} else {
+		user = discord_get_user(da, to_int(json_object_get_string_member(json, "user_id")));
+	}
+	g_return_if_fail(user != NULL);
+	
 	gint64 type = json_object_get_int_member(json, "type");
 	gchar *merged_username = discord_create_fullname(user);
 
@@ -3582,14 +3589,30 @@ discord_got_presences(DiscordAccount *da, JsonNode *node, gpointer user_data)
 	for (i = len - 1; i >= 0; i--) {
 		/* TODO convert to user object */
 		JsonObject *presence = json_array_get_object_element(presences, i);
-		JsonObject *user = json_object_get_object_member(presence, "user");
 		const gchar *status = json_object_get_string_member(presence, "status");
-		const gchar *username = json_object_get_string_member(user, "username");
-		const gchar *discriminator = json_object_get_string_member(user, "discriminator");
-		JsonObject *game = json_object_get_object_member(presence, "game");
+		gchar *merged_username = NULL;
+		JsonObject *game = NULL;
+		
+		if (json_object_has_member(presence, "user")) {
+			//Old API
+			JsonObject *user = json_object_get_object_member(presence, "user");
+			const gchar *username = json_object_get_string_member(user, "username");
+			const gchar *discriminator = json_object_get_string_member(user, "discriminator");
+			merged_username = discord_combine_username(username, discriminator);
+			
+			game = json_object_get_object_member(presence, "game");
+			
+		} else {
+			const gchar *user_id = json_object_get_string_member(presence, "user_id");
+			DiscordUser *user = discord_get_user(da, to_int(user_id));
+			merged_username = discord_create_fullname(user);
+			
+			JsonArray *activities = json_object_get_array_member(presence, "activities");
+			game = json_array_get_object_element(activities, 0);
+			
+		}
 		const gchar *game_id = json_object_get_string_member(game, "id");
 		const gchar *game_name = json_object_get_string_member(game, "name");
-		gchar *merged_username = discord_combine_username(username, discriminator);
 
 		if (purple_strequal(game_id, "custom")) {
 			game_name = json_object_get_string_member(game, "state");
