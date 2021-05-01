@@ -2802,6 +2802,9 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 			}
 		}
 
+	} else if (purple_strequal(type, "READY_SUPPLEMENTAL")) {
+
+		discord_got_presences(da, json_object_get_member(data, "merged_presences"), NULL);
 
 	} else if (purple_strequal(type, "GUILD_SYNC") || purple_strequal(type, "GUILD_CREATE") || purple_strequal(type, "GUILD_MEMBERS_CHUNK")) {
 		const gchar *guild_id_str = json_object_get_string_member(data, "id");
