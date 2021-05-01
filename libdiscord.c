@@ -3595,6 +3595,18 @@ discord_got_private_channels(DiscordAccount *da, JsonNode *node, gpointer user_d
 static void
 discord_got_presences(DiscordAccount *da, JsonNode *node, gpointer user_data)
 {
+	if(node == NULL) {
+		return;
+	}
+	
+	if (json_node_get_object(node)) {
+		JsonObject *presences_obj = json_node_get_object(node);
+		if (json_object_has_member(presences_obj, "friends")) {
+			node = json_object_get_member(presences_obj, "friends");
+		} else {
+			return;
+		}
+	}
 	JsonArray *presences = json_node_get_array(node);
 	gint i;
 	guint len = json_array_get_length(presences);
