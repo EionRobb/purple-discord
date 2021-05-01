@@ -3534,17 +3534,33 @@ discord_got_private_channels(DiscordAccount *da, JsonNode *node, gpointer user_d
 		gint64 room_type = json_object_get_int_member(channel, "type");
 
 		if (room_type == 1) {
+			gchar *merged_username = NULL;
+			
 			/* One-to-one DM */
-			JsonObject *user = json_array_get_object_element(recipients, 0);
-			const gchar *username = json_object_get_string_member(user, "username");
-			const gchar *discriminator = json_object_get_string_member(user, "discriminator");
-			gchar *merged_username = discord_combine_username(username, discriminator);
+			if (recipients == NULL) {
+				//New API
+				recipients = json_object_get_array_member(channel, "recipient_ids");
+				const gchar *user_id = json_array_get_string_element(recipients, 0);
+				
+				DiscordUser *user = discord_get_user(da, to_int(user_id));
+				merged_username = discord_create_fullname(user);
+				
+			} else {
+				// Old API
+				JsonObject *user = json_array_get_object_element(recipients, 0);
+				const gchar *username = json_object_get_string_member(user, "username");
+				const gchar *discriminator = json_object_get_string_member(user, "discriminator");
+				merged_username = discord_combine_username(username, discriminator);
+				
+			}
+			
+			if (merged_username != NULL) {
+				g_hash_table_replace(da->one_to_ones, g_strdup(room_id), g_strdup(merged_username));
+				g_hash_table_replace(da->one_to_ones_rev, g_strdup(merged_username), g_strdup(room_id));
+				g_hash_table_replace(da->last_message_id_dm, g_strdup(room_id), g_strdup(last_message_id));
 
-			g_hash_table_replace(da->one_to_ones, g_strdup(room_id), g_strdup(merged_username));
-			g_hash_table_replace(da->one_to_ones_rev, g_strdup(merged_username), g_strdup(room_id));
-			g_hash_table_replace(da->last_message_id_dm, g_strdup(room_id), g_strdup(last_message_id));
-
-			g_free(merged_username);
+				g_free(merged_username);
+			}
 		} else if (room_type == 3) {
 			discord_got_group_dm(da, channel);
 		}
