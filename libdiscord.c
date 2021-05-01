@@ -1106,6 +1106,7 @@ discord_fetch_url_with_method_len(DiscordAccount *ya, const gchar *method, const
 	purple_http_request_header_set(request, "Accept", "*/*");
 	purple_http_request_header_set(request, "User-Agent", DISCORD_USERAGENT);
 	purple_http_request_header_set(request, "Cookie", cookies);
+	purple_http_request_set_keepalive_pool(request, ya->http_keepalive_pool);
 
 	if (ya->token) {
 		purple_http_request_header_set(request, "Authorization", ya->token);
