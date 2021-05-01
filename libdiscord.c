@@ -5861,9 +5861,6 @@ discord_send_im(PurpleConnection *pc,
 
 			discord_fetch_url(da, "https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/users/@me/channels", postdata, discord_created_direct_message_send, msg);
 
-#if !PURPLE_VERSION_CHECK(3, 0, 0)
-			purple_message_destroy(msg);
-#endif
 			g_free(postdata);
 			json_object_unref(data);
 
