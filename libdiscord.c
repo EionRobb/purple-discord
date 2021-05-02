@@ -379,7 +379,13 @@ discord_new_guild_role(JsonObject *json)
 	guild_role->id = to_int(json_object_get_string_member(json, "id"));
 	guild_role->name = g_strdup(json_object_get_string_member(json, "name"));
 	guild_role->color = json_object_get_int_member(json, "color");
-	guild_role->permissions = json_object_get_int_member(json, "permissions");
+	
+	if (json_object_get_string_member(json, "permissions")) {
+		const gchar *permissions = json_object_get_string_member(json, "permissions");
+		guild_role->permissions = to_int(permissions);
+	} else {
+		guild_role->permissions = json_object_get_int_member(json, "permissions");
+	}
 
 	return guild_role;
 }
@@ -2763,6 +2769,19 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 			/* Ensure user is non-null... */
 			discord_upsert_user(da->new_users, self_user);
 		}
+		
+		// New ready-handshake has membership of a guild outside of that guild
+		// hack it back in so that the existing code can cope with it
+		if (json_object_has_member(data, "merged_members")) {
+			JsonArray *merged_members = json_object_get_array_member(data, "merged_members");
+			JsonArray *guilds = json_object_get_array_member(data, "guilds");
+			
+			for (int i = json_array_get_length(merged_members) - 1; i >= 0; i--) {
+				JsonArray *members = json_array_get_array_element(merged_members, i);
+				JsonObject *guild = json_array_get_object_element(guilds, i);
+				json_object_set_array_member(guild, "members", members);
+			}
+		}
 
 		discord_got_initial_load_users(da, json_object_get_member(data, "users"), NULL);
 		discord_got_relationships(da, json_object_get_member(data, "relationships"), NULL);
@@ -2800,6 +2819,49 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 	} else if (purple_strequal(type, "READY_SUPPLEMENTAL")) {
 
 		discord_got_presences(da, json_object_get_member(data, "merged_presences"), NULL);
+		
+		// Server membership for users other than ourselves comes through here
+		
+		if (json_object_has_member(data, "merged_members")) {
+			JsonArray *merged_members = json_object_get_array_member(data, "merged_members");
+			JsonArray *guilds = json_object_get_array_member(data, "guilds");
+			
+			for (int i = json_array_get_length(merged_members) - 1; i >= 0; i--) {
+				JsonArray *members = json_array_get_array_element(merged_members, i);
+				JsonObject *guild_obj = json_array_get_object_element(guilds, i);
+				const gchar *guild_id_str = json_object_get_string_member(guild_obj, "guild_id");
+				guint64 guild_id = to_int(guild_id_str);
+
+				DiscordGuild *guild = discord_get_guild(da, guild_id);
+				
+				if (guild == NULL) {
+					continue;
+				}
+				
+				for (int j = json_array_get_length(members) - 1; j >= 0; j--) {
+					JsonObject *member = json_array_get_object_element(members, j);
+					const gchar *user_id = json_object_get_string_member(member, "user_id");
+					DiscordUser *u = discord_get_user(da, to_int(user_id));
+					
+					if (u == NULL) {
+						continue;
+					}
+					
+					DiscordGuildMembership *membership = discord_new_guild_membership(guild_id, member);
+					g_hash_table_replace_int64(u->guild_memberships, membership->id, membership);
+					g_hash_table_replace_int64(guild->members, u->id, NULL);
+
+					g_free(discord_alloc_nickname(u, guild, membership->nick));
+
+					JsonArray *roles = json_object_get_array_member(member, "roles");
+					int roles_len = json_array_get_length(roles);
+					for (int k = 0; k < roles_len; k++) {
+						guint64 role = to_int(json_array_get_string_element(roles, k));
+						g_array_append_val(membership->roles, role);
+					}
+				}
+			}
+		}
 
 	} else if (purple_strequal(type, "GUILD_SYNC") || purple_strequal(type, "GUILD_CREATE") || purple_strequal(type, "GUILD_MEMBERS_CHUNK")) {
 		const gchar *guild_id_str = json_object_get_string_member(data, "id");
@@ -2826,9 +2888,18 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		/* all members in small groups, online in large */
 		for (int j = json_array_get_length(members) - 1; j >= 0; j--) {
 			JsonObject *member = json_array_get_object_element(members, j);
+			DiscordUser *u = NULL;
 			JsonObject *user = json_object_get_object_member(member, "user");
-
-			DiscordUser *u = discord_upsert_user(da->new_users, user);
+			if (user == NULL) {
+				const gchar *user_id = json_object_get_string_member(member, "user_id");
+				u = discord_get_user(da, to_int(user_id));
+			} else {
+				u = discord_upsert_user(da->new_users, user);
+			}
+			if (u == NULL) {
+				continue;
+			}
+			
 			DiscordGuildMembership *membership = discord_new_guild_membership(guild_id, member);
 			g_hash_table_replace_int64(u->guild_memberships, membership->id, membership);
 			g_hash_table_replace_int64(guild->members, u->id, NULL);
@@ -3740,9 +3811,19 @@ discord_populate_guild(DiscordAccount *da, JsonObject *guild)
 
 	for (int j = json_array_get_length(members) - 1; j >= 0; j--) {
 		JsonObject *member = json_array_get_object_element(members, j);
+		
+		DiscordUser *u = NULL;
 		JsonObject *user = json_object_get_object_member(member, "user");
+		if (user == NULL) {
+			const gchar *user_id = json_object_get_string_member(member, "user_id");
+			u = discord_get_user(da, to_int(user_id));
+		} else {
+			u = discord_upsert_user(da->new_users, user);
+		}
+		if (u == NULL) {
+			continue;
+		}
 
-		DiscordUser *u = discord_upsert_user(da->new_users, user);
 		DiscordGuildMembership *membership = discord_new_guild_membership(g->id, member);
 		g_hash_table_replace_int64(u->guild_memberships, membership->id, membership);
 		g_hash_table_replace_int64(g->members, u->id, NULL);
