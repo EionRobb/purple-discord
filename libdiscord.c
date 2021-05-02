@@ -5521,7 +5521,7 @@ discord_mark_room_messages_read(DiscordAccount *da, guint64 channel_id)
 	gchar *url;
 
 	url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/channels/%" G_GUINT64_FORMAT "/messages/%" G_GUINT64_FORMAT "/ack", channel_id, last_message_id);
-	gchar *postdata = g_strconcat("{\"token\":\"", da->ack_token, "\"}", NULL);
+	gchar *postdata = g_strconcat("{\"token\":\"", da->ack_token ? da->ack_token : "null", "\"}", NULL);
 	discord_fetch_url(da, url, postdata, discord_got_ack_token, NULL);
 	g_free(postdata);
 	g_free(url);
