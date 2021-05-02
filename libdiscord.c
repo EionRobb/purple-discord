@@ -228,7 +228,6 @@ typedef struct {
 	GHashTable *new_guilds;
 	GHashTable *group_dms;			/* A store of known room_id's -> DiscordChannel's */
 
-	GSList *http_conns; /**< PurpleHttpConnection to be cancelled on logout */
 	gint frames_since_reconnect;
 	GSList *pending_writes;
 	gint roomlist_guild_count;
@@ -1028,8 +1027,6 @@ discord_response_callback(PurpleHttpConnection *http_conn,
 	DiscordProxyConnection *conn = user_data;
 	JsonParser *parser = json_parser_new();
 
-	conn->ya->http_conns = g_slist_remove(conn->ya->http_conns, http_conn);
-
 	discord_update_cookies(conn->ya, purple_http_response_get_headers_by_name(response, "Set-Cookie"));
 
 	body = url_text;
@@ -1080,7 +1077,6 @@ discord_fetch_url_with_method_len(DiscordAccount *ya, const gchar *method, const
 	PurpleAccount *account;
 	DiscordProxyConnection *conn;
 	gchar *cookies;
-	PurpleHttpConnection *http_conn;
 
 	account = ya->account;
 
@@ -1131,12 +1127,8 @@ discord_fetch_url_with_method_len(DiscordAccount *ya, const gchar *method, const
 		purple_http_request_set_contents(request, postdata, postdata_len);
 	}
 
-	http_conn = purple_http_request(ya->pc, request, discord_response_callback, conn);
+	purple_http_request(ya->pc, request, discord_response_callback, conn);
 	purple_http_request_unref(request);
-
-	if (http_conn != NULL) {
-		ya->http_conns = g_slist_prepend(ya->http_conns, http_conn);
-	}
 
 	g_free(cookies);
 }
@@ -4215,12 +4207,8 @@ discord_close(PurpleConnection *pc)
 	da->new_guilds = NULL;
 	g_queue_free(da->received_message_queue);
 	da->received_message_queue = NULL;
-
-	while (da->http_conns) {
-		purple_http_conn_cancel(da->http_conns->data);
-		da->http_conns = g_slist_delete_link(da->http_conns, da->http_conns);
-	}
 	
+	purple_http_conn_cancel_all(pc);
 	purple_http_keepalive_pool_unref(da->http_keepalive_pool);
 
 	while (da->pending_writes) {
