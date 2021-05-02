@@ -1066,7 +1066,7 @@ discord_response_callback(PurpleHttpConnection *http_conn,
 	} else {
 		JsonNode *root = json_parser_get_root(parser);
 
-		purple_debug_misc("discord", "Got response: %s\n", body);
+		purple_debug_misc("discord", "Got response: %s\n", body ? body : "(null)");
 
 		if (conn->callback) {
 			conn->callback(conn->ya, root, conn->user_data);
@@ -2164,9 +2164,10 @@ release_ctx:
 static void
 discord_got_nick_change(DiscordAccount *da, DiscordUser *user, DiscordGuild *guild, const gchar *new, const gchar *old, gboolean self)
 {
-	gchar *old_safe = g_strdup(old);
+	gchar *old_safe = NULL;
 
-	if (old) {
+	if (old != NULL) {
+		old_safe = g_strdup(old); // The pointer to 'old' can be free'd by the _remove() to copy it
 		g_hash_table_remove(guild->nicknames_rev, old);
 	}
 
@@ -2779,6 +2780,8 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 			for (int i = json_array_get_length(merged_members) - 1; i >= 0; i--) {
 				JsonArray *members = json_array_get_array_element(merged_members, i);
 				JsonObject *guild = json_array_get_object_element(guilds, i);
+				
+				json_array_ref(members);
 				json_object_set_array_member(guild, "members", members);
 			}
 		}
@@ -3874,6 +3877,9 @@ discord_guild_get_offline_users(DiscordAccount *da, const gchar *guild_id)
 
 	JsonObject *channels = json_object_new();
 	DiscordGuild *guild = discord_get_guild(da, to_int(guild_id));
+	if (guild == NULL) {
+		return;
+	}
 	DiscordUser *user = discord_get_user(da, da->self_user_id);
 
 	// We can only request status updates for one channel at a time, try:
@@ -3997,7 +4003,7 @@ discord_got_read_states(DiscordAccount *da, JsonNode *node, gpointer user_data)
 
 		const gchar *channel = json_object_get_string_member(state, "id");
 		gchar *last_id = from_int(discord_get_room_last_id(da, to_int(channel)));
-		guint mentions = json_object_get_int_member(state, "mention_count");
+		gint mentions = json_object_get_int_member(state, "mention_count");
 
 		if (mentions && channel) {
 			gboolean isDM = g_hash_table_contains(da->one_to_ones, channel);
@@ -4514,11 +4520,15 @@ discord_inflate(DiscordAccount *da, gchar *frame, gsize frame_len)
 	gsize decomp_len;
 
 	while (zs->avail_in > 0) {
-		zs->next_out = (Bytef*)decomp_buff; //-V507
+		zs->next_out = (Bytef*)decomp_buff;
 		zs->avail_out = sizeof(decomp_buff);
-		decomp_len = zs->avail_out = sizeof(decomp_buff);
+		decomp_len = zs->avail_out;
 		gzres = inflate(zs, Z_SYNC_FLUSH);
 		decomp_len -= zs->avail_out;
+
+		// Quieten static analysis
+		zs->next_out = NULL;
+		zs->avail_out = 0;
 
 		if (gzres == Z_OK || gzres == Z_STREAM_END) {
 			g_string_append_len(ret, decomp_buff, decomp_len);
@@ -4526,10 +4536,6 @@ discord_inflate(DiscordAccount *da, gchar *frame, gsize frame_len)
 			break;
 		}
 	}
-
-	// Quieten static analysis
-	zs->next_out = NULL;
-	zs->avail_out = 0;
 
 	if (gzres != Z_OK && gzres != Z_STREAM_END) {
 		g_string_free(ret, TRUE);
@@ -5749,6 +5755,7 @@ discord_conversation_send_image(DiscordAccount *da, guint64 room_id, PurpleImage
 	
 	discord_fetch_url_with_method_len(da, "POST", url, postdata->str, postdata->len, NULL, NULL);
 	
+	g_free(mimetype);
 	g_free(url);
 	g_string_free(postdata, TRUE);
 }

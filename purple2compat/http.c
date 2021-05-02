@@ -408,9 +408,12 @@ purple_http_gz_put(PurpleHttpGzStream *gzs, const gchar *buf, gsize len)
 
 		zs->next_out = (Bytef*)decompressed_buff;
 		zs->avail_out = sizeof(decompressed_buff);
-		decompressed_len = zs->avail_out = sizeof(decompressed_buff);
+		decompressed_len = zs->avail_out;
 		gzres = inflate(zs, Z_FULL_FLUSH);
 		decompressed_len -= zs->avail_out;
+
+		zs->next_out = NULL;
+		zs->avail_out = 0;
 
 		if (gzres == Z_OK || gzres == Z_STREAM_END) {
 			if (decompressed_len == 0)
@@ -1625,7 +1628,7 @@ PurpleHttpConnection * purple_http_request(PurpleConnection *gc,
 			hc, request->url);
 	else
 		purple_debug_misc("http", "Performing new request %p to %s.\n",
-			hc, hc->url ? hc->url->host : NULL);
+			hc, hc->url ? hc->url->host : "(null)");
 
 	if (!hc->url || hc->url->host == NULL || hc->url->host[0] == '\0') {
 		purple_debug_error("http", "Invalid URL requested.\n");
