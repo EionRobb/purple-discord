@@ -475,7 +475,7 @@ discord_update_status(DiscordUser *user, JsonObject *json)
 		}
 	}
 
-	if (json_object_has_member(json, "game")) {
+	if (json_object_get_object_member(json, "game") != NULL) {
 		JsonObject *game = json_object_get_object_member(json, "game");
 		const gchar *game_id = json_object_get_string_member(game, "id");
 
