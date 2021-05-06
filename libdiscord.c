@@ -243,6 +243,14 @@ typedef struct {
 	DiscordGuild *guild;
 } DiscordAccountGuild;
 
+typedef struct _DiscordImgMsgContext {
+	gint conv_id;
+	gchar* from;
+	gchar* url;
+	PurpleMessageFlags flags;
+	time_t timestamp;
+} DiscordImgMsgContext;
+
 static guint64
 to_int(const gchar *id)
 {
@@ -452,6 +460,15 @@ discord_free_channel(gpointer data)
 	g_list_free_full(channel->recipients, g_free);
 
 	g_free(channel);
+}
+
+static void
+discord_free_image_context(gpointer data)
+{
+	DiscordImgMsgContext *img_context = data;
+	g_free(img_context->from);
+	g_free(img_context->url);
+	g_free(img_context);
 }
 
 /* updating */
@@ -1737,15 +1754,6 @@ bail:
 	return g_strdup(who);
 }
 
-typedef struct _DiscordImgMsgContext {
-	gint conv_id;
-	gchar* from;
-	const gchar* url;
-	PurpleMessageFlags flags;
-	time_t timestamp;
-} DiscordImgMsgContext;
-
-
 static void
 discord_download_image_cb(DiscordAccount *da, JsonNode *node, gpointer user_data) {
 	//The returned size can be changed by appending a querystring of ?size=desired_size to the URL. Image size can be any power of two between 16 and 4096.
@@ -1774,14 +1782,15 @@ discord_download_image_cb(DiscordAccount *da, JsonNode *node, gpointer user_data
 		} else {
 			purple_serv_got_im(da->pc, img_context->from, attachment_show, img_context->flags, img_context->timestamp);
 		}
-		g_free(img_context);
+		g_free(attachment_show);
+		discord_free_image_contex(img_context);
 		return;
 	} else {
 		purple_debug_error("discord", "Image response node is null!\n");
-		g_free(img_context);
+		discord_free_image_contex(img_context);
 		return;
 	}
-	g_free(img_context);
+	discord_free_image_contex(img_context);
 	return;
 }
 
