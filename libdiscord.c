@@ -5293,7 +5293,7 @@ discord_got_history_of_room(DiscordAccount *da, JsonNode *node, gpointer user_da
 		JsonObject *message = json_array_get_object_element(messages, i);
 		guint64 id = to_int(json_object_get_string_member(message, "id"));
 
-		if (id < last_message) {
+		if (id <= last_message) {
 			rolling_last_message_id = discord_process_message(da, message, DISCORD_MESSAGE_NORMAL);
 		}
 	}
