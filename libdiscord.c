@@ -1023,7 +1023,7 @@ discord_cookies_to_string(DiscordAccount *ya)
 
 static void
 discord_response_callback(PurpleHttpConnection *http_conn,
-						  PurpleHttpResponse *response, gpointer user_data)
+							PurpleHttpResponse *response, gpointer user_data)
 {
 	gsize len;
 	const gchar *url_text = purple_http_response_get_data(response, &len);
@@ -1751,7 +1751,7 @@ discord_download_image_cb(DiscordAccount *da, JsonNode *node, gpointer user_data
 	//The returned size can be changed by appending a querystring of ?size=desired_size to the URL. Image size can be any power of two between 16 and 4096.
 	DiscordImgMsgContext *img_context = user_data;
 	int img_id = -1;
-  gsize img_data_len;
+	gsize img_data_len;
 	gpointer img_data;
 	const gchar *img_data_s;
 	gchar *attachment_show;
@@ -1761,18 +1761,18 @@ discord_download_image_cb(DiscordAccount *da, JsonNode *node, gpointer user_data
 		img_data_s = g_dataset_get_data(node, "raw_body");
 		img_data_len = json_object_get_int_member(response, "len");
 		img_data = g_memdup(img_data_s, img_data_len);
-  	img_id = purple_imgstore_add_with_id(img_data, img_data_len, NULL);
+		img_id = purple_imgstore_add_with_id(img_data, img_data_len, NULL);
 
-    if (img_id >= 0) {
-      attachment_show = g_strdup_printf("<img id=\"%u\" alt=\"%s\"/><br /><a href=\"%s\">(link)</a>", img_id, img_context->url, img_context->url);
+		if (img_id >= 0) {
+			attachment_show = g_strdup_printf("<img id=\"%u\" alt=\"%s\"/><br /><a href=\"%s\">(link)</a>", img_id, img_context->url, img_context->url);
 		} else {
-      attachment_show = g_strdup(img_context->url);
-    }
+			attachment_show = g_strdup(img_context->url);
+		}
 
 		if (img_context->conv_id >= 0) {
-    	purple_serv_got_chat_in(da->pc, img_context->conv_id, img_context->from, img_context->flags, attachment_show, img_context->timestamp);
+			purple_serv_got_chat_in(da->pc, img_context->conv_id, img_context->from, img_context->flags, attachment_show, img_context->timestamp);
 		} else {
-    	purple_serv_got_im(da->pc, img_context->from, attachment_show, img_context->flags, img_context->timestamp);
+			purple_serv_got_im(da->pc, img_context->from, attachment_show, img_context->flags, img_context->timestamp);
 		}
 		g_free(img_context);
 		return;
@@ -1782,7 +1782,7 @@ discord_download_image_cb(DiscordAccount *da, JsonNode *node, gpointer user_data
 		return;
 	}
 	g_free(img_context);
-  return;
+	return;
 }
 
 static guint64
@@ -2135,7 +2135,6 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 						GList *l = conv->logs;
 						if (l != NULL) {
 							PurpleLog *log = l->data;
-							printf("%s\n", log->name);
 							purple_log_write(log, flags | PURPLE_MESSAGE_INVISIBLE, merged_username, timestamp, url_log);
 						}
 
@@ -2189,8 +2188,8 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 					img_context->flags = flags | PURPLE_MESSAGE_IMAGES;
 					img_context->timestamp = timestamp;
 
-        	PurpleChatConversation *chatconv = purple_conversations_find_chat(da->pc, discord_chat_hash(channel_id));
-       		conv = PURPLE_CONVERSATION(chatconv);
+					PurpleChatConversation *chatconv = purple_conversations_find_chat(da->pc, discord_chat_hash(channel_id));
+ 					conv = PURPLE_CONVERSATION(chatconv);
 
 					int head_count = guild ? g_hash_table_size(guild->members) : 0;
 					if (head_count > 0 && (head_count < purple_account_get_int(da->account, "large-channel-count", 20) || purple_account_get_bool(da->account, "display-images-large-servers", FALSE) )) {
@@ -2198,7 +2197,6 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 						GList *l = conv->logs;
 						if (l != NULL) {
 							PurpleLog *log = l->data;
-							printf("%s\n", log->name);
 							purple_log_write(log, flags | PURPLE_MESSAGE_INVISIBLE, name, timestamp, url_log);
 						}
 					}
@@ -3624,9 +3622,9 @@ discord_capture_join_part(PurpleConversation *conv, const char *name, PurpleChat
 static void
 discord_friends_auth_accept(
 #if PURPLE_VERSION_CHECK(3, 0, 0)
-  const gchar *response,
+	const gchar *response,
 #endif
-  gpointer userdata)
+	gpointer userdata)
 {
 	DiscordUserInviteResponseStore *store = userdata;
 	DiscordUser *user = store->user;
@@ -3642,9 +3640,9 @@ discord_friends_auth_accept(
 static void
 discord_friends_auth_reject(
 #if PURPLE_VERSION_CHECK(3, 0, 0)
-  const gchar *response,
+	const gchar *response,
 #endif
-  gpointer userdata)
+	gpointer userdata)
 {
 	DiscordUserInviteResponseStore *store = userdata;
 	DiscordUser *user = store->user;
@@ -4831,17 +4829,17 @@ discord_socket_connected(gpointer userdata, PurpleSslConnection *conn, PurpleInp
 	purple_ssl_input_add(da->websocket, discord_socket_got_data, da);
 
 	websocket_header = g_strdup_printf("GET %s%s HTTP/1.1\r\n"
-									   "Host: %s\r\n"
-									   "Connection: Upgrade\r\n"
-									   "Pragma: no-cache\r\n"
-									   "Cache-Control: no-cache\r\n"
-									   "Upgrade: websocket\r\n"
-									   "Sec-WebSocket-Version: 13\r\n"
-									   "Sec-WebSocket-Key: %s\r\n"
-									   "User-Agent: " DISCORD_USERAGENT "\r\n"
-									   "\r\n",
-									   DISCORD_GATEWAY_SERVER_PATH, da->compress ? "&compress=zlib-stream" : "",
-									   DISCORD_GATEWAY_SERVER, websocket_key);
+									 	"Host: %s\r\n"
+									 	"Connection: Upgrade\r\n"
+									 	"Pragma: no-cache\r\n"
+									 	"Cache-Control: no-cache\r\n"
+									 	"Upgrade: websocket\r\n"
+									 	"Sec-WebSocket-Version: 13\r\n"
+									 	"Sec-WebSocket-Key: %s\r\n"
+									 	"User-Agent: " DISCORD_USERAGENT "\r\n"
+									 	"\r\n",
+									 	DISCORD_GATEWAY_SERVER_PATH, da->compress ? "&compress=zlib-stream" : "",
+									 	DISCORD_GATEWAY_SERVER, websocket_key);
 
 	purple_ssl_write(da->websocket, websocket_header, strlen(websocket_header));
 
@@ -5462,7 +5460,7 @@ discord_compute_permission(DiscordAccount *da, DiscordUser *user, DiscordChannel
 	/* Check special permission overrides just for us */
 
 	DiscordPermissionOverride *uo =
-	  g_hash_table_lookup_int64(channel->permission_user_overrides, uid);
+		g_hash_table_lookup_int64(channel->permission_user_overrides, uid);
 
 	if (uo) {
 		permissions = (permissions & ~(uo->deny)) | uo->allow;
@@ -5964,11 +5962,11 @@ discord_conversation_send_message(DiscordAccount *da, guint64 room_id, const gch
 static gint
 discord_chat_send(PurpleConnection *pc, gint id,
 #if PURPLE_VERSION_CHECK(3, 0, 0)
-				  PurpleMessage *msg)
+					PurpleMessage *msg)
 {
 	const gchar *message = purple_message_get_contents(msg);
 #else
-				  const gchar *message, PurpleMessageFlags flags)
+					const gchar *message, PurpleMessageFlags flags)
 {
 #endif
 
@@ -6215,10 +6213,10 @@ discord_add_buddy_cb(DiscordAccount *da, JsonNode *node, gpointer user_data)
 static void
 discord_add_buddy(PurpleConnection *pc, PurpleBuddy *buddy, PurpleGroup *group
 #if PURPLE_VERSION_CHECK(3, 0, 0)
-				  ,
-				  const char *message
+					,
+					const char *message
 #endif
-				  )
+					)
 {
 	DiscordAccount *da = purple_connection_get_protocol_data(pc);
 	const gchar *buddy_name = purple_buddy_get_name(buddy);
@@ -6703,11 +6701,11 @@ discord_join_server(PurpleProtocolAction *action)
 static GList *
 discord_actions(
 #if !PURPLE_VERSION_CHECK(3, 0, 0)
-  PurplePlugin *plugin, gpointer context
+	PurplePlugin *plugin, gpointer context
 #else
-  PurpleConnection *pc
+	PurpleConnection *pc
 #endif
-  )
+	)
 {
 	GList *m = NULL;
 	PurpleProtocolAction *act;
@@ -6842,17 +6840,17 @@ plugin_load(PurplePlugin *plugin, GError **error)
 						_("leave:  Leave the channel"), NULL);
 
 	purple_cmd_register("part", "", PURPLE_CMD_P_PLUGIN, PURPLE_CMD_FLAG_CHAT |
-														   PURPLE_CMD_FLAG_PROTOCOL_ONLY | PURPLE_CMD_FLAG_ALLOW_WRONG_ARGS,
+														 	PURPLE_CMD_FLAG_PROTOCOL_ONLY | PURPLE_CMD_FLAG_ALLOW_WRONG_ARGS,
 						DISCORD_PLUGIN_ID, discord_cmd_leave,
 						_("part:  Leave the channel"), NULL);
 
 	purple_cmd_register("pinned", "", PURPLE_CMD_P_PLUGIN, PURPLE_CMD_FLAG_CHAT |
-														   PURPLE_CMD_FLAG_PROTOCOL_ONLY | PURPLE_CMD_FLAG_ALLOW_WRONG_ARGS,
+														 	PURPLE_CMD_FLAG_PROTOCOL_ONLY | PURPLE_CMD_FLAG_ALLOW_WRONG_ARGS,
 						DISCORD_PLUGIN_ID, discord_cmd_pinned,
 						_("pinned:  Display pinned messages"), NULL);
 
 	purple_cmd_register("roles", "", PURPLE_CMD_P_PLUGIN, PURPLE_CMD_FLAG_CHAT |
-														   PURPLE_CMD_FLAG_PROTOCOL_ONLY | PURPLE_CMD_FLAG_ALLOW_WRONG_ARGS,
+														 	PURPLE_CMD_FLAG_PROTOCOL_ONLY | PURPLE_CMD_FLAG_ALLOW_WRONG_ARGS,
 						DISCORD_PLUGIN_ID, discord_cmd_roles,
 						_("roles:  Display server roles"), NULL);
 
@@ -7135,22 +7133,22 @@ PURPLE_DEFINE_TYPE_EXTENDED(
 	DiscordProtocol, discord_protocol, PURPLE_TYPE_PROTOCOL, 0,
 
 	PURPLE_IMPLEMENT_INTERFACE_STATIC(PURPLE_TYPE_PROTOCOL_IM_IFACE,
-									  discord_protocol_im_iface_init)
+										discord_protocol_im_iface_init)
 
 	PURPLE_IMPLEMENT_INTERFACE_STATIC(PURPLE_TYPE_PROTOCOL_CHAT_IFACE,
-									  discord_protocol_chat_iface_init)
+										discord_protocol_chat_iface_init)
 
 	PURPLE_IMPLEMENT_INTERFACE_STATIC(PURPLE_TYPE_PROTOCOL_SERVER_IFACE,
-									  discord_protocol_server_iface_init)
+										discord_protocol_server_iface_init)
 
 	PURPLE_IMPLEMENT_INTERFACE_STATIC(PURPLE_TYPE_PROTOCOL_CLIENT_IFACE,
-									  discord_protocol_client_iface_init)
+										discord_protocol_client_iface_init)
 
 	PURPLE_IMPLEMENT_INTERFACE_STATIC(PURPLE_TYPE_PROTOCOL_PRIVACY_IFACE,
-									  discord_protocol_privacy_iface_init)
+										discord_protocol_privacy_iface_init)
 
 	PURPLE_IMPLEMENT_INTERFACE_STATIC(PURPLE_TYPE_PROTOCOL_ROOMLIST_IFACE,
-									  discord_protocol_roomlist_iface_init)
+										discord_protocol_roomlist_iface_init)
 
 );
 
@@ -7190,17 +7188,17 @@ plugin_query(GError **error)
 #endif
 
 	return purple_plugin_info_new(
-	  "id", DISCORD_PLUGIN_ID,
-	  "name", "Discord",
-	  "version", DISCORD_PLUGIN_VERSION,
-	  "category", _("Protocol"),
-	  "summary", _("Discord Protocol Plugins."),
-	  "description", _("Adds Discord protocol support to libpurple."),
-	  "website", DISCORD_PLUGIN_WEBSITE,
-	  "abi-version", PURPLE_ABI_VERSION,
-	  "flags", PURPLE_PLUGIN_INFO_FLAGS_INTERNAL |
+		"id", DISCORD_PLUGIN_ID,
+		"name", "Discord",
+		"version", DISCORD_PLUGIN_VERSION,
+		"category", _("Protocol"),
+		"summary", _("Discord Protocol Plugins."),
+		"description", _("Adds Discord protocol support to libpurple."),
+		"website", DISCORD_PLUGIN_WEBSITE,
+		"abi-version", PURPLE_ABI_VERSION,
+		"flags", PURPLE_PLUGIN_INFO_FLAGS_INTERNAL |
 				 PURPLE_PLUGIN_INFO_FLAGS_AUTO_LOAD,
-	  NULL);
+		NULL);
 }
 
 PURPLE_PLUGIN_INIT(discord, plugin_query, libpurple3_plugin_load, libpurple3_plugin_unload);
