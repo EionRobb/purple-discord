@@ -141,6 +141,7 @@ markdown_convert_markdown(const gchar *html, gboolean escape_html, gboolean disc
 	gboolean s_strikethrough = FALSE;
 	gboolean s_codeblock = FALSE;
 	gboolean s_codebit = FALSE;
+	gboolean s_spoiler = FALSE;
 
 	for (guint i = 0; i < html_len; ++i) {
 		char c = html[i];
@@ -245,6 +246,13 @@ markdown_convert_markdown(const gchar *html, gboolean escape_html, gboolean disc
 #else
 				HTML_TOGGLE_OUT(s_codebit, "<code>", "</code>");
 #endif
+			}
+		} else if (c == '|') {
+			if (html[i + 1] == '|') {
+#ifdef MARKDOWN_PIDGIN
+					HTML_TOGGLE_OUT(s_spoiler, "<span style='foreground: black; background: black'>", "</span>");
+#endif
+				i++;
 			}
 		} else {
 			out = g_string_append_c(out, c);
