@@ -234,7 +234,7 @@ typedef struct {
 
 	gboolean compress;
 	z_stream *zstream;
-	
+
 	PurpleHttpKeepalivePool *http_keepalive_pool;
 } DiscordAccount;
 
@@ -379,7 +379,7 @@ discord_new_guild_role(JsonObject *json)
 	guild_role->id = to_int(json_object_get_string_member(json, "id"));
 	guild_role->name = g_strdup(json_object_get_string_member(json, "name"));
 	guild_role->color = json_object_get_int_member(json, "color");
-	
+
 	if (json_object_get_string_member(json, "permissions")) {
 		const gchar *permissions = json_object_get_string_member(json, "permissions");
 		guild_role->permissions = to_int(permissions);
@@ -985,7 +985,7 @@ discord_update_cookies(DiscordAccount *ya, const GList *cookie_headers)
 		const gchar *cookie_end;
 		gchar *cookie_name;
 		gchar *cookie_value;
-		
+
 		cookie_start = cur->data;
 		cookie_end = strchr(cookie_start, '=');
 
@@ -996,7 +996,7 @@ discord_update_cookies(DiscordAccount *ya, const GList *cookie_headers)
 
 			if (cookie_end != NULL) {
 				cookie_value = g_strndup(cookie_start, cookie_end - cookie_start);
-				
+
 				g_hash_table_replace(ya->cookie_table, cookie_name, cookie_value);
 			}
 		}
@@ -1183,7 +1183,7 @@ discord_send_auth(DiscordAccount *da)
 		json_object_set_string_member(properties, "browser_user_agent", DISCORD_USERAGENT);
 		json_object_set_string_member(properties, "browser_version", "51.0.2704.103");
 		json_object_set_string_member(properties, "os_version", "10");
-		
+
 		json_object_set_string_member(properties, "referrer", "https://discord.com/channels/@me");
 		json_object_set_string_member(properties, "referring_domain", "discord.com");
 		json_object_set_string_member(properties, "referrer_current", "");
@@ -1191,7 +1191,7 @@ discord_send_auth(DiscordAccount *da)
 		json_object_set_string_member(properties, "release_channel", "stable");
 		json_object_set_int_member(properties, "client_build_number", 83364);
 		json_object_set_null_member(properties, "client_event_source");
-		
+
 		json_object_set_object_member(data, "properties", properties);
 
 		/* TODO real presence */
@@ -1200,7 +1200,7 @@ discord_send_auth(DiscordAccount *da)
 		json_object_set_array_member(presence, "activities", json_array_new());
 		json_object_set_boolean_member(presence, "afk", FALSE);
 		json_object_set_object_member(data, "presence", presence);
-		
+
 		json_object_set_boolean_member(data, "compress", FALSE);
 		//json_object_set_int_member(data, "large_threshold", 25000);
 
@@ -1737,6 +1737,54 @@ bail:
 	return g_strdup(who);
 }
 
+typedef struct _DiscordImgMsgContext {
+	gint conv_id;
+	gchar* from;
+	const gchar* url;
+	PurpleMessageFlags flags;
+	time_t timestamp;
+} DiscordImgMsgContext;
+
+
+static void
+discord_download_image_cb(DiscordAccount *da, JsonNode *node, gpointer user_data) {
+	//The returned size can be changed by appending a querystring of ?size=desired_size to the URL. Image size can be any power of two between 16 and 4096.
+	DiscordImgMsgContext *img_context = user_data;
+	int img_id = -1;
+  gsize img_data_len;
+	gpointer img_data;
+	const gchar *img_data_s;
+	gchar *attachment_show;
+
+	if (node != NULL) {
+		JsonObject *response = json_node_get_object(node);
+		img_data_s = g_dataset_get_data(node, "raw_body");
+		img_data_len = json_object_get_int_member(response, "len");
+		img_data = g_memdup(img_data_s, img_data_len);
+  	img_id = purple_imgstore_add_with_id(img_data, img_data_len, NULL);
+
+    if (img_id >= 0) {
+      attachment_show = g_strdup_printf("<img id=\"%u\" alt=\"%s\"/><br /><a href=\"%s\">(link)</a>", img_id, img_context->url, img_context->url);
+		} else {
+      attachment_show = g_strdup(img_context->url);
+    }
+
+		if (img_context->conv_id >= 0) {
+    	purple_serv_got_chat_in(da->pc, img_context->conv_id, img_context->from, img_context->flags, attachment_show, img_context->timestamp);
+		} else {
+    	purple_serv_got_im(da->pc, img_context->from, attachment_show, img_context->flags, img_context->timestamp);
+		}
+		g_free(img_context);
+		return;
+	} else {
+		purple_debug_error("discord", "Image response node is null!\n");
+		g_free(img_context);
+		return;
+	}
+	g_free(img_context);
+  return;
+}
+
 static guint64
 discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_type)
 {
@@ -2058,9 +2106,43 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 			if (attachments) {
 				for (i = json_array_get_length(attachments) - 1; i >= 0; i--) {
 					JsonObject *attachment = json_array_get_object_element(attachments, i);
-					const gchar *url = json_object_get_string_member(attachment, "url");
 
-					purple_serv_got_im(da->pc, merged_username, url, flags, timestamp);
+					const gchar *url = json_object_get_string_member(attachment, "proxy_url");
+					const gchar *url_log = json_object_get_string_member(attachment, "url");
+					const gchar *type = json_object_get_string_member(attachment, "content_type");
+					//gsize size = json_object_get_int_member(attachment, "content_type");
+
+					if (g_str_has_prefix(type, "image") && (!strstr(url, "/SPOILER_")) && purple_account_get_bool(da->account, "display-images", FALSE)) {
+
+						DiscordImgMsgContext *img_context = g_new0(DiscordImgMsgContext, 1);
+						img_context->conv_id = -1;
+						img_context->from = g_strdup(merged_username);
+						img_context->url = g_strdup(url);
+						img_context->flags = flags | PURPLE_MESSAGE_IMAGES;
+						img_context->timestamp = timestamp;
+
+						if (conv == NULL) {
+							PurpleIMConversation *imconv;
+							imconv = purple_conversations_find_im_with_account(merged_username, da->account);
+							if (imconv == NULL) {
+								imconv = purple_im_conversation_new(da->account, merged_username);
+							}
+
+							conv = PURPLE_CONVERSATION(imconv);
+						}
+
+						discord_fetch_url(da, img_context->url, NULL, discord_download_image_cb, img_context);
+						GList *l = conv->logs;
+						if (l != NULL) {
+							PurpleLog *log = l->data;
+							printf("%s\n", log->name);
+							purple_log_write(log, flags | PURPLE_MESSAGE_INVISIBLE, merged_username, timestamp, url_log);
+						}
+
+					} else {
+						purple_serv_got_im(da->pc, merged_username, url, flags, timestamp);
+					}
+
 				}
 			}
 
@@ -2092,10 +2174,41 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 		if (attachments) {
 			for (i = json_array_get_length(attachments) - 1; i >= 0; i--) {
 				JsonObject *attachment = json_array_get_object_element(attachments, i);
-				const gchar *url = json_object_get_string_member(attachment, "url");
 
-				purple_serv_got_chat_in(da->pc, discord_chat_hash(channel_id), name, flags, url, timestamp);
+				const gchar *url = json_object_get_string_member(attachment, "proxy_url");
+				const gchar *url_log = json_object_get_string_member(attachment, "url");
+				const gchar *type = json_object_get_string_member(attachment, "content_type");
+				//gsize size = json_object_get_int_member(attachment, "content_type");
+
+				if (g_str_has_prefix(type, "image") && (!strstr(url, "/SPOILER_")) && purple_account_get_bool(da->account, "display-images", FALSE)) {
+
+					DiscordImgMsgContext *img_context = g_new0(DiscordImgMsgContext, 1);
+					img_context->conv_id = discord_chat_hash(channel_id);
+					img_context->from = g_strdup(name);
+					img_context->url = g_strdup(url);
+					img_context->flags = flags | PURPLE_MESSAGE_IMAGES;
+					img_context->timestamp = timestamp;
+
+        	PurpleChatConversation *chatconv = purple_conversations_find_chat(da->pc, discord_chat_hash(channel_id));
+       		conv = PURPLE_CONVERSATION(chatconv);
+
+					int head_count = guild ? g_hash_table_size(guild->members) : 0;
+					if (head_count > 0 && (head_count < purple_account_get_int(da->account, "large-channel-count", 20) || purple_account_get_bool(da->account, "display-images-large-servers", FALSE) )) {
+						discord_fetch_url(da, img_context->url, NULL, discord_download_image_cb, img_context);
+						GList *l = conv->logs;
+						if (l != NULL) {
+							PurpleLog *log = l->data;
+							printf("%s\n", log->name);
+							purple_log_write(log, flags | PURPLE_MESSAGE_INVISIBLE, name, timestamp, url_log);
+						}
+					}
+
+				} else {
+					purple_serv_got_chat_in(da->pc, discord_chat_hash(channel_id), name, flags, url, timestamp);
+				}
+
 			}
+
 		}
 
 		g_free(name);
@@ -2770,17 +2883,17 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 			/* Ensure user is non-null... */
 			discord_upsert_user(da->new_users, self_user);
 		}
-		
+
 		// New ready-handshake has membership of a guild outside of that guild
 		// hack it back in so that the existing code can cope with it
 		if (json_object_has_member(data, "merged_members")) {
 			JsonArray *merged_members = json_object_get_array_member(data, "merged_members");
 			JsonArray *guilds = json_object_get_array_member(data, "guilds");
-			
+
 			for (int i = json_array_get_length(merged_members) - 1; i >= 0; i--) {
 				JsonArray *members = json_array_get_array_element(merged_members, i);
 				JsonObject *guild = json_array_get_object_element(guilds, i);
-				
+
 				json_array_ref(members);
 				json_object_set_array_member(guild, "members", members);
 			}
@@ -2822,13 +2935,13 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 	} else if (purple_strequal(type, "READY_SUPPLEMENTAL")) {
 
 		discord_got_presences(da, json_object_get_member(data, "merged_presences"), NULL);
-		
+
 		// Server membership for users other than ourselves comes through here
-		
+
 		if (json_object_has_member(data, "merged_members")) {
 			JsonArray *merged_members = json_object_get_array_member(data, "merged_members");
 			JsonArray *guilds = json_object_get_array_member(data, "guilds");
-			
+
 			for (int i = json_array_get_length(merged_members) - 1; i >= 0; i--) {
 				JsonArray *members = json_array_get_array_element(merged_members, i);
 				JsonObject *guild_obj = json_array_get_object_element(guilds, i);
@@ -2836,20 +2949,20 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 				guint64 guild_id = to_int(guild_id_str);
 
 				DiscordGuild *guild = discord_get_guild(da, guild_id);
-				
+
 				if (guild == NULL) {
 					continue;
 				}
-				
+
 				for (int j = json_array_get_length(members) - 1; j >= 0; j--) {
 					JsonObject *member = json_array_get_object_element(members, j);
 					const gchar *user_id = json_object_get_string_member(member, "user_id");
 					DiscordUser *u = discord_get_user(da, to_int(user_id));
-					
+
 					if (u == NULL) {
 						continue;
 					}
-					
+
 					DiscordGuildMembership *membership = discord_new_guild_membership(guild_id, member);
 					g_hash_table_replace_int64(u->guild_memberships, membership->id, membership);
 					g_hash_table_replace_int64(guild->members, u->id, NULL);
@@ -2902,7 +3015,7 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 			if (u == NULL) {
 				continue;
 			}
-			
+
 			DiscordGuildMembership *membership = discord_new_guild_membership(guild_id, member);
 			g_hash_table_replace_int64(u->guild_memberships, membership->id, membership);
 			g_hash_table_replace_int64(guild->members, u->id, NULL);
@@ -3554,7 +3667,7 @@ discord_create_relationship(DiscordAccount *da, JsonObject *json)
 		user = discord_get_user(da, to_int(json_object_get_string_member(json, "user_id")));
 	}
 	g_return_if_fail(user != NULL);
-	
+
 	gint64 type = json_object_get_int_member(json, "type");
 	gchar *merged_username = discord_create_fullname(user);
 
@@ -3626,25 +3739,25 @@ discord_got_private_channels(DiscordAccount *da, JsonNode *node, gpointer user_d
 
 		if (room_type == 1) {
 			gchar *merged_username = NULL;
-			
+
 			/* One-to-one DM */
 			if (recipients == NULL) {
 				//New API
 				recipients = json_object_get_array_member(channel, "recipient_ids");
 				const gchar *user_id = json_array_get_string_element(recipients, 0);
-				
+
 				DiscordUser *user = discord_get_user(da, to_int(user_id));
 				merged_username = discord_create_fullname(user);
-				
+
 			} else {
 				// Old API
 				JsonObject *user = json_array_get_object_element(recipients, 0);
 				const gchar *username = json_object_get_string_member(user, "username");
 				const gchar *discriminator = json_object_get_string_member(user, "discriminator");
 				merged_username = discord_combine_username(username, discriminator);
-				
+
 			}
-			
+
 			if (merged_username != NULL) {
 				g_hash_table_replace(da->one_to_ones, g_strdup(room_id), g_strdup(merged_username));
 				g_hash_table_replace(da->one_to_ones_rev, g_strdup(merged_username), g_strdup(room_id));
@@ -3664,7 +3777,7 @@ discord_got_presences(DiscordAccount *da, JsonNode *node, gpointer user_data)
 	if(node == NULL) {
 		return;
 	}
-	
+
 	if (json_node_get_object(node)) {
 		JsonObject *presences_obj = json_node_get_object(node);
 		if (json_object_has_member(presences_obj, "friends")) {
@@ -3683,24 +3796,24 @@ discord_got_presences(DiscordAccount *da, JsonNode *node, gpointer user_data)
 		const gchar *status = json_object_get_string_member(presence, "status");
 		gchar *merged_username = NULL;
 		JsonObject *game = NULL;
-		
+
 		if (json_object_has_member(presence, "user")) {
 			//Old API
 			JsonObject *user = json_object_get_object_member(presence, "user");
 			const gchar *username = json_object_get_string_member(user, "username");
 			const gchar *discriminator = json_object_get_string_member(user, "discriminator");
 			merged_username = discord_combine_username(username, discriminator);
-			
+
 			game = json_object_get_object_member(presence, "game");
-			
+
 		} else {
 			const gchar *user_id = json_object_get_string_member(presence, "user_id");
 			DiscordUser *user = discord_get_user(da, to_int(user_id));
 			merged_username = discord_create_fullname(user);
-			
+
 			JsonArray *activities = json_object_get_array_member(presence, "activities");
 			game = json_array_get_object_element(activities, 0);
-			
+
 		}
 		const gchar *game_id = json_object_get_string_member(game, "id");
 		const gchar *game_name = json_object_get_string_member(game, "name");
@@ -3814,7 +3927,7 @@ discord_populate_guild(DiscordAccount *da, JsonObject *guild)
 
 	for (int j = json_array_get_length(members) - 1; j >= 0; j--) {
 		JsonObject *member = json_array_get_object_element(members, j);
-		
+
 		DiscordUser *u = NULL;
 		JsonObject *user = json_object_get_object_member(member, "user");
 		if (user == NULL) {
@@ -4294,7 +4407,7 @@ discord_close(PurpleConnection *pc)
 	da->new_guilds = NULL;
 	g_queue_free(da->received_message_queue);
 	da->received_message_queue = NULL;
-	
+
 	purple_http_conn_cancel_all(pc);
 	purple_http_keepalive_pool_unref(da->http_keepalive_pool);
 
@@ -4872,17 +4985,17 @@ discord_chat_roles(PurpleConnection *pc, int id)
 		/* TODO FIXME? */
 		room_id = to_int(purple_conversation_get_name(PURPLE_CONVERSATION(chatconv)));
 	}
-	
+
 	DiscordGuild *guild = NULL;
 	discord_get_channel_global_int_guild(da, room_id, &guild);
-	
+
 	if (guild != NULL) {
 		PurpleConversation *conv = PURPLE_CONVERSATION(chatconv);
-		
+
 		if (g_hash_table_size(guild->roles)) {
 			GHashTableIter role_iter;
 			gpointer key, value;
-			
+
 			purple_conversation_write_system_message(conv, _("Server Roles:"), PURPLE_MESSAGE_NO_LOG);
 			g_hash_table_iter_init(&role_iter, guild->roles);
 
@@ -4891,7 +5004,7 @@ discord_chat_roles(PurpleConnection *pc, int id)
 				gchar *role_text = g_strdup_printf("%" G_GUINT64_FORMAT " - %s", role->id, role->name);
 				purple_conversation_write_system_message(conv, role_text, PURPLE_MESSAGE_NO_LOG);
 			}
-			
+
 		} else {
 			/* Don't make the user think we forget about them */
 			purple_conversation_write_system_message(conv, _("No server roles"), PURPLE_MESSAGE_NO_LOG);
@@ -5557,7 +5670,7 @@ discord_got_ack_token(DiscordAccount *da, JsonNode *node, gpointer user_data)
 {
 	JsonObject *ack_response = json_node_get_object(node);
 	const gchar *token = json_object_get_string_member(ack_response, "token");
-	
+
 	if (token != NULL) {
 		g_free(da->ack_token);
 		da->ack_token = g_strdup(token);
@@ -5733,10 +5846,10 @@ discord_conversation_send_image(DiscordAccount *da, guint64 room_id, PurpleImage
 	gchar *mimetype;
 	gchar *url;
 	gchar *nonce;
-	
+
 	nonce = g_strdup_printf("%" G_GUINT32_FORMAT, g_random_int());
 	g_hash_table_insert(da->sent_message_ids, nonce, nonce);
-	
+
 	filename = (gchar *)purple_image_get_path(image);
 	if (filename != NULL) {
 		filename = g_path_get_basename(filename);
@@ -5744,17 +5857,17 @@ discord_conversation_send_image(DiscordAccount *da, guint64 room_id, PurpleImage
 		filename = g_strdup_printf("purple%u.%s", g_random_int(), purple_image_get_extension(image));
 	}
 	mimetype = g_strdup(purple_image_get_mimetype(image));
-	
+
 	postdata = g_string_new(NULL);
 	g_string_append_printf(postdata, "------PurpleBoundary\r\nContent-Disposition: form-data; name=\"file\"; filename=\"%s\"\r\nContent-Type: %s\r\n\r\n", purple_url_encode(filename), mimetype);
 	g_string_append_len(postdata, purple_image_get_data(image), purple_image_get_data_size(image));
 	g_string_append_printf(postdata, "\r\n------PurpleBoundary\r\nContent-Disposition: form-data; name=\"payload_json\"\r\n\r\n{\"content\":\"\",\"nonce\":\"%s\",\"tts\":false}\r\n", nonce);
 	g_string_append(postdata, "------PurpleBoundary--\r\n");
-	
+
 	url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/channels/%" G_GUINT64_FORMAT "/messages", room_id);
-	
+
 	discord_fetch_url_with_method_len(da, "POST", url, postdata->str, postdata->len, NULL, NULL);
-	
+
 	g_free(mimetype);
 	g_free(url);
 	g_string_free(postdata, TRUE);
@@ -5764,16 +5877,16 @@ static void
 discord_conversation_check_message_for_images(DiscordAccount *da, guint64 room_id, const gchar *message)
 {
 	const gchar *img;
-	
+
 	if ((img = strstr(message, "<img ")) || (img = strstr(message, "<IMG "))) {
 		const gchar *id, *src;
 		const gchar *close = strchr(img, '>');
-		
+
 		if (((id = strstr(img, "ID=\"")) || (id = strstr(img, "id=\""))) &&
 				id < close) {
 			int imgid = atoi(id + 4);
 			PurpleImage *image = purple_image_store_get(imgid);
-			
+
 			if (image != NULL) {
 				discord_conversation_send_image(da, room_id, image);
 			}
@@ -5783,7 +5896,7 @@ discord_conversation_check_message_for_images(DiscordAccount *da, guint64 room_i
 			if (strncmp(src + 5, "purple-image:", 13) == 0) {
 				int imgid = atoi(src + 5 + 13);
 				PurpleImage *image = purple_image_store_get(imgid);
-				
+
 				if (image != NULL) {
 					discord_conversation_send_image(da, room_id, image);
 				}
@@ -5801,7 +5914,7 @@ discord_conversation_send_message(DiscordAccount *da, guint64 room_id, const gch
 	gchar *stripped;
 	gchar *final;
 	gint final_len;
-	
+
 	discord_conversation_check_message_for_images(da, room_id, message);
 
 	nonce = g_strdup_printf("%" G_GUINT32_FORMAT, g_random_int());
@@ -5824,7 +5937,7 @@ discord_conversation_send_message(DiscordAccount *da, guint64 room_id, const gch
 		json_object_set_string_member(data, "content", final);
 		json_object_set_string_member(data, "nonce", nonce);
 		json_object_set_boolean_member(data, "tts", FALSE);
-		
+
 		g_hash_table_insert(da->sent_message_ids, nonce, nonce);
 
 		url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/channels/%" G_GUINT64_FORMAT "/messages", room_id);
@@ -5928,11 +6041,11 @@ discord_created_direct_message_send(DiscordAccount *da, JsonNode *node, gpointer
 
 	result = json_node_get_object(node);
 	result_code = json_object_get_int_member(result, "code");
-	
+
 	if (result_code / 10000 == 4 || result_code / 10000 == 5) {
 		const gchar *result_message = json_object_get_string_member(result, "message");
 		if (!result_message || !*result_message) result_message = _("Could not send message to this user");
-		
+
 		purple_conversation_present_error(who, da->account, result_message);
 		purple_message_destroy(msg);
 		return;
@@ -6528,6 +6641,12 @@ discord_add_account_options(GList *account_options)
 	option = purple_account_option_int_new(_("Number of users in a large channel"), "large-channel-count", 20);
 	account_options = g_list_append(account_options, option);
 
+	option = purple_account_option_bool_new(_("Display images in conversations"), "display-images", FALSE);
+	account_options = g_list_append(account_options, option);
+
+	option = purple_account_option_bool_new(_("Display images in large servers"), "display-images-large-servers", FALSE);
+	account_options = g_list_append(account_options, option);
+
 	option = purple_account_option_bool_new(_("Display custom emoji as inline images"), "show-custom-emojis", TRUE);
 	account_options = g_list_append(account_options, option);
 
@@ -6780,7 +6899,7 @@ plugin_unload(PurplePlugin *plugin, GError **error)
 /* Purple2 Plugin Load Functions */
 #if !PURPLE_VERSION_CHECK(3, 0, 0)
 
-	
+
 // Normally set in core.c in purple3
 void _purple_socket_init(void);
 void _purple_socket_uninit(void);
@@ -6790,7 +6909,7 @@ libpurple2_plugin_load(PurplePlugin *plugin)
 {
 	_purple_socket_init();
 	purple_http_init();
-	
+
 	return plugin_load(plugin, NULL);
 }
 
@@ -6799,7 +6918,7 @@ libpurple2_plugin_unload(PurplePlugin *plugin)
 {
 	_purple_socket_uninit();
 	purple_http_uninit();
-	
+
 	return plugin_unload(plugin, NULL);
 }
 
