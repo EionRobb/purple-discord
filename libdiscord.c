@@ -1783,14 +1783,14 @@ discord_download_image_cb(DiscordAccount *da, JsonNode *node, gpointer user_data
 			purple_serv_got_im(da->pc, img_context->from, attachment_show, img_context->flags, img_context->timestamp);
 		}
 		g_free(attachment_show);
-		discord_free_image_contex(img_context);
+		discord_free_image_context(img_context);
 		return;
 	} else {
 		purple_debug_error("discord", "Image response node is null!\n");
-		discord_free_image_contex(img_context);
+		discord_free_image_context(img_context);
 		return;
 	}
-	discord_free_image_contex(img_context);
+	discord_free_image_context(img_context);
 	return;
 }
 
