@@ -251,6 +251,12 @@ typedef struct _DiscordImgMsgContext {
 	time_t timestamp;
 } DiscordImgMsgContext;
 
+typedef struct {
+	PurpleConversation *conv;
+	gchar *reactor;
+	gchar *reaction;
+} DiscordReaction;
+
 static guint64
 to_int(const gchar *id)
 {
@@ -469,6 +475,15 @@ discord_free_image_context(gpointer data)
 	g_free(img_context->from);
 	g_free(img_context->url);
 	g_free(img_context);
+}
+
+static void
+discord_free_reaction(gpointer data)
+{
+	DiscordReaction *react = data;
+	g_free(react->reactor);
+	g_free(react->reaction);
+	g_free(react);
 }
 
 /* updating */
@@ -1754,6 +1769,61 @@ bail:
 	return g_strdup(who);
 }
 
+static void discord_react_cb(DiscordAccount *da, JsonNode *node, gpointer user_data);
+
+static gchar *
+discord_get_react_text(PurpleConversation *conv, JsonArray *reactions, gchar *name) {
+	guint reactions_len = json_array_get_length(reactions);
+	if (reactions_len > 0) {
+		gchar *reaction_str = NULL;
+		gchar *tmp;
+
+		for (guint n = 0; n < reactions_len; n++) {
+			JsonObject *reaction = json_array_get_object_element(reactions, 0);
+			JsonObject *emoji = json_object_get_object_member(reaction, "emoji");
+			const gchar *emoji_id = json_object_get_string_member(emoji, "id");
+			const gchar *emoji_name = json_object_get_string_member(emoji, "name");
+			guint count = json_object_get_int_member(reaction, "count");
+			gboolean is_me = json_object_get_boolean_member(reaction, "me");
+			gchar *reactors;
+
+			if (count > 1)
+				reactors = g_strdup_printf("%u %s", count, "people");
+			else
+				reactors = is_me ? g_strdup("You") : g_strdup(name);
+
+			if (emoji_name != NULL) {
+				gchar *emoji_str = (emoji_id != NULL) ? g_strdup_printf("&lt;:%s:%s&gt;", emoji_name, emoji_id) : g_strdup(emoji_name);
+
+				if (reaction_str != NULL) {
+					tmp = g_strdup_printf("%s<br />%s reacted with %s", reaction_str, reactors, emoji_str);
+					g_free(reaction_str);
+					reaction_str = tmp;
+				} else {
+					reaction_str = g_strdup_printf("%s reacted with %s", reactors, emoji_str);
+				}
+
+				g_free(emoji_str);
+			}
+			g_free(reactors);
+		}
+
+		/* Replace <:emoji:id> with emojis */
+		if (reaction_str != NULL) {
+			tmp = g_regex_replace_eval(emoji_regex, reaction_str, -1, 0, 0, discord_replace_emoji, conv, NULL);
+
+			if (tmp != NULL) {
+				g_free(reaction_str);
+				reaction_str = tmp;
+			}
+		}
+
+		return reaction_str;
+	}
+
+	return NULL;
+}
+
 static void
 discord_download_image_cb(DiscordAccount *da, JsonNode *node, gpointer user_data) {
 	//The returned size can be changed by appending a querystring of ?size=desired_size to the URL. Image size can be any power of two between 16 and 4096.
@@ -1821,6 +1891,7 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 	gchar *escaped_content = purple_markup_escape_text(content, -1);
 	JsonArray *attachments = json_object_get_array_member(data, "attachments");
 	JsonArray *embeds = json_object_get_array_member(data, "embeds");
+	JsonArray *reactions = json_object_get_array_member(data, "reactions");
 	JsonArray *mentions = json_object_get_array_member(data, "mentions");
 	JsonArray *mention_roles = json_object_get_array_member(data, "mention_roles");
 	PurpleMessageFlags flags;
@@ -2156,6 +2227,23 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 
 			g_free(merged_username);
 		}
+
+		if (reactions != NULL) {
+			PurpleIMConversation *imconv;
+			gchar *username = g_hash_table_lookup(da->one_to_ones, channel_id_s);
+			imconv = purple_conversations_find_im_with_account(username, da->account);
+			conv = PURPLE_CONVERSATION(imconv);
+
+			gchar *reaction_str = discord_get_react_text(conv, reactions, username);
+			g_free(username);
+
+			if (reaction_str != NULL) {
+				purple_conversation_write_system_message(conv, reaction_str, PURPLE_MESSAGE_SYSTEM);
+
+				g_free(reaction_str);
+			}
+		}
+
 	} else if (!nonce || !g_hash_table_remove(da->sent_message_ids, nonce)) {
 		/* Open the buffer if it's not already */
 		int head_count = guild ? g_hash_table_size(guild->members) : 0;
@@ -2216,6 +2304,19 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 
 			}
 
+		}
+
+		if (reactions != NULL) {
+			PurpleChatConversation *chatconv = purple_conversations_find_chat(da->pc, discord_chat_hash(channel_id));
+			conv = PURPLE_CONVERSATION(chatconv);
+			gchar *someone = g_strdup("Someone");
+			gchar *reaction_str = discord_get_react_text(conv, reactions, someone);
+			g_free(someone);
+
+			if (reaction_str != NULL) {
+				purple_conversation_write_system_message(conv, reaction_str, PURPLE_MESSAGE_SYSTEM);
+				g_free(reaction_str);
+			}
 		}
 
 		g_free(name);
@@ -3286,6 +3387,57 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 				}
 			}
 		}
+
+	} else if (purple_strequal(type, "GUILD_MESSAGE_REACTION_ADD") || purple_strequal(type, "DIRECT_MESSAGE_REACTION_ADD") || purple_strequal(type, "MESSAGE_REACTION_ADD")) {
+
+
+		const gchar *channel_id_s = json_object_get_string_member(data, "channel_id");
+		guint64 channel_id = to_int(channel_id_s);
+		guint64 message_id = to_int(json_object_get_string_member(data, "message_id"));
+		guint64 user_id = to_int(json_object_get_string_member(data, "user_id"));
+		JsonObject *emoji = json_object_get_object_member(data, "emoji");
+		const gchar *emoji_name = json_object_get_string_member(emoji, "name");
+		const gchar *emoji_id = json_object_get_string_member(emoji, "id");
+
+		gchar *user_nick;
+		PurpleConversation *conv;
+
+		if (channel_id_s && g_hash_table_contains(da->one_to_ones, channel_id_s)) {
+			PurpleIMConversation *imconv;
+
+			gchar *username = g_hash_table_lookup(da->one_to_ones, channel_id_s);
+			imconv = purple_conversations_find_im_with_account(username, da->account);
+
+			conv = PURPLE_CONVERSATION(imconv);
+
+			if (user_id == da->self_user_id)
+				user_nick = "You";
+			else
+				user_nick = username;
+		} else {
+			PurpleChatConversation *chatconv = purple_conversations_find_chat(da->pc, discord_chat_hash(channel_id));
+
+			conv = PURPLE_CONVERSATION(chatconv);
+
+			DiscordChannel *channel = discord_get_channel_global(da, channel_id_s);
+			DiscordGuild *guild = discord_get_guild(da, channel->guild_id);
+
+			if (user_id == da->self_user_id)
+				user_nick = "You";
+			else
+				user_nick = g_hash_table_lookup_int64(guild->nicknames, user_id);
+		}
+
+		DiscordReaction *reaction;
+		reaction = g_new0(DiscordReaction, 1);
+		reaction->conv = conv;
+		reaction->reactor = g_strdup(user_nick);
+		reaction->reaction = (emoji_id != NULL) ? g_strdup_printf("&lt;:%s:%s&gt;", emoji_name, emoji_id) : g_strdup(emoji_name);
+
+		// Get array of messages because single-message endpoint is bot-only
+		gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/channels/%" G_GUINT64_FORMAT "/messages?limit=5&after=%" G_GUINT64_FORMAT, channel_id, message_id-1);
+		discord_fetch_url(da, url, NULL, discord_react_cb, reaction);
+		g_free(url);
 
 	} else {
 		purple_debug_info("discord", "Unhandled message type '%s'\n", type);
@@ -4913,6 +5065,71 @@ discord_chat_leave_by_room_id(PurpleConnection *pc, guint64 room_id)
 	json_object_set_string_member(data, "id", discord_get_next_id_str(ya));
 
 	discord_socket_write_json(ya, data);*/
+}
+
+static void
+discord_react_cb(DiscordAccount *da, JsonNode *node, gpointer user_data)
+{
+	JsonArray *datas = json_node_get_array(node);
+	guint len = json_array_get_length(datas);
+	JsonObject *data = json_array_get_object_element(datas, len-1);
+	DiscordReaction *react = user_data;
+	PurpleConversation *conv = react->conv;
+	gchar *reactor_nick = react->reactor;
+	gchar *emoji_name = react->reaction;
+
+	const gchar *channel_id_s = json_object_get_string_member(data, "channel_id");
+	JsonObject *user_obj = json_object_get_object_member(data, "author");
+	guint64 user_id = to_int(json_object_get_string_member(user_obj, "id"));
+
+	const gchar *msg_text = json_object_get_string_member(data, "content");
+	size_t txt_len = strlen(msg_text);
+	gchar *prev_text;
+
+	// Truncate long messages
+	if (txt_len > 64) {
+		gchar *tmp = g_strndup(msg_text, 64);
+		prev_text = g_strdup_printf("%s...", tmp);
+		g_free(tmp);
+	} else {
+		prev_text = g_strdup(msg_text);
+	}
+
+	gchar *user_nick;
+
+	if (channel_id_s && g_hash_table_contains(da->one_to_ones, channel_id_s)) {
+
+		user_nick = g_hash_table_lookup(da->one_to_ones, channel_id_s);
+
+	} else {
+
+		DiscordChannel *channel = discord_get_channel_global(da, channel_id_s);
+		DiscordGuild *guild = discord_get_guild(da, channel->guild_id);
+		user_nick = g_hash_table_lookup_int64(guild->nicknames, user_id);
+
+	}
+
+	gchar *react_text;
+	if (user_id != da->self_user_id)
+		react_text = g_strdup_printf("%s reacted with \"%s\" to %s's message: %s", reactor_nick, emoji_name, user_nick, prev_text);
+	else
+		react_text = g_strdup_printf("%s reacted with \"%s\" to your message: %s", reactor_nick, emoji_name, prev_text);
+
+	/* Replace <:emoji:id> with emojis */
+	if (react_text != NULL) {
+		gchar *tmp = g_regex_replace_eval(emoji_regex, react_text, -1, 0, 0, discord_replace_emoji, conv, NULL);
+
+		if (tmp != NULL) {
+			g_free(react_text);
+			react_text = tmp;
+		}
+	}
+
+	purple_conversation_write_system_message(conv, react_text, PURPLE_MESSAGE_SYSTEM);
+
+	g_free(prev_text);
+	g_free(react_text);
+	discord_free_reaction(react);
 }
 
 static void
