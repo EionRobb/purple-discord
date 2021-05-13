@@ -1772,7 +1772,7 @@ bail:
 static void discord_react_cb(DiscordAccount *da, JsonNode *node, gpointer user_data);
 
 static gchar *
-discord_get_react_text(PurpleConversation *conv, JsonArray *reactions, gchar *name) {
+discord_get_react_text(PurpleConversation *conv, JsonArray *reactions, const gchar *name) {
 	guint reactions_len = json_array_get_length(reactions);
 	if (reactions_len > 0) {
 		gchar *reaction_str = NULL;
@@ -1788,19 +1788,19 @@ discord_get_react_text(PurpleConversation *conv, JsonArray *reactions, gchar *na
 			gchar *reactors;
 
 			if (count > 1)
-				reactors = g_strdup_printf("%u %s", count, "people");
+				reactors = g_strdup_printf("%u %s", count, _( "people"));
 			else
-				reactors = is_me ? g_strdup("You") : g_strdup(name);
+				reactors = is_me ? g_strdup(_("You")) : g_strdup(name);
 
 			if (emoji_name != NULL) {
 				gchar *emoji_str = (emoji_id != NULL) ? g_strdup_printf("&lt;:%s:%s&gt;", emoji_name, emoji_id) : g_strdup(emoji_name);
 
 				if (reaction_str != NULL) {
-					tmp = g_strdup_printf("%s<br />%s reacted with %s", reaction_str, reactors, emoji_str);
+					tmp = g_strdup_printf(_("%s<br />%s reacted with %s"), reaction_str, reactors, emoji_str);
 					g_free(reaction_str);
 					reaction_str = tmp;
 				} else {
-					reaction_str = g_strdup_printf("%s reacted with %s", reactors, emoji_str);
+					reaction_str = g_strdup_printf(_("%s reacted with %s"), reactors, emoji_str);
 				}
 
 				g_free(emoji_str);
@@ -2230,12 +2230,11 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 
 		if (reactions != NULL) {
 			PurpleIMConversation *imconv;
-			gchar *username = g_hash_table_lookup(da->one_to_ones, channel_id_s);
+			const gchar *username = g_hash_table_lookup(da->one_to_ones, channel_id_s);
 			imconv = purple_conversations_find_im_with_account(username, da->account);
 			conv = PURPLE_CONVERSATION(imconv);
 
 			gchar *reaction_str = discord_get_react_text(conv, reactions, username);
-			g_free(username);
 
 			if (reaction_str != NULL) {
 				purple_conversation_write_system_message(conv, reaction_str, PURPLE_MESSAGE_SYSTEM);
@@ -2309,9 +2308,8 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 		if (reactions != NULL) {
 			PurpleChatConversation *chatconv = purple_conversations_find_chat(da->pc, discord_chat_hash(channel_id));
 			conv = PURPLE_CONVERSATION(chatconv);
-			gchar *someone = g_strdup("Someone");
+			const gchar *someone = "Someone";
 			gchar *reaction_str = discord_get_react_text(conv, reactions, someone);
-			g_free(someone);
 
 			if (reaction_str != NULL) {
 				purple_conversation_write_system_message(conv, reaction_str, PURPLE_MESSAGE_SYSTEM);
@@ -3411,7 +3409,7 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 			conv = PURPLE_CONVERSATION(imconv);
 
 			if (user_id == da->self_user_id)
-				user_nick = "You";
+				user_nick = _("You");
 			else
 				user_nick = username;
 		} else {
@@ -3423,7 +3421,7 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 			DiscordGuild *guild = discord_get_guild(da, channel->guild_id);
 
 			if (user_id == da->self_user_id)
-				user_nick = "You";
+				user_nick = _("You");
 			else
 				user_nick = g_hash_table_lookup_int64(guild->nicknames, user_id);
 		}
@@ -5083,12 +5081,16 @@ discord_react_cb(DiscordAccount *da, JsonNode *node, gpointer user_data)
 	guint64 user_id = to_int(json_object_get_string_member(user_obj, "id"));
 
 	const gchar *msg_text = json_object_get_string_member(data, "content");
-	size_t txt_len = strlen(msg_text);
+	size_t txt_len = g_utf8_strlen(msg_text, -1);
 	gchar *prev_text;
 
 	// Truncate long messages
 	if (txt_len > 64) {
-		gchar *tmp = g_strndup(msg_text, 64);
+		// Get pointer to 65th character of msg_text
+		gchar *tmp = g_utf8_offset_to_pointer(msg_text, 64);
+		// (tmp - msg_text) is # bytes (char*) of first 64 characters
+		guint num_bytes = tmp - msg_text;
+		tmp = g_strndup(msg_text, num_bytes);
 		prev_text = g_strdup_printf("%s...", tmp);
 		g_free(tmp);
 	} else {
@@ -5111,9 +5113,9 @@ discord_react_cb(DiscordAccount *da, JsonNode *node, gpointer user_data)
 
 	gchar *react_text;
 	if (user_id != da->self_user_id)
-		react_text = g_strdup_printf("%s reacted with \"%s\" to %s's message: %s", reactor_nick, emoji_name, user_nick, prev_text);
+		react_text = g_strdup_printf(_("%s reacted with \"%s\" to %s's message: %s"), reactor_nick, emoji_name, user_nick, prev_text);
 	else
-		react_text = g_strdup_printf("%s reacted with \"%s\" to your message: %s", reactor_nick, emoji_name, prev_text);
+		react_text = g_strdup_printf(_("%s reacted with \"%s\" to your message: %s"), reactor_nick, emoji_name, prev_text);
 
 	/* Replace <:emoji:id> with emojis */
 	if (react_text != NULL) {
