@@ -2199,14 +2199,16 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 
 					PurpleChatConversation *chatconv = purple_conversations_find_chat(da->pc, discord_chat_hash(channel_id));
  					conv = PURPLE_CONVERSATION(chatconv);
-
-					int head_count = guild ? g_hash_table_size(guild->members) : 0;
-					if (head_count > 0 && (head_count < purple_account_get_int(da->account, "large-channel-count", 20) || purple_account_get_bool(da->account, "display-images-large-servers", FALSE) )) {
-						discord_fetch_url(da, img_context->url, NULL, discord_download_image_cb, img_context);
-						GList *l = conv->logs;
-						if (l != NULL) {
-							PurpleLog *log = l->data;
-							purple_log_write(log, flags | PURPLE_MESSAGE_INVISIBLE, name, timestamp, url_log);
+					
+					if (conv != NULL) {
+						int head_count = guild ? g_hash_table_size(guild->members) : 0;
+						if (head_count > 0 && (head_count < purple_account_get_int(da->account, "large-channel-count", 20) || purple_account_get_bool(da->account, "display-images-large-servers", FALSE) )) {
+							discord_fetch_url(da, img_context->url, NULL, discord_download_image_cb, img_context);
+							GList *l = conv->logs;
+							if (l != NULL) {
+								PurpleLog *log = l->data;
+								purple_log_write(log, flags | PURPLE_MESSAGE_INVISIBLE, name, timestamp, url_log);
+							}
 						}
 					}
 
