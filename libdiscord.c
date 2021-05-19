@@ -4674,6 +4674,8 @@ discord_socket_got_data(gpointer userdata, PurpleSslConnection *conn, PurpleInpu
 	guchar length_code;
 	int read_len = 0;
 	gboolean done_some_reads = FALSE;
+	
+	g_return_if_fail(conn == ya->websocket);
 
 	if (G_UNLIKELY(!ya->websocket_header_received)) {
 		gint nlbr_count = 0;
