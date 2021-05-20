@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2019-10-26 12:55+1300\n"
+"POT-Creation-Date: 2021-05-20 19:31+1200\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -21,8 +21,25 @@ msgstr ""
 msgid "Connection error: %s."
 msgstr ""
 
+msgid "people"
+msgstr ""
+
+msgid "You"
+msgstr ""
+
+#, c-format
+msgid "%s<br />%s reacted with %s"
+msgstr ""
+
+#, c-format
+msgid "%s reacted with %s"
+msgstr ""
+
 #, c-format
 msgid "EDIT: %s"
+msgstr ""
+
+msgid "Unknown user"
 msgstr ""
 
 msgid "Group DMs"
@@ -73,7 +90,21 @@ msgstr ""
 msgid "Couldn't connect to gateway"
 msgstr ""
 
+#, c-format
+msgid "%s reacted with \"%s\" to %s's message: %s"
+msgstr ""
+
+#, c-format
+msgid "%s reacted with \"%s\" to your message: %s"
+msgstr ""
+
 msgid "No pinned messages"
+msgstr ""
+
+msgid "Server Roles:"
+msgstr ""
+
+msgid "No server roles"
 msgstr ""
 
 msgid "Name"
@@ -99,9 +130,6 @@ msgstr ""
 
 #, c-format
 msgid "No users with tag %s exist"
-msgstr ""
-
-msgid "Unknown user"
 msgstr ""
 
 msgid "Username"
@@ -163,6 +191,12 @@ msgstr ""
 msgid "Number of users in a large channel"
 msgstr ""
 
+msgid "Display images in conversations"
+msgstr ""
+
+msgid "Display images in large servers"
+msgstr ""
+
 msgid "Display custom emoji as inline images"
 msgstr ""
 
@@ -201,6 +235,9 @@ msgid "part:  Leave the channel"
 msgstr ""
 
 msgid "pinned:  Display pinned messages"
+msgstr ""
+
+msgid "roles:  Display server roles"
 msgstr ""
 
 msgid "mute <username>:  Mute someone in channel"
