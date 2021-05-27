@@ -1887,6 +1887,7 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 	time_t timestamp = purple_str_to_time(timestamp_str, FALSE, NULL, NULL, NULL);
 	const gchar *nonce = json_object_get_string_member(data, "nonce");
 	gchar *escaped_content = purple_markup_escape_text(content, -1);
+	JsonObject *referenced_message = json_object_get_object_member(data, "referenced_message");
 	JsonArray *attachments = json_object_get_array_member(data, "attachments");
 	JsonArray *embeds = json_object_get_array_member(data, "embeds");
 	JsonArray *reactions = json_object_get_array_member(data, "reactions");
@@ -2177,6 +2178,45 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 			DiscordUser *author = discord_upsert_user(da->new_users, author_obj);
 			gchar *merged_username = discord_create_fullname(author);
 
+			if (referenced_message != NULL) {
+				JsonObject *reply_author = json_object_get_object_member(referenced_message, "author");
+				const gchar *msg_txt = json_object_get_string_member(referenced_message, "content");
+				DiscordUser *reply_user = discord_upsert_user(da->new_users, reply_author);
+				const gchar *reply_username = discord_create_fullname(reply_user);
+
+				size_t txt_len = g_utf8_strlen(msg_txt, -1);
+				gchar *prev_text;
+
+				// Truncate long messages
+				if (txt_len > 32) {
+					// Get pointer to 33th character of msg_text
+					gchar *tmp = g_utf8_offset_to_pointer(msg_txt, 32);
+					// (tmp - msg_txt) is # bytes (char*) of first 32 characters
+					guint num_bytes = tmp - msg_txt;
+					tmp = g_strndup(msg_txt, num_bytes);
+					prev_text = g_strdup_printf("%s...", tmp);
+					g_free(tmp);
+				} else {
+					prev_text = g_strdup(msg_txt);
+				}
+
+				gchar *reply_txt = g_strdup_printf("<font size=1>┌──@%s: %s</font>", reply_username, prev_text);
+				g_free(prev_text);
+
+				if (conv == NULL) {
+					PurpleIMConversation *imconv;
+					imconv = purple_conversations_find_im_with_account(merged_username, da->account);
+					if (imconv == NULL) {
+						imconv = purple_im_conversation_new(da->account, merged_username);
+					}
+
+					conv = PURPLE_CONVERSATION(imconv);
+				}
+
+				purple_conversation_write(conv, NULL, reply_txt, PURPLE_MESSAGE_SYSTEM, time(NULL));
+				g_free(reply_txt);
+			}
+
 			if (escaped_content && *escaped_content) {
 				purple_serv_got_im(da->pc, merged_username, escaped_content, flags, timestamp);
 			}
@@ -2260,6 +2300,40 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 		} else {
 			DiscordUser *author = discord_upsert_user(da->new_users, author_obj);
 			name = discord_create_nickname(author, guild, channel);
+		}
+
+		if (referenced_message != NULL) {
+			JsonObject *reply_author = json_object_get_object_member(referenced_message, "author");
+			const gchar *msg_txt = json_object_get_string_member(referenced_message, "content");
+			DiscordUser *reply_user = discord_upsert_user(da->new_users, reply_author);
+			const gchar *reply_username = discord_create_nickname(reply_user, guild, channel);
+
+			size_t txt_len = g_utf8_strlen(msg_txt, -1);
+			gchar *prev_text;
+
+			// Truncate long messages
+			if (txt_len > 32) {
+				// Get pointer to 33th character of msg_text
+				gchar *tmp = g_utf8_offset_to_pointer(msg_txt, 32);
+				// (tmp - msg_txt) is # bytes (char*) of first 32 characters
+				guint num_bytes = tmp - msg_txt;
+				tmp = g_strndup(msg_txt, num_bytes);
+				prev_text = g_strdup_printf("%s...", tmp);
+				g_free(tmp);
+			} else {
+				prev_text = g_strdup(msg_txt);
+			}
+
+			// Formatting could be better. I went with something similar to Discord's
+			// format to make it familiar to the user
+			gchar *reply_txt = g_strdup_printf("<font size=1>┌──@%s: %s</font>", reply_username, prev_text);
+			g_free(prev_text);
+
+			PurpleChatConversation *chatconv = purple_conversations_find_chat(da->pc, discord_chat_hash(channel_id));
+			conv = PURPLE_CONVERSATION(chatconv);
+
+			purple_conversation_write(conv, NULL, reply_txt, PURPLE_MESSAGE_SYSTEM, time(NULL));
+			g_free(reply_txt);
 		}
 
 		if (escaped_content && *escaped_content) {
