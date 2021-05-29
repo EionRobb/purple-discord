@@ -1071,6 +1071,10 @@ discord_response_callback(PurpleHttpConnection *http_conn,
 	body_len = len;
 
 	if (body == NULL && error_message != NULL) {
+		if (conn->callback) {
+			conn->callback(conn->ya, NULL, conn->user_data);
+		}
+		
 		/* connection error - unersolvable dns name, non existing server */
 		gchar *error_msg_formatted = g_strdup_printf(_("Connection error: %s."), error_message);
 		purple_connection_error(conn->ya->pc, PURPLE_CONNECTION_ERROR_NETWORK_ERROR, error_msg_formatted);
@@ -1119,6 +1123,8 @@ discord_fetch_url_with_method_len(DiscordAccount *ya, const gchar *method, const
 	account = ya->account;
 
 	if (!PURPLE_CONNECTION_IS_VALID(ya->pc) || purple_account_is_disconnected(account)) {
+		// Allow callback to free memory
+		callback(ya, NULL, user_data);
 		return;
 	}
 
