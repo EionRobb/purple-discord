@@ -5084,6 +5084,8 @@ discord_socket_connected(gpointer userdata, PurpleSslConnection *conn, PurpleInp
 	DiscordAccount *da = userdata;
 	gchar *websocket_header;
 	const gchar *websocket_key = "15XF+ptKDhYVERXoGcdHTA=="; /* TODO don't be lazy */
+	
+	g_return_if_fail(conn == da->websocket);
 
 	purple_ssl_input_add(da->websocket, discord_socket_got_data, da);
 
