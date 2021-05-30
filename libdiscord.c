@@ -2208,7 +2208,7 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 					prev_text = g_strdup(msg_txt);
 				}
 
-				gchar *reply_txt = g_strdup_printf("<font size=1>┌──@%s: %s</font>", reply_username, prev_text);
+				gchar *reply_txt = g_strdup_printf("<font size=1>┌──@%s: %s</font>", reply_username ? reply_username : _("Unknown user"), prev_text);
 				g_free(prev_text);
 
 				if (conv == NULL) {
@@ -2334,7 +2334,7 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 
 			// Formatting could be better. I went with something similar to Discord's
 			// format to make it familiar to the user
-			gchar *reply_txt = g_strdup_printf("<font size=1>┌──@%s: %s</font>", reply_username, prev_text);
+			gchar *reply_txt = g_strdup_printf("<font size=1>┌──@%s: %s</font>", reply_username ? reply_username : _("Unknown user"), prev_text);
 			g_free(prev_text);
 
 			PurpleChatConversation *chatconv = purple_conversations_find_chat(da->pc, discord_chat_hash(channel_id));
