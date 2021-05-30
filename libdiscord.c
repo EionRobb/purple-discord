@@ -1123,8 +1123,10 @@ discord_fetch_url_with_method_len(DiscordAccount *ya, const gchar *method, const
 	account = ya->account;
 
 	if (!PURPLE_CONNECTION_IS_VALID(ya->pc) || purple_account_is_disconnected(account)) {
-		// Allow callback to free memory
-		callback(ya, NULL, user_data);
+		if (callback != NULL) {
+			// Allow callback to free memory
+			callback(ya, NULL, user_data);
+		}
 		return;
 	}
 
