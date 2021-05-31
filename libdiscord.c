@@ -5056,7 +5056,7 @@ discord_socket_got_data(gpointer userdata, PurpleSslConnection *conn, PurpleInpu
 			ya->frame_len = 0;
 			ya->frames_since_reconnect++;
 
-			if (G_UNLIKELY(ya->websocket == NULL || success == FALSE)) {
+			if (G_UNLIKELY(ya->websocket == NULL || success == FALSE || ya->websocket != conn)) {
 				return;
 			}
 		} else {
