@@ -2302,6 +2302,13 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 		}
 	}
 
+	if (purple_account_get_bool(da->account, "show-msg-id", FALSE)) {
+		/* Add msg_id */
+		tmp = g_strdup_printf("%s <a href=\"dscmsg:%ld\"><font size=1>.</font></a>", escaped_content, msg_id);
+		g_free(escaped_content);
+		escaped_content = tmp;
+	}
+
 	if (embeds != NULL) {
 		GString *embed_str = g_string_new(NULL);
 		guint embeds_len = json_array_get_length(embeds);
@@ -6732,7 +6739,7 @@ discord_conversation_check_message_for_images(DiscordAccount *da, guint64 room_i
 }
 
 static gint
-discord_conversation_send_message(DiscordAccount *da, guint64 room_id, const gchar *message)
+discord_conversation_send_message(DiscordAccount *da, guint64 room_id, const gchar *message, const gchar *ref_id)
 {
 	JsonObject *data = json_object_new();
 	gchar *nonce;
@@ -6763,6 +6770,12 @@ discord_conversation_send_message(DiscordAccount *da, guint64 room_id, const gch
 		json_object_set_string_member(data, "content", final);
 		json_object_set_string_member(data, "nonce", nonce);
 		json_object_set_boolean_member(data, "tts", FALSE);
+
+		if (ref_id != NULL) {
+			JsonObject *ref_obj = json_object_new();
+			json_object_set_string_member(ref_obj, "message_id", ref_id);
+			json_object_set_object_member(data, "message_reference", ref_obj);
+		}
 
 		g_hash_table_insert(da->sent_message_ids, nonce, nonce);
 
@@ -6827,7 +6840,7 @@ discord_chat_send(PurpleConnection *pc, gint id,
 	}
 
 	g_return_val_if_fail(discord_get_channel_global_int(da, room_id), -1); /* TODO rejoin room? */
-	ret = discord_conversation_send_message(da, room_id, d_message);
+	ret = discord_conversation_send_message(da, room_id, d_message, NULL);
 
 	if (ret > 0) {
 		gchar *tmp = g_regex_replace_eval(emoji_regex, d_message, -1, 0, 0, discord_replace_emoji, PURPLE_CONVERSATION(chatconv), NULL);
@@ -6891,7 +6904,7 @@ discord_created_direct_message_send(DiscordAccount *da, JsonNode *node, gpointer
 	}
 
 	if (room_id != NULL) {
-		discord_conversation_send_message(da, to_int(room_id), message);
+		discord_conversation_send_message(da, to_int(room_id), message, NULL);
 	} else {
 		purple_conversation_present_error(who, da->account, _("Invalid channel for this user"));
 	}
@@ -6941,7 +6954,7 @@ discord_send_im(PurpleConnection *pc,
 		return -1;
 	}
 
-	return discord_conversation_send_message(da, to_int(room_id), message);
+	return discord_conversation_send_message(da, to_int(room_id), message, NULL);
 }
 
 static void
@@ -7575,6 +7588,9 @@ discord_add_account_options(GList *account_options)
 	option = purple_account_option_bool_new(_("Display custom emoji as inline images"), "show-custom-emojis", TRUE);
 	account_options = g_list_append(account_options, option);
 
+	option = purple_account_option_bool_new(_("Append small link with message id to incoming messages"), "show-msg-id", TRUE);
+	account_options = g_list_append(account_options, option);
+
 	option = purple_account_option_bool_new(_("Open chat when you are @mention'd"), "open-chat-on-mention", TRUE);
 	account_options = g_list_append(account_options, option);
 
@@ -7644,6 +7660,167 @@ discord_actions(
 	m = g_list_append(m, act);
 
 	return m;
+}
+
+typedef struct {
+	guint64 room_id;
+	gchar *msg_txt;
+	PurpleConversation *conv;
+} DiscordReply;
+
+static void
+discord_reply_cb(DiscordAccount *da, JsonNode *node, gpointer user_data)
+{
+	DiscordReply *reply = user_data;
+	gchar *msg_txt = reply->msg_txt;
+	guint64 room_id = reply->room_id;
+	PurpleConversation *conv = reply->conv;
+
+	PurpleConnection *pc = purple_conversation_get_connection(conv);
+
+	DiscordGuild *guild = NULL;
+	DiscordChannel *channel = discord_get_channel_global_int_guild(da, room_id, &guild);
+
+	JsonArray *messages = json_node_get_array(node);
+	guint len = json_array_get_length(messages);
+	JsonObject *referenced_message = json_array_get_object_element(messages, len-1);
+	JsonObject *reply_author = json_object_get_object_member(referenced_message, "author");
+	const gchar *reply_txt = json_object_get_string_member(referenced_message, "content");
+	DiscordUser *reply_user = discord_upsert_user(da->new_users, reply_author);
+	const gchar *reply_username = discord_create_fullname(reply_user);
+
+	size_t txt_len = g_utf8_strlen(reply_txt, -1);
+	gchar *prev_text;
+
+	// Truncate long messages
+	if (txt_len > 32) {
+		// Get pointer to 33th character of msg_text
+		gchar *tmp = g_utf8_offset_to_pointer(reply_txt, 32);
+		// (tmp - reply_txt) is # bytes (char*) of first 32 characters
+		guint num_bytes = tmp - reply_txt;
+		tmp = g_strndup(reply_txt, num_bytes);
+		prev_text = g_strdup_printf("%s...", tmp);
+		g_free(tmp);
+	} else {
+		prev_text = g_strdup(reply_txt);
+	}
+
+	gchar *reply_msg = g_strdup_printf("<font size=1>┌──@%s: %s</font>", reply_username, prev_text);
+	g_free(prev_text);
+
+	purple_conversation_write(conv, NULL, reply_msg, PURPLE_MESSAGE_SYSTEM, time(NULL));
+	g_free(reply_msg);
+
+	gchar *tmp = g_regex_replace_eval(emoji_regex, msg_txt, -1, 0, 0, discord_replace_emoji, conv, NULL);
+
+	if (tmp != NULL) {
+		g_free(msg_txt);
+		msg_txt = tmp;
+	}
+
+	msg_txt = discord_replace_mentions_bare(da, guild, msg_txt);
+
+	if (guild) {
+		gchar *name = discord_create_nickname_from_id(da, guild, channel, da->self_user_id);
+		purple_serv_got_chat_in(pc, discord_chat_hash(room_id), name, PURPLE_MESSAGE_SEND, msg_txt, time(NULL));
+		g_free(name);
+	}
+
+	g_free(reply);
+	g_free(msg_txt);
+
+}
+
+static PurpleCmdRet
+discord_cmd_reply(PurpleConversation *conv, const gchar *cmd, gchar **args, gchar **error, gpointer data)
+{
+	PurpleConnection *pc = purple_conversation_get_connection(conv);
+	DiscordAccount *da = purple_connection_get_protocol_data(pc);
+	guint64 room_id = *(guint64 *) purple_conversation_get_data(conv, "id");
+	gint ret;
+
+	if (pc == NULL || (int)room_id == -1) {
+		return PURPLE_CMD_RET_FAILED;
+	}
+
+	//gchar **parts = g_strsplit(args[0], " ", 2);
+	gchar *msg_txt = g_strdup(args[1]);
+
+
+	DiscordGuild *guild = NULL;
+	DiscordChannel *channel = discord_get_channel_global_int_guild(da, room_id, &guild);
+	guint64 last_message = channel->last_message_id;
+
+	msg_txt = discord_make_mentions(da, guild, msg_txt);
+
+	if(guild) {
+		gchar *tmp = g_regex_replace_eval(emoji_natural_regex, msg_txt, -1, 0, 0, discord_replace_natural_emoji, guild, NULL);
+
+		if (tmp != NULL) {
+			g_free(msg_txt);
+			msg_txt = tmp;
+		}
+	}
+
+	g_return_val_if_fail(discord_get_channel_global_int(da, room_id), -1); /* TODO rejoin room? */
+
+	ret = discord_conversation_send_message(da, room_id, msg_txt, args[0]);
+	if (ret > 0) {
+
+		DiscordReply *reply = g_new0(DiscordReply, 1);
+		reply->room_id = room_id;
+		reply->msg_txt = g_strdup(msg_txt);
+		reply->conv = conv;
+
+		gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/channels/%" G_GUINT64_FORMAT "/messages?limit=5&after=%" G_GUINT64_FORMAT, room_id, last_message-1);
+		discord_fetch_url(da, url, NULL, discord_reply_cb, reply);
+		g_free(url);
+	}
+
+	g_free(msg_txt);
+
+	return PURPLE_CMD_RET_OK;
+}
+
+static PurpleCmdRet
+discord_cmd_react(PurpleConversation *conv, const gchar *cmd, gchar **args, gchar **error, gpointer data)
+{
+	PurpleConnection *pc = purple_conversation_get_connection(conv);
+	DiscordAccount *da = purple_connection_get_protocol_data(pc);
+	guint64 id = *(guint64 *) purple_conversation_get_data(conv, "id");
+
+	if (pc == NULL || id == -1) {
+		return PURPLE_CMD_RET_FAILED;
+	}
+
+	//gchar **parts = g_strsplit(args[0], " ", -1);
+
+	const gchar *raw_emoji = args[1];
+	gchar *emoji = NULL;
+	if (g_str_has_prefix(raw_emoji, ":") && g_str_has_suffix(raw_emoji, ":")) {
+		gchar **emoji_parts = g_strsplit(args[1], ":", -1);
+		emoji = g_strdup(emoji_parts[1]);
+		g_strfreev(emoji_parts);
+	} else {
+		emoji = g_strdup(raw_emoji);
+	}
+
+	DiscordGuild *guild = NULL;
+	discord_get_channel_global_int_guild(da, id, &guild);
+	gchar *emoji_id = g_hash_table_lookup(guild->emojis, emoji);
+
+	if (emoji_id != NULL) {
+		gchar *tmp = g_strdup_printf("%s:%s", emoji, emoji_id);
+		if (emoji != NULL)
+			g_free(emoji);
+		emoji = tmp;
+	}
+
+	gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/channels/%" G_GUINT64_FORMAT "/messages/%s/reactions/%s/%%40me", id, args[0], purple_url_encode(emoji));
+	discord_fetch_url_with_method(da, "PUT", url, "{}", NULL, NULL);
+	g_free(url);
+
+	return PURPLE_CMD_RET_OK;
 }
 
 static PurpleCmdRet
@@ -7750,6 +7927,20 @@ plugin_load(PurplePlugin *plugin, GError **error)
 	discord_spaced_mention_regex = g_regex_new("(?:^|\\s)@([^\\s@]+ [^\\s@]+)\\b", G_REGEX_OPTIMIZE, 0, NULL);
 
 	purple_cmd_register(
+		"reply", "ws", PURPLE_CMD_P_PLUGIN,
+		PURPLE_CMD_FLAG_CHAT | PURPLE_CMD_FLAG_PROTOCOL_ONLY | PURPLE_CMD_FLAG_ALLOW_WRONG_ARGS,
+		DISCORD_PLUGIN_ID, discord_cmd_reply,
+		_("reply <msg_id> <message>:  Replies to message"), NULL
+	);
+
+	purple_cmd_register(
+		"react", "ws", PURPLE_CMD_P_PLUGIN,
+		PURPLE_CMD_FLAG_CHAT | PURPLE_CMD_FLAG_PROTOCOL_ONLY | PURPLE_CMD_FLAG_ALLOW_WRONG_ARGS,
+		DISCORD_PLUGIN_ID, discord_cmd_react,
+		_("react <msg_id> <emoji>:  Reacts to message with emoji"), NULL
+	);
+
+	purple_cmd_register(
 		"nick", "s", PURPLE_CMD_P_PLUGIN,
 		PURPLE_CMD_FLAG_CHAT | PURPLE_CMD_FLAG_PROTOCOL_ONLY | PURPLE_CMD_FLAG_ALLOW_WRONG_ARGS,
 		DISCORD_PLUGIN_ID, discord_cmd_nick,
@@ -7797,7 +7988,6 @@ plugin_load(PurplePlugin *plugin, GError **error)
 		DISCORD_PLUGIN_ID, discord_cmd_roles,
 		_("roles:  Display server roles"), NULL
 	);
-
 
 
 #if 0
