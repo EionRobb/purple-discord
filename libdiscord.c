@@ -6903,6 +6903,12 @@ discord_unblock_user(PurpleConnection *pc, const char *who)
 	g_free(url);
 }
 
+static gboolean
+discord_offline_messaging(const PurpleBuddy *buddy)
+{
+	return TRUE;
+}
+
 const gchar *
 discord_list_emblem(PurpleBuddy *buddy)
 {
@@ -7330,6 +7336,8 @@ plugin_init(PurplePlugin *plugin)
 
 	prpl_info->roomlist_get_list = discord_roomlist_get_list;
 	prpl_info->roomlist_room_serialize = discord_roomlist_serialize;
+
+	prpl_info->offline_message = discord_offline_messaging;
 }
 
 static PurplePluginInfo info = {
