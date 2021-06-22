@@ -67,8 +67,8 @@
 #define DISCORD_API_SERVER "discord.com"
 #define DISCORD_GATEWAY_SERVER "gateway.discord.gg"
 #define DISCORD_GATEWAY_PORT 443
-#define DISCORD_GATEWAY_SERVER_PATH "/?encoding=json&v=6"
-#define DISCORD_API_VERSION "v6"
+#define DISCORD_GATEWAY_SERVER_PATH "/?encoding=json&v=9"
+#define DISCORD_API_VERSION "v9"
 #define DISCORD_CDN_SERVER "cdn.discordapp.com"
 
 #define DISCORD_MESSAGE_NORMAL (0)
@@ -344,8 +344,8 @@ discord_new_permission_override(JsonObject *json)
 	DiscordPermissionOverride *permission = g_new0(DiscordPermissionOverride, 1);
 
 	permission->id = to_int(json_object_get_string_member(json, "id"));
-	permission->deny = json_object_get_int_member(json, "deny");
-	permission->allow = json_object_get_int_member(json, "allow");
+	permission->deny = to_int(json_object_get_string_member(json, "deny"));
+	permission->allow = to_int(json_object_get_string_member(json, "allow"));
 
 	return permission;
 }
@@ -556,7 +556,8 @@ discord_add_permission_override(DiscordChannel *channel, JsonObject *json)
 static gboolean
 discord_permission_is_role(JsonObject *json)
 {
-	return purple_strequal(json_object_get_string_member(json, "type"), "role");
+	//return purple_strequal(json_object_get_string_member(json, "type"), "role");
+	return (json_object_get_int_member(json, "type") == 0);
 }
 
 static DiscordUser *
