@@ -1864,6 +1864,11 @@ discord_download_image_cb(DiscordAccount *da, JsonNode *node, gpointer user_data
 
 	} else {
 		purple_debug_error("discord", "Image response node is null!\n");
+		if (img_context->conv_id >= 0) {
+			purple_serv_got_chat_in(da->pc, img_context->conv_id, img_context->from, img_context->flags, img_context->url, img_context->timestamp);
+		} else {
+			purple_serv_got_im(da->pc, img_context->from, img_context->url, img_context->flags, img_context->timestamp);
+		}
 	}
 
 	discord_free_image_context(img_context);
@@ -2030,6 +2035,8 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 			JsonObject *embed = json_array_get_object_element(embeds, n);
 			JsonObject *author = json_object_get_object_member(embed, "author");
 			JsonObject *footer = json_object_get_object_member(embed, "footer");
+			JsonObject *image = json_object_get_object_member(embed, "image");
+			JsonObject *video = json_object_get_object_member(embed, "video");
 			JsonArray *fields = json_object_get_array_member(embed, "fields");
 			gint64 color = 0xcccccc;
 
@@ -2075,6 +2082,13 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 					g_string_append(embed_str, "</a>");
 				}
 				g_string_append(embed_str, "<br/>");
+
+			} else if (json_object_has_member(embed, "url")) {
+				// bare url
+				const gchar *url = json_object_get_string_member(embed, "url");
+
+				g_string_append_printf(embed_str, border_format, color, color);
+				g_string_append_printf(embed_str, "%s<br/>", url);
 			}
 
 			if (json_object_has_member(embed, "description")) {
@@ -2115,7 +2129,21 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 					}
 				}
 			}
-			// image - TODO
+
+			if (image != NULL && json_object_has_member(image, "url")) {
+				const gchar *url = json_object_get_string_member(image, "url");
+
+				g_string_append_printf(embed_str, border_format, color, color);
+				g_string_append_printf(embed_str, "%s<br/>", url);
+			}
+
+			if (video != NULL && json_object_has_member(video, "url")) {
+				const gchar *url = json_object_get_string_member(video, "url");
+
+				g_string_append_printf(embed_str, border_format, color, color);
+				g_string_append_printf(embed_str, "%s<br/>", url);
+			}
+
 			// footer | time
 
 			g_string_append_printf(embed_str, border_format, color, color);
@@ -2378,18 +2406,22 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 
 					if (conv != NULL) {
 						int head_count = guild ? g_hash_table_size(guild->members) : 0;
-						if (head_count > 0 && (head_count < purple_account_get_int(da->account, "large-channel-count", 20) || purple_account_get_bool(da->account, "display-images-large-servers", FALSE) )) {
+						if (head_count < purple_account_get_int(da->account, "large-channel-count", 20) || purple_account_get_bool(da->account, "display-images-large-servers", FALSE) ) {
 							discord_fetch_url(da, img_context->url, NULL, discord_download_image_cb, img_context);
 							GList *l = conv->logs;
 							if (l != NULL) {
 								PurpleLog *log = l->data;
 								purple_log_write(log, flags | PURPLE_MESSAGE_INVISIBLE, name, timestamp, url_log);
 							}
+						} else {
+							purple_serv_got_chat_in(da->pc, discord_chat_hash(channel_id), name, flags, url_log, timestamp);
 						}
+					} else {
+						purple_serv_got_chat_in(da->pc, discord_chat_hash(channel_id), name, flags, url_log, timestamp);
 					}
 
 				} else {
-					purple_serv_got_chat_in(da->pc, discord_chat_hash(channel_id), name, flags, url, timestamp);
+					purple_serv_got_chat_in(da->pc, discord_chat_hash(channel_id), name, flags, url_log, timestamp);
 				}
 
 			}
