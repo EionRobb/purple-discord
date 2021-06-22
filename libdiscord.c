@@ -2264,7 +2264,7 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 			if (escaped_content && *escaped_content && msg_type != 3) {
 				purple_serv_got_im(da->pc, merged_username, escaped_content, flags, timestamp);
 			} else if (msg_type == 3) {
-				gchar *call_txt = g_strdup_printf("%s started a call", merged_username);
+				gchar *call_txt = g_strdup_printf(_("%s started a call"), merged_username);
 				purple_conversation_write(conv, NULL, call_txt, PURPLE_MESSAGE_SYSTEM, timestamp);
 				g_free(call_txt);
 			}
@@ -2387,12 +2387,12 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 		if (escaped_content && *escaped_content && msg_type != 7 && msg_type != 3) {
 			purple_serv_got_chat_in(da->pc, discord_chat_hash(channel_id), name, flags, escaped_content, timestamp);
 		} else if (msg_type == 7) {
-			gchar *join_txt = g_strdup_printf("%s joined the guild!", name);
+			gchar *join_txt = g_strdup_printf(_("%s joined the guild!"), name);
 			purple_conversation_write(conv, NULL, join_txt, PURPLE_MESSAGE_SYSTEM, timestamp);
 			g_free(join_txt);
 			return msg_id;
 		} else if (msg_type == 3) {
-			gchar *call_txt = g_strdup_printf("%s started a call", name);
+			gchar *call_txt = g_strdup_printf(_("%s started a call"), name);
 			purple_conversation_write(conv, NULL, call_txt, PURPLE_MESSAGE_SYSTEM, timestamp);
 			g_free(call_txt);
 			return msg_id;
