@@ -1882,6 +1882,7 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 	gboolean pinned = special_type == DISCORD_MESSAGE_PINNED;
 
 	guint64 msg_id = to_int(json_object_get_string_member(data, "id"));
+	guint64 msg_type = json_object_get_int_member(data, "type");
 
 	if (!json_object_get_object_member(data, "author")) {
 		/* Possibly edited message? */
@@ -2260,8 +2261,12 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 				g_free(reply_txt);
 			}
 
-			if (escaped_content && *escaped_content) {
+			if (escaped_content && *escaped_content && msg_type != 3) {
 				purple_serv_got_im(da->pc, merged_username, escaped_content, flags, timestamp);
+			} else if (msg_type == 3) {
+				gchar *call_txt = g_strdup_printf("%s started a call", merged_username);
+				purple_conversation_write(conv, NULL, call_txt, PURPLE_MESSAGE_SYSTEM, timestamp);
+				g_free(call_txt);
 			}
 
 			if (attachments) {
@@ -2379,8 +2384,18 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 			g_free(reply_txt);
 		}
 
-		if (escaped_content && *escaped_content) {
+		if (escaped_content && *escaped_content && msg_type != 7 && msg_type != 3) {
 			purple_serv_got_chat_in(da->pc, discord_chat_hash(channel_id), name, flags, escaped_content, timestamp);
+		} else if (msg_type == 7) {
+			gchar *join_txt = g_strdup_printf("%s joined the guild!", name);
+			purple_conversation_write(conv, NULL, join_txt, PURPLE_MESSAGE_SYSTEM, timestamp);
+			g_free(join_txt);
+			return msg_id;
+		} else if (msg_type == 3) {
+			gchar *call_txt = g_strdup_printf("%s started a call", name);
+			purple_conversation_write(conv, NULL, call_txt, PURPLE_MESSAGE_SYSTEM, timestamp);
+			g_free(call_txt);
+			return msg_id;
 		}
 
 		if (attachments) {
