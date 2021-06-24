@@ -344,8 +344,15 @@ discord_new_permission_override(JsonObject *json)
 	DiscordPermissionOverride *permission = g_new0(DiscordPermissionOverride, 1);
 
 	permission->id = to_int(json_object_get_string_member(json, "id"));
-	permission->deny = to_int(json_object_get_string_member(json, "deny"));
-	permission->allow = to_int(json_object_get_string_member(json, "allow"));
+	if (json_object_get_string_member(json, "deny")) {
+		// v9 and above
+		permission->deny = to_int(json_object_get_string_member(json, "deny"));
+		permission->allow = to_int(json_object_get_string_member(json, "allow"));
+	} else {
+		// v6 and below
+		permission->deny = json_object_get_int_member(json, "deny");
+		permission->allow = json_object_get_int_member(json, "allow");
+	}
 
 	return permission;
 }
@@ -556,7 +563,12 @@ discord_add_permission_override(DiscordChannel *channel, JsonObject *json)
 static gboolean
 discord_permission_is_role(JsonObject *json)
 {
-	//return purple_strequal(json_object_get_string_member(json, "type"), "role");
+	if (json_object_get_string_member(json, "type")) {
+		// v6 and below
+		return purple_strequal(json_object_get_string_member(json, "type"), "role");
+	}
+	
+	// v9 and above
 	return (json_object_get_int_member(json, "type") == 0);
 }
 
