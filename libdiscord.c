@@ -567,7 +567,7 @@ discord_permission_is_role(JsonObject *json)
 		// v6 and below
 		return purple_strequal(json_object_get_string_member(json, "type"), "role");
 	}
-	
+
 	// v9 and above
 	return (json_object_get_int_member(json, "type") == 0);
 }
@@ -4439,7 +4439,8 @@ static void discord_set_room_last_id(DiscordAccount *da, guint64 channel_id, gui
 static void
 discord_got_read_states(DiscordAccount *da, JsonNode *node, gpointer user_data)
 {
-	JsonArray *states = json_node_get_array(node);
+	JsonObject *data = json_node_get_object(node);
+	JsonArray *states = json_object_get_array_member(data, "entries");
 	guint len = json_array_get_length(states);
 
 	for (int i = len - 1; i >= 0; i--) {
@@ -4523,7 +4524,8 @@ discord_got_guild_setting(DiscordAccount *da, JsonObject *settings)
 static void
 discord_got_guild_settings(DiscordAccount *da, JsonNode *node)
 {
-	JsonArray *guilds = json_node_get_array(node);
+	JsonObject *data = json_node_get_object(node);
+	JsonArray *guilds = json_object_get_array_member(data, "entries");
 	guint len = json_array_get_length(guilds);
 
 	for (int i = len - 1; i >= 0; i--) {
