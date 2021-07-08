@@ -3552,7 +3552,7 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 			emoji_name = "?";
 		}
 
-		gchar *user_nick = NULL;
+		const gchar *user_nick = NULL;
 		PurpleConversation *conv;
 
 		if (channel_id_s && g_hash_table_contains(da->one_to_ones, channel_id_s)) {
@@ -5277,7 +5277,7 @@ discord_react_cb(DiscordAccount *da, JsonNode *node, gpointer user_data)
 		prev_text = g_strdup(msg_text);
 	}
 
-	gchar *user_nick = NULL;
+	const gchar *user_nick = NULL;
 
 	if (channel_id_s && g_hash_table_contains(da->one_to_ones, channel_id_s)) {
 
