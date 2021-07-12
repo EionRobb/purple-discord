@@ -6553,9 +6553,9 @@ static void
 discord_got_avatar(DiscordAccount *da, JsonNode *node, gpointer user_data)
 {
 	DiscordUser *user = user_data;
-	gchar *username = discord_create_fullname(user);
 
 	if (node != NULL) {
+		gchar *username = discord_create_fullname(user);
 		JsonObject *response = json_node_get_object(node);
 		const gchar *response_str;
 		gsize response_len;
@@ -6571,9 +6571,10 @@ discord_got_avatar(DiscordAccount *da, JsonNode *node, gpointer user_data)
 		} else {
 			purple_buddy_icons_set_for_user(da->account, username, response_dup, response_len, user->avatar);
 		}
+		
+		g_free(username);
 	}
 
-	g_free(username);
 }
 
 static void
