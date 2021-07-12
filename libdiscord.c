@@ -5255,6 +5255,11 @@ discord_react_cb(DiscordAccount *da, JsonNode *node, gpointer user_data)
 	PurpleConversation *conv = react->conv;
 	gchar *reactor_nick = react->reactor;
 	gchar *emoji_name = react->reaction;
+	
+	if (node == NULL) {
+		discord_free_reaction(react);
+		return;
+	}
 
 	const gchar *channel_id_s = json_object_get_string_member(data, "channel_id");
 	JsonObject *user_obj = json_object_get_object_member(data, "author");
