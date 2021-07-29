@@ -98,11 +98,13 @@ C_FILES := markdown.c
 PURPLE_COMPAT_FILES := purple2compat/*.c
 PURPLE_C_FILES := libdiscord.c $(C_FILES)
 
-.PHONY: all install FAILNOPURPLE clean install-icons install-locales %-locale-install
+.PHONY: all build install FAILNOPURPLE clean build-icons install-icons build-locales install-locales %-locale-install
 
 LOCALES = $(patsubst %.po, %.mo, $(wildcard po/*.po))
 
 all: $(DISCORD_TARGET)
+
+build: all build-icons build-locales
 
 libdiscord.so: $(PURPLE_C_FILES) $(PURPLE_COMPAT_FILES)
 	$(CC) -fPIC $(CFLAGS) $(CPPFLAGS) -shared -o $@ $^ $(LDFLAGS) `$(PKG_CONFIG) purple glib-2.0 json-glib-1.0 --libs --cflags`  $(INCLUDES) -Ipurple2compat -g -ggdb
@@ -126,6 +128,8 @@ po/%.po: po/purple-discord.pot
 po/%.mo: po/%.po
 	msgfmt -o $@ $^
 
+build-locales: $(LOCALES)
+
 %-locale-install: po/%.mo
 	mkdir -m $(DIR_PERM) -p $(LOCALE_DEST)/$(*F)/LC_MESSAGES
 	install -m $(FILE_PERM) -p po/$(*F).mo $(LOCALE_DEST)/$(*F)/LC_MESSAGES/purple-discord.mo
@@ -143,7 +147,9 @@ discord22.png: discord-alt-logo.svg
 discord48.png: discord-alt-logo.svg
 	convert -strip -background none discord-alt-logo.svg -resize 48x48 discord48.png
 
-install-icons: discord16.png discord22.png discord48.png
+build-icons: discord16.png discord22.png discord48.png
+
+install-icons: build-icons
 	mkdir -m $(DIR_PERM) -p $(DISCORD_ICONS_DEST)/16
 	mkdir -m $(DIR_PERM) -p $(DISCORD_ICONS_DEST)/22
 	mkdir -m $(DIR_PERM) -p $(DISCORD_ICONS_DEST)/48
@@ -151,7 +157,7 @@ install-icons: discord16.png discord22.png discord48.png
 	install -m $(FILE_PERM) -p discord22.png $(DISCORD_ICONS_DEST)/22/discord.png
 	install -m $(FILE_PERM) -p discord48.png $(DISCORD_ICONS_DEST)/48/discord.png
 
-install-locales: $(patsubst po/%.po, %-locale-install, $(wildcard po/*.po))
+install-locales: build-locales $(patsubst po/%.po, %-locale-install, $(wildcard po/*.po))
 
 FAILNOPURPLE:
 	echo "You need libpurple development headers installed to be able to compile this plugin"
