@@ -1028,19 +1028,17 @@ discord_update_cookies(DiscordAccount *ya, const GList *cookie_headers)
 	for (cur = cookie_headers; cur != NULL; cur = g_list_next(cur)) {
 		const gchar *cookie_start;
 		const gchar *cookie_end;
-		gchar *cookie_name;
-		gchar *cookie_value;
 
 		cookie_start = cur->data;
 		cookie_end = strchr(cookie_start, '=');
 
 		if (cookie_end != NULL) {
-			cookie_name = g_strndup(cookie_start, cookie_end - cookie_start);
+			gchar *cookie_name = g_strndup(cookie_start, cookie_end - cookie_start);
 			cookie_start = cookie_end + 1;
 			cookie_end = strchr(cookie_start, ';');
 
 			if (cookie_end != NULL) {
-				cookie_value = g_strndup(cookie_start, cookie_end - cookie_start);
+				gchar *cookie_value = g_strndup(cookie_start, cookie_end - cookie_start);
 
 				g_hash_table_replace(ya->cookie_table, cookie_name, cookie_value);
 			}
@@ -1849,18 +1847,14 @@ static void
 discord_download_image_cb(DiscordAccount *da, JsonNode *node, gpointer user_data) {
 	//The returned size can be changed by appending a querystring of ?size=desired_size to the URL. Image size can be any power of two between 16 and 4096.
 	DiscordImgMsgContext *img_context = user_data;
-	int img_id = -1;
-	gsize img_data_len;
-	gpointer img_data;
-	const gchar *img_data_s;
-	gchar *attachment_show;
 
 	if (node != NULL) {
+		gchar *attachment_show;
 		JsonObject *response = json_node_get_object(node);
-		img_data_s = g_dataset_get_data(node, "raw_body");
-		img_data_len = json_object_get_int_member(response, "len");
-		img_data = g_memdup(img_data_s, img_data_len);
-		img_id = purple_imgstore_add_with_id(img_data, img_data_len, NULL);
+		const gchar *img_data_s = g_dataset_get_data(node, "raw_body");
+		gsize img_data_len = json_object_get_int_member(response, "len");
+		gpointer img_data = g_memdup(img_data_s, img_data_len);
+		int img_id = purple_imgstore_add_with_id(img_data, img_data_len, NULL);
 
 		if (img_id >= 0) {
 			attachment_show = g_strdup_printf("<img id=\"%u\" alt=\"%s\"/><br /><a href=\"%s\">(link)</a>", img_id, img_context->url, img_context->url);

@@ -583,7 +583,7 @@ static void purple_http_headers_add(PurpleHttpHeaders *hdrs, const gchar *key,
 static void purple_http_headers_remove(PurpleHttpHeaders *hdrs,
 	const gchar *key)
 {
-	GList *it, *curr;
+	GList *it;
 
 	g_return_if_fail(hdrs != NULL);
 	g_return_if_fail(key != NULL);
@@ -595,7 +595,7 @@ static void purple_http_headers_remove(PurpleHttpHeaders *hdrs,
 	it = g_list_first(hdrs->list);
 	while (it) {
 		PurpleKeyValuePair *kvp = it->data;
-		curr = it;
+		GList *curr = it;
 		it = g_list_next(it);
 		if (g_ascii_strcasecmp(kvp->key, key) != 0)
 			continue;
@@ -746,7 +746,7 @@ static void _purple_http_gen_headers(PurpleHttpConnection *hc)
 
 	PurpleProxyInfo *proxy;
 	gboolean proxy_http = FALSE;
-	const gchar *proxy_username, *proxy_password;
+	const gchar *proxy_username;
 
 	g_return_if_fail(hc != NULL);
 
@@ -806,6 +806,7 @@ static void _purple_http_gen_headers(PurpleHttpConnection *hc)
 
 	proxy_username = purple_proxy_info_get_username(proxy);
 	if (proxy_http && proxy_username != NULL && proxy_username[0] != '\0') {
+		const gchar *proxy_password;
 		gchar *proxy_auth, *ntlm_type1, *tmp;
 		int len;
 
