@@ -1028,19 +1028,17 @@ discord_update_cookies(DiscordAccount *ya, const GList *cookie_headers)
 	for (cur = cookie_headers; cur != NULL; cur = g_list_next(cur)) {
 		const gchar *cookie_start;
 		const gchar *cookie_end;
-		gchar *cookie_name;
-		gchar *cookie_value;
 
 		cookie_start = cur->data;
 		cookie_end = strchr(cookie_start, '=');
 
 		if (cookie_end != NULL) {
-			cookie_name = g_strndup(cookie_start, cookie_end - cookie_start);
+			gchar *cookie_name = g_strndup(cookie_start, cookie_end - cookie_start);
 			cookie_start = cookie_end + 1;
 			cookie_end = strchr(cookie_start, ';');
 
 			if (cookie_end != NULL) {
-				cookie_value = g_strndup(cookie_start, cookie_end - cookie_start);
+				gchar *cookie_value = g_strndup(cookie_start, cookie_end - cookie_start);
 
 				g_hash_table_replace(ya->cookie_table, cookie_name, cookie_value);
 			}
@@ -1849,18 +1847,14 @@ static void
 discord_download_image_cb(DiscordAccount *da, JsonNode *node, gpointer user_data) {
 	//The returned size can be changed by appending a querystring of ?size=desired_size to the URL. Image size can be any power of two between 16 and 4096.
 	DiscordImgMsgContext *img_context = user_data;
-	int img_id = -1;
-	gsize img_data_len;
-	gpointer img_data;
-	const gchar *img_data_s;
-	gchar *attachment_show;
 
 	if (node != NULL) {
+		gchar *attachment_show;
 		JsonObject *response = json_node_get_object(node);
-		img_data_s = g_dataset_get_data(node, "raw_body");
-		img_data_len = json_object_get_int_member(response, "len");
-		img_data = g_memdup(img_data_s, img_data_len);
-		img_id = purple_imgstore_add_with_id(img_data, img_data_len, NULL);
+		const gchar *img_data_s = g_dataset_get_data(node, "raw_body");
+		gsize img_data_len = json_object_get_int_member(response, "len");
+		gpointer img_data = g_memdup(img_data_s, img_data_len);
+		int img_id = purple_imgstore_add_with_id(img_data, img_data_len, NULL);
 
 		if (img_id >= 0) {
 			attachment_show = g_strdup_printf("<img id=\"%u\" alt=\"%s\"/><br /><a href=\"%s\">(link)</a>", img_id, img_context->url, img_context->url);
@@ -2232,14 +2226,13 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 				JsonObject *reply_author = json_object_get_object_member(referenced_message, "author");
 				const gchar *msg_txt = json_object_get_string_member(referenced_message, "content");
 				DiscordUser *reply_user = discord_upsert_user(da->new_users, reply_author);
-				const gchar *reply_username = discord_create_fullname(reply_user);
-				gchar *tmp = discord_create_fullname(reply_user);
-				PurpleBuddy *reply_buddy = purple_blist_find_buddy(da->account, tmp);
+				gchar *reply_username = discord_create_fullname(reply_user);
+				PurpleBuddy *reply_buddy = purple_blist_find_buddy(da->account, reply_username);
+				const gchar *reply_name;
 				if (reply_buddy != NULL)
-					reply_username = purple_buddy_get_alias(reply_buddy);
+					reply_name = purple_buddy_get_alias(reply_buddy);
 				else
-					reply_username = discord_create_fullname(reply_user);
-				g_free(tmp);
+					reply_name = reply_username;
 
 				size_t txt_len = g_utf8_strlen(msg_txt, -1);
 				gchar *prev_text;
@@ -2257,7 +2250,8 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 					prev_text = g_strdup(msg_txt);
 				}
 
-				gchar *reply_txt = g_strdup_printf("<font size=1>┌──@%s: %s</font>", reply_username ? reply_username : _("Unknown user"), prev_text);
+				gchar *reply_txt = g_strdup_printf("<font size=1>┌──@%s: %s</font>", reply_name ? reply_name : _("Unknown user"), prev_text);
+				g_free(reply_username);
 				g_free(prev_text);
 
 				if (conv == NULL) {
