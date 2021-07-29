@@ -159,6 +159,7 @@ FAILNOPURPLE:
 clean:
 	rm -f $(DISCORD_TARGET)
 	rm -f discord*.png
+	rm -f po/*.mo
 
 gdb:
 	gdb --args pidgin -c ~/.fake_purple -n -m
