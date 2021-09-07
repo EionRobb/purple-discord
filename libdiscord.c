@@ -60,7 +60,8 @@
 #endif
 #define DISCORD_PLUGIN_WEBSITE "https://github.com/EionRobb/purple-discord"
 
-#define DISCORD_USERAGENT "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/89.0.4389.116 Safari/537.36"
+#define DISCORD_USERAGENT_VERSION "92.0.4515.159"
+#define DISCORD_USERAGENT "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/" DISCORD_USERAGENT_VERSION " Safari/537.36"
 
 #define DISCORD_BUFFER_DEFAULT_SIZE 40960
 
@@ -1232,7 +1233,7 @@ discord_send_auth(DiscordAccount *da)
 		json_object_set_string_member(properties, "browser", "Chrome");
 		json_object_set_string_member(properties, "device", "");
 		json_object_set_string_member(properties, "browser_user_agent", DISCORD_USERAGENT);
-		json_object_set_string_member(properties, "browser_version", "51.0.2704.103");
+		json_object_set_string_member(properties, "browser_version", DISCORD_USERAGENT_VERSION);
 		json_object_set_string_member(properties, "os_version", "10");
 
 		json_object_set_string_member(properties, "referrer", "https://discord.com/channels/@me");
@@ -1240,7 +1241,7 @@ discord_send_auth(DiscordAccount *da)
 		json_object_set_string_member(properties, "referrer_current", "");
 		json_object_set_string_member(properties, "referring_domain_current", "");
 		json_object_set_string_member(properties, "release_channel", "stable");
-		json_object_set_int_member(properties, "client_build_number", 83364);
+		json_object_set_int_member(properties, "client_build_number", 96355);
 		json_object_set_null_member(properties, "client_event_source");
 
 		json_object_set_object_member(data, "properties", properties);
