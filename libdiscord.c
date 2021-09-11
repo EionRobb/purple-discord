@@ -4716,9 +4716,13 @@ fosscord_got_server_details(DiscordAccount *da, JsonNode *node, gpointer user_da
 		if (percent) {
 			*percent = '\0';
 		}
-
-		json_object_set_string_member(data, "login", username_copy); //XXX not "email" like Discord
+		
+		json_object_set_string_member(data, "login", username_copy);
 		json_object_set_string_member(data, "password", purple_connection_get_password(da->pc));
+		json_object_set_boolean_member(data, "undelete", FALSE);
+		json_object_set_null_member(data, "captcha_key");
+		json_object_set_null_member(data, "login_source");
+		json_object_set_null_member(data, "gift_code_sku_id");
 
 		str = json_object_to_string(data);
 		url = g_strdup_printf("https://%s/api/" DISCORD_API_VERSION "/auth/login", DISCORD_API_SERVER);
@@ -4818,20 +4822,21 @@ discord_login(PurpleAccount *account)
 		JsonObject *data = json_object_new();
 		gchar *str;
 		gchar *url;
+		gchar *username_copy = g_strdup(username);
 		
 #ifdef FOSSCORD
-		gchar *username_copy = g_strdup(username);
 		gchar *percent = g_strrstr(username_copy, "%");
 		if (percent) {
 			*percent = '\0';
 		}
+#endif
 
 		json_object_set_string_member(data, "login", username_copy);
-		g_free(username_copy);
-#else
-		json_object_set_string_member(data, "email", username);
-#endif
 		json_object_set_string_member(data, "password", purple_connection_get_password(da->pc));
+		json_object_set_boolean_member(data, "undelete", FALSE);
+		json_object_set_null_member(data, "captcha_key");
+		json_object_set_null_member(data, "login_source");
+		json_object_set_null_member(data, "gift_code_sku_id");
 
 		str = json_object_to_string(data);
 		url = g_strdup_printf("https://%s/api/" DISCORD_API_VERSION "/auth/login", DISCORD_API_SERVER);
