@@ -54,7 +54,13 @@
 // Prevent segfault in libpurple ssl plugins
 #define purple_ssl_read(a, b, c)  ((a) && (a)->private_data ? purple_ssl_read((a), (b), (c)) : 0)
 
-#define DISCORD_PLUGIN_ID "prpl-eionrobb-discord"
+#ifdef FOSSCORD
+#	define DISCORD_PLUGIN_ID "prpl-eionrobb-fosscord"
+#	define DISCORD_PLUGIN_NAME "Fosscord"
+#else
+#	define DISCORD_PLUGIN_ID "prpl-eionrobb-discord"
+#	define DISCORD_PLUGIN_NAME "Discord"
+#endif
 #ifndef DISCORD_PLUGIN_VERSION
 #define DISCORD_PLUGIN_VERSION "0.1"
 #endif
@@ -65,12 +71,21 @@
 
 #define DISCORD_BUFFER_DEFAULT_SIZE 40960
 
-#define DISCORD_API_SERVER "discord.com"
-#define DISCORD_GATEWAY_SERVER "gateway.discord.gg"
-#define DISCORD_GATEWAY_PORT 443
-#define DISCORD_GATEWAY_SERVER_PATH "/?encoding=json&v=9"
-#define DISCORD_API_VERSION "v9"
-#define DISCORD_CDN_SERVER "cdn.discordapp.com"
+#ifdef FOSSCORD
+#	define DISCORD_API_SERVER (purple_account_get_string((da)->account, "api_server", ""))
+#	define DISCORD_GATEWAY_SERVER (purple_account_get_string((da)->account, "gateway_server", ""))
+#	define DISCORD_GATEWAY_PORT 443
+#	define DISCORD_GATEWAY_SERVER_PATH "/?encoding=json&v=9"
+#	define DISCORD_API_VERSION "v9"
+#	define DISCORD_CDN_SERVER (purple_account_get_string((da)->account, "cdn_server", ""))
+#else
+#	define DISCORD_API_SERVER "discord.com"
+#	define DISCORD_GATEWAY_SERVER "gateway.discord.gg"
+#	define DISCORD_GATEWAY_PORT 443
+#	define DISCORD_GATEWAY_SERVER_PATH "/?encoding=json&v=9"
+#	define DISCORD_API_VERSION "v9"
+#	define DISCORD_CDN_SERVER "cdn.discordapp.com"
+#endif
 
 #define DISCORD_MESSAGE_NORMAL (0)
 #define DISCORD_MESSAGE_EDITED (1)
@@ -1442,7 +1457,9 @@ discord_fetch_emoji(PurpleConversation *conv, const gchar *emoji, guint64 id)
 
 	data->shortcut = shortcut;
 	data->conv = conv;  //TODO g_object_ref(conv); for purple3?
-	GString *url = g_string_new("https://" DISCORD_CDN_SERVER "/emojis/");
+	GString *url = g_string_new("https://");
+	g_string_append(url, DISCORD_CDN_SERVER);
+	g_string_append(url, "/emojis/");
 	g_string_append_printf(url, "%" G_GUINT64_FORMAT, id);
 	g_string_append(url, ".png");
 
@@ -1464,7 +1481,13 @@ discord_replace_emoji(const GMatchInfo *match, GString *result, gpointer user_da
 		discord_fetch_emoji(conv, alt_text, to_int(emoji_id));
 
 	} else {
-		g_string_append_printf(result, "<img src=\"https://" DISCORD_CDN_SERVER "/emojis/%s\" alt=\":%s:\"/>", emoji_id, alt_text);
+		PurpleConnection *pc = purple_conversation_get_connection(conv);
+		DiscordAccount *da = purple_connection_get_protocol_data(pc);
+		g_return_val_if_fail(da, FALSE);
+		
+		g_string_append(result, "<img src=\"https://");
+		g_string_append(result, DISCORD_CDN_SERVER);
+		g_string_append_printf(result, "/emojis/%s\" alt=\":%s:\"/>", emoji_id, alt_text);
 	}
 
 	g_free(emoji_id);
@@ -3603,7 +3626,7 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		reaction->reaction = (emoji_id != NULL) ? g_strdup_printf("&lt;:%s:%s&gt;", emoji_name, emoji_id) : g_strdup(emoji_name);
 
 		// Get array of messages because single-message endpoint is bot-only
-		gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/channels/%" G_GUINT64_FORMAT "/messages?limit=5&after=%" G_GUINT64_FORMAT, channel_id, message_id-1);
+		gchar *url = g_strdup_printf("https://%s/api/" DISCORD_API_VERSION "/channels/%" G_GUINT64_FORMAT "/messages?limit=5&after=%" G_GUINT64_FORMAT, DISCORD_API_SERVER, channel_id, message_id-1);
 		discord_fetch_url(da, url, NULL, discord_react_cb, reaction);
 		g_free(url);
 
@@ -3615,10 +3638,10 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 PurpleGroup *
 discord_get_or_create_default_group()
 {
-	PurpleGroup *discord_group = purple_blist_find_group("Discord");
+	PurpleGroup *discord_group = purple_blist_find_group(DISCORD_PLUGIN_NAME);
 
 	if (!discord_group) {
-		discord_group = purple_group_new("Discord");
+		discord_group = purple_group_new(DISCORD_PLUGIN_NAME);
 		purple_blist_add_group(discord_group, NULL);
 	}
 
@@ -3799,10 +3822,11 @@ void
 discord_set_status(PurpleAccount *account, PurpleStatus *status)
 {
 	PurpleConnection *pc = purple_account_get_connection(account);
-	DiscordAccount *ya = purple_connection_get_protocol_data(pc);
+	DiscordAccount *da = purple_connection_get_protocol_data(pc);
 	const gchar *status_id = purple_status_get_id(status);
 	gchar *postdata;
 	const gchar *message = purple_status_get_attr_string(status, "message");
+	gchar *url;
 
 	JsonObject *obj = json_object_new();
 	JsonObject *data = json_object_new();
@@ -3835,7 +3859,7 @@ discord_set_status(PurpleAccount *account, PurpleStatus *status)
 	json_object_set_boolean_member(data, "afk", FALSE);
 	json_object_set_object_member(obj, "d", data);
 
-	discord_socket_write_json(ya, obj);
+	discord_socket_write_json(da, obj);
 
 	data = json_object_new();
 	json_object_set_string_member(data, "status", status_id);
@@ -3853,7 +3877,9 @@ discord_set_status(PurpleAccount *account, PurpleStatus *status)
 
 	postdata = json_object_to_string(data);
 
-	discord_fetch_url_with_method(ya, "PATCH", "https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/users/@me/settings", postdata, NULL, NULL);
+	url = g_strdup_printf("https://%s/api/" DISCORD_API_VERSION "/users/@me/settings", DISCORD_API_SERVER);
+	discord_fetch_url_with_method(da, "PATCH", url, postdata, NULL, NULL);
+	g_free(url);
 
 	g_free(postdata);
 	json_object_unref(data);
@@ -3862,7 +3888,7 @@ discord_set_status(PurpleAccount *account, PurpleStatus *status)
 void
 discord_set_idle(PurpleConnection *pc, int idle_time)
 {
-	DiscordAccount *ya = purple_connection_get_protocol_data(pc);
+	DiscordAccount *da = purple_connection_get_protocol_data(pc);
 	JsonObject *obj = json_object_new();
 	JsonObject *data = json_object_new();
 	const gchar *status = "idle";
@@ -3880,10 +3906,10 @@ discord_set_idle(PurpleConnection *pc, int idle_time)
 	json_object_set_boolean_member(data, "afk", idle_time >= 20);
 	json_object_set_object_member(obj, "d", data);
 
-	discord_socket_write_json(ya, obj);
+	discord_socket_write_json(da, obj);
 }
 
-static void discord_start_socket(DiscordAccount *ya);
+static void discord_start_socket(DiscordAccount *da);
 
 static void
 discord_restart_channel(DiscordAccount *da)
@@ -3893,7 +3919,7 @@ discord_restart_channel(DiscordAccount *da)
 }
 
 static void
-discord_build_groups_from_blist(DiscordAccount *ya)
+discord_build_groups_from_blist(DiscordAccount *da)
 {
 	PurpleBlistNode *node;
 
@@ -3905,7 +3931,7 @@ discord_build_groups_from_blist(DiscordAccount *ya)
 			const gchar *name;
 			PurpleBuddy *buddy = PURPLE_BUDDY(node);
 
-			if (purple_buddy_get_account(buddy) != ya->account) {
+			if (purple_buddy_get_account(buddy) != da->account) {
 				continue;
 			}
 
@@ -3913,9 +3939,9 @@ discord_build_groups_from_blist(DiscordAccount *ya)
 			discord_id = purple_blist_node_get_string(node, "discord_id");
 
 			if (discord_id != NULL) {
-				g_hash_table_replace(ya->one_to_ones, g_strdup(discord_id), g_strdup(name));
-				g_hash_table_replace(ya->last_message_id_dm, g_strdup(discord_id), g_strdup("0"));
-				g_hash_table_replace(ya->one_to_ones_rev, g_strdup(name), g_strdup(discord_id));
+				g_hash_table_replace(da->one_to_ones, g_strdup(discord_id), g_strdup(name));
+				g_hash_table_replace(da->last_message_id_dm, g_strdup(discord_id), g_strdup("0"));
+				g_hash_table_replace(da->one_to_ones_rev, g_strdup(name), g_strdup(discord_id));
 			}
 		}
 	}
@@ -3959,7 +3985,7 @@ discord_friends_auth_accept(
 	DiscordUser *user = store->user;
 	DiscordAccount *da = store->da;
 
-	gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/users/@me/relationships/%" G_GUINT64_FORMAT, user->id);
+	gchar *url = g_strdup_printf("https://%s/api/" DISCORD_API_VERSION "/users/@me/relationships/%" G_GUINT64_FORMAT, DISCORD_API_SERVER, user->id);
 	discord_fetch_url_with_method(da, "PUT", url, NULL, NULL, NULL);
 	g_free(url);
 
@@ -3977,7 +4003,7 @@ discord_friends_auth_reject(
 	DiscordUser *user = store->user;
 	DiscordAccount *da = store->da;
 
-	gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/users/@me/relationships/%" G_GUINT64_FORMAT, user->id);
+	gchar *url = g_strdup_printf("https://%s/api/" DISCORD_API_VERSION "/users/@me/relationships/%" G_GUINT64_FORMAT, DISCORD_API_SERVER, user->id);
 	discord_fetch_url_with_method(da, "DELETE", url, NULL, NULL, NULL);
 	g_free(url);
 
@@ -4416,7 +4442,7 @@ discord_got_guilds(DiscordAccount *da, JsonNode *node, gpointer user_data)
 static void
 discord_get_history(DiscordAccount *da, const gchar *channel_id, const gchar *last, int count)
 {
-	gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/channels/%s/messages?limit=%d&after=%s", channel_id, count ? count : 100, last);
+	gchar *url = g_strdup_printf("https://%s/api/" DISCORD_API_VERSION "/channels/%s/messages?limit=%d&after=%s", DISCORD_API_SERVER, channel_id, count ? count : 100, last);
 	DiscordChannel *channel = discord_get_channel_global(da, channel_id);
 
 	if (count && channel) {
@@ -4538,12 +4564,15 @@ discord_mfa_text_entry(gpointer user_data, const gchar *code)
 	DiscordAccount *da = user_data;
 	JsonObject *data = json_object_new();
 	gchar *str;
+	gchar *url;
 
 	json_object_set_string_member(data, "code", code);
 	json_object_set_string_member(data, "ticket", da->mfa_ticket);
 
 	str = json_object_to_string(data);
-	discord_fetch_url(da, "https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/auth/mfa/totp", str, discord_login_response, NULL);
+	url = g_strdup_printf("https://%s/api/" DISCORD_API_VERSION "/auth/mfa/totp", DISCORD_API_SERVER);
+	discord_fetch_url(da, url, str, discord_login_response, NULL);
+	g_free(url);
 
 	g_free(str);
 	json_object_unref(data);
@@ -4613,14 +4642,119 @@ discord_login_response(DiscordAccount *da, JsonNode *node, gpointer user_data)
 	purple_connection_error(da->pc, PURPLE_CONNECTION_ERROR_AUTHENTICATION_FAILED, _("Bad username/password"));
 }
 
+#ifdef FOSSCORD
+
+static void
+fosscord_got_server_details(DiscordAccount *da, JsonNode *node, gpointer user_data)
+{
+	gchar *host = user_data;
+	
+	//grab GLOBAL_ENV
+	/*
+	
+	window.GLOBAL_ENV = {
+				API_ENDPOINT: "/api",
+				API_VERSION: 9,
+				GATEWAY_ENDPOINT: "wss://gateway.fosscord.com",
+				WEBAPP_ENDPOINT: "",
+				CDN_HOST: "cdn.fosscord.com",
+				ASSET_ENDPOINT: "",
+				MEDIA_PROXY_ENDPOINT: "https://media.discordapp.net",
+				WIDGET_ENDPOINT: `//${location.host}/widget`,
+				INVITE_HOST: `${location.hostname}`,
+				GUILD_TEMPLATE_HOST: "discord.new",
+				GIFT_CODE_HOST: "discord.gift",
+				RELEASE_CHANNEL: "stable",
+				MARKETING_ENDPOINT: "//discord.com",
+				BRAINTREE_KEY: "production_5st77rrc_49pp2rp4phym7387",
+				STRIPE_KEY: "pk_live_CUQtlpQUF0vufWpnpUmQvcdi",
+				NETWORKING_ENDPOINT: "//router.discordapp.net",
+				RTC_LATENCY_ENDPOINT: "//latency.discord.media/rtc",
+				PROJECT_ENV: "production",
+				REMOTE_AUTH_ENDPOINT: "//remote-auth-gateway.discord.gg",
+				SENTRY_TAGS: { buildId: "75e36d9", buildType: "normal" },
+				MIGRATION_SOURCE_ORIGIN: "https://discordapp.com",
+				MIGRATION_DESTINATION_ORIGIN: "https://discord.com",
+				HTML_TIMESTAMP: Date.now(),
+				ALGOLIA_KEY: "aca0d7082e4e63af5ba5917d5e96bed0"
+			};
+	*/
+	const gchar *global_env = g_dataset_get_data(node, "raw_body");
+	GMatchInfo *match_info;
+	
+	GRegex *gateway_regex = g_regex_new("GATEWAY_ENDPOINT: \"wss://([^\"]+)\",", 0, 0, NULL);
+	g_regex_match(gateway_regex, global_env, 0, &match_info);
+	if (g_match_info_matches(match_info)) {
+		gchar *gateway = g_match_info_fetch(match_info, 1);
+		purple_account_set_string(da->account, "gateway_server", gateway);
+		g_free(gateway);
+	}
+	g_regex_unref(gateway_regex);
+	
+	GRegex *cdn_regex = g_regex_new("CDN_HOST: \"([^\"]+)\",", 0, 0, NULL);
+	g_regex_match(cdn_regex, global_env, 0, &match_info);
+	if (g_match_info_matches(match_info)) {
+		gchar *cdn = g_match_info_fetch(match_info, 1);
+		purple_account_set_string(da->account, "cdn_server", cdn);
+		g_free(cdn);
+	}
+	g_regex_unref(cdn_regex);
+	
+	purple_account_set_string(da->account, "api_server", host);
+	
+	
+	//discord_login(account);
+	if (da->token) {
+		discord_start_socket(da);
+	} else {
+		JsonObject *data = json_object_new();
+		gchar *str;
+		gchar *url;
+		gchar *username_copy = g_strdup(purple_account_get_username(da->account));
+		
+		gchar *percent = g_strrstr(username_copy, "%");
+		if (percent) {
+			*percent = '\0';
+		}
+
+		json_object_set_string_member(data, "login", username_copy); //XXX not "email" like Discord
+		json_object_set_string_member(data, "password", purple_connection_get_password(da->pc));
+
+		str = json_object_to_string(data);
+		url = g_strdup_printf("https://%s/api/" DISCORD_API_VERSION "/auth/login", DISCORD_API_SERVER);
+		discord_fetch_url(da, url, str, discord_login_response, NULL);
+		g_free(url);
+
+		g_free(str);
+		json_object_unref(data);
+		
+		g_free(username_copy);
+	}
+	
+	g_free(host);
+}
+
+static void
+fosscord_find_server_details(DiscordAccount *da, const gchar *host)
+{
+	//connect to https:// host
+	gchar *url = g_strdup_printf("https://%s/", host);
+	discord_fetch_url(da, url, NULL, fosscord_got_server_details, g_strdup(host));
+	g_free(url);
+}
+
+#endif
+
 void
 discord_login(PurpleAccount *account)
 {
 	DiscordAccount *da;
 	PurpleConnection *pc = purple_account_get_connection(account);
 	PurpleConnectionFlags pc_flags;
+	
+	const gchar *username = purple_account_get_username(account);
 
-	if (!strchr(purple_account_get_username(account), '@')) {
+	if (!strchr(username, '@')) {
 		purple_connection_error(pc, PURPLE_CONNECTION_ERROR_INVALID_USERNAME, _("Username needs to be an email address"));
 		return;
 	}
@@ -4665,17 +4799,44 @@ discord_login(PurpleAccount *account)
 
 	da->token = g_strdup(purple_account_get_string(account, "token", NULL));
 
+#ifdef FOSSCORD
+	
+	if (!purple_account_get_string(account, "gateway_server", NULL)) {
+		const gchar *host = g_strrstr(username, "%");
+		if (host) {
+			fosscord_find_server_details(da, host + 1);
+		} else {
+			purple_connection_error(pc, PURPLE_CONNECTION_ERROR_INVALID_USERNAME, _("Need host address of Fosscord server"));
+			return;
+		}
+	} else
+#endif
+
 	if (da->token) {
 		discord_start_socket(da);
 	} else {
 		JsonObject *data = json_object_new();
 		gchar *str;
+		gchar *url;
+		
+#ifdef FOSSCORD
+		gchar *username_copy = g_strdup(username);
+		gchar *percent = g_strrstr(username_copy, "%");
+		if (percent) {
+			*percent = '\0';
+		}
 
-		json_object_set_string_member(data, "email", purple_account_get_username(account));
+		json_object_set_string_member(data, "login", username_copy);
+		g_free(username_copy);
+#else
+		json_object_set_string_member(data, "email", username);
+#endif
 		json_object_set_string_member(data, "password", purple_connection_get_password(da->pc));
 
 		str = json_object_to_string(data);
-		discord_fetch_url(da, "https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/auth/login", str, discord_login_response, NULL);
+		url = g_strdup_printf("https://%s/api/" DISCORD_API_VERSION "/auth/login", DISCORD_API_SERVER);
+		discord_fetch_url(da, url, str, discord_login_response, NULL);
+		g_free(url);
 
 		g_free(str);
 		json_object_unref(data);
@@ -4990,7 +5151,9 @@ discord_inflate(DiscordAccount *da, gchar *frame, gsize frame_len)
 	return g_string_free(ret, FALSE);
 }
 
+#ifndef FOSSCORD
 static gboolean discord_five_minute_restart(gpointer data);
+#endif
 
 static void
 discord_socket_got_data(gpointer userdata, PurpleSslConnection *conn, PurpleInputCondition cond)
@@ -5023,8 +5186,10 @@ discord_socket_got_data(gpointer userdata, PurpleSslConnection *conn, PurpleInpu
 				discord_socket_write_json(ya, ya->pending_writes->data);
 				ya->pending_writes = g_slist_delete_link(ya->pending_writes, ya->pending_writes);
 			}
-			
+
+#ifndef FOSSCORD
 			ya->five_minute_restart = g_timeout_add_seconds(5 * 60, discord_five_minute_restart, ya);
+#endif
 		}
 	}
 
@@ -5234,6 +5399,7 @@ discord_start_socket(DiscordAccount *da)
 	da->websocket = purple_ssl_connect(da->account, DISCORD_GATEWAY_SERVER, DISCORD_GATEWAY_PORT, discord_socket_connected, discord_socket_failed, da);
 }
 
+#ifndef FOSSCORD
 static gboolean
 discord_five_minute_restart(gpointer data)
 {
@@ -5243,6 +5409,7 @@ discord_five_minute_restart(gpointer data)
 	
 	return FALSE;
 }
+#endif
 
 static void
 discord_chat_leave_by_room_id(PurpleConnection *pc, guint64 room_id)
@@ -5381,7 +5548,7 @@ discord_chat_pinned_by_room_id(PurpleConnection *pc, PurpleChatConversation *cha
 {
 	DiscordAccount *da = purple_connection_get_protocol_data(pc);
 
-	gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/channels/%" G_GUINT64_FORMAT "/pins", room_id);
+	gchar *url = g_strdup_printf("https://%s/api/" DISCORD_API_VERSION "/channels/%" G_GUINT64_FORMAT "/pins", DISCORD_API_SERVER, room_id);
 	discord_fetch_url(da, url, NULL, discord_got_pinned, chatconv);
 	g_free(url);
 }
@@ -5489,7 +5656,7 @@ discord_chat_invite(PurpleConnection *pc, int id, const char *message, const cha
 		json_object_set_string_member(data, "recipient", from_int(user->id));
 		gchar *postdata = json_object_to_string(data);
 
-		gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/channels/%" G_GUINT64_FORMAT "/recipients/%" G_GUINT64_FORMAT, room_id, user->id);
+		gchar *url = g_strdup_printf("https://%s/api/" DISCORD_API_VERSION "/channels/%" G_GUINT64_FORMAT "/recipients/%" G_GUINT64_FORMAT, DISCORD_API_SERVER, room_id, user->id);
 		discord_fetch_url_with_method(da, "PUT", url, postdata, NULL, NULL);
 		g_free(url);
 
@@ -5499,7 +5666,7 @@ discord_chat_invite(PurpleConnection *pc, int id, const char *message, const cha
 	} else {
 		//TODO /channels/{channel.id}/invites
 		//TODO max_age, max_uses, temporary, unique options
-		gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/channels/%" G_GUINT64_FORMAT "/invites", room_id);
+		gchar *url = g_strdup_printf("https://%s/api/" DISCORD_API_VERSION "/channels/%" G_GUINT64_FORMAT "/invites", DISCORD_API_SERVER, room_id);
 		discord_fetch_url_with_method(da, "POST", url, "{}", NULL, NULL);
 		g_free(url);
 
@@ -5530,7 +5697,7 @@ discord_chat_nick(PurpleConnection *pc, int id, const gchar *new_nick)
 		json_object_set_string_member(data, "nick", new_nick);
 		gchar *postdata = json_object_to_string(data);
 
-		gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/guilds/%" G_GUINT64_FORMAT "/members/@me/nick", guild->id);
+		gchar *url = g_strdup_printf("https://%s/api/" DISCORD_API_VERSION "/guilds/%" G_GUINT64_FORMAT "/members/@me/nick", DISCORD_API_SERVER, guild->id);
 		discord_fetch_url_with_method(da, "PATCH", url, postdata, NULL, NULL);
 
 		g_free(url);
@@ -5580,7 +5747,7 @@ discord_chat_kick_username(PurpleConnection *pc, int id, const gchar *username)
 		}
 
 		if (user_id) {
-			gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/guilds/%" G_GUINT64_FORMAT "/members/%" G_GUINT64_FORMAT, guild->id, user_id);
+			gchar *url = g_strdup_printf("https://%s/api/" DISCORD_API_VERSION "/guilds/%" G_GUINT64_FORMAT "/members/%" G_GUINT64_FORMAT, DISCORD_API_SERVER, guild->id, user_id);
 			discord_fetch_url_with_method(da, "DELETE", url, NULL, NULL, NULL);
 			g_free(url);
 		}
@@ -5629,7 +5796,7 @@ discord_chat_ban_username(PurpleConnection *pc, int id, const gchar *username)
 			//json_object_set_int_member(data, "delete-message-days", numdays);
 			gchar *postdata = json_object_to_string(data);
 
-			gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/guilds/%" G_GUINT64_FORMAT "/bans/%" G_GUINT64_FORMAT, guild->id, user_id);
+			gchar *url = g_strdup_printf("https://%s/api/" DISCORD_API_VERSION "/guilds/%" G_GUINT64_FORMAT "/bans/%" G_GUINT64_FORMAT, DISCORD_API_SERVER, guild->id, user_id);
 			discord_fetch_url_with_method(da, "PUT", url, postdata, NULL, NULL);
 
 			g_free(url);
@@ -5748,7 +5915,7 @@ discord_got_history_of_room(DiscordAccount *da, JsonNode *node, gpointer user_da
 
 		if (rolling_last_message_id < last_message) {
 			/* Request the next 100 messages */
-			gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/channels/%" G_GUINT64_FORMAT "/messages?limit=100&after=%" G_GUINT64_FORMAT, channel->id, rolling_last_message_id);
+			gchar *url = g_strdup_printf("https://%s/api/" DISCORD_API_VERSION "/channels/%" G_GUINT64_FORMAT "/messages?limit=100&after=%" G_GUINT64_FORMAT, DISCORD_API_SERVER, channel->id, rolling_last_message_id);
 			discord_fetch_url(da, url, NULL, discord_got_history_of_room, channel);
 			g_free(url);
 		}
@@ -6074,7 +6241,7 @@ discord_open_chat(DiscordAccount *da, guint64 id, gboolean present)
 	purple_conversation_present(PURPLE_CONVERSATION(chatconv));
 
 	/* Get info about the channel */
-	gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/channels/%" G_GUINT64_FORMAT, id);
+	gchar *url = g_strdup_printf("https://%s/api/" DISCORD_API_VERSION "/channels/%" G_GUINT64_FORMAT, DISCORD_API_SERVER, id);
 	discord_fetch_url(da, url, NULL, discord_got_channel_info, channel);
 	g_free(url);
 
@@ -6104,7 +6271,7 @@ discord_join_chat(PurpleConnection *pc, GHashTable *chatdata)
 	guint64 last_message_id = discord_get_room_last_id(da, id);
 
 	if (last_message_id != 0 && channel->last_message_id > last_message_id) {
-		gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/channels/%" G_GUINT64_FORMAT "/messages?limit=100&after=%" G_GUINT64_FORMAT, id, last_message_id);
+		gchar *url = g_strdup_printf("https://%s/api/" DISCORD_API_VERSION "/channels/%" G_GUINT64_FORMAT "/messages?limit=100&after=%" G_GUINT64_FORMAT, DISCORD_API_SERVER, id, last_message_id);
 		discord_fetch_url(da, url, NULL, discord_got_history_of_room, channel);
 		g_free(url);
 	}
@@ -6163,9 +6330,7 @@ discord_mark_room_messages_read(DiscordAccount *da, guint64 channel_id)
 
 	discord_set_room_last_id(da, channel_id, last_message_id);
 
-	gchar *url;
-
-	url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/channels/%" G_GUINT64_FORMAT "/messages/%" G_GUINT64_FORMAT "/ack", channel_id, last_message_id);
+	gchar *url = g_strdup_printf("https://%s/api/" DISCORD_API_VERSION "/channels/%" G_GUINT64_FORMAT "/messages/%" G_GUINT64_FORMAT "/ack", DISCORD_API_SERVER, channel_id, last_message_id);
 	gchar *postdata = g_strconcat("{\"token\":\"", da->ack_token ? da->ack_token : "null", "\"}", NULL);
 	discord_fetch_url(da, url, postdata, discord_got_ack_token, NULL);
 	g_free(postdata);
@@ -6210,7 +6375,7 @@ discord_mark_conv_seen(PurpleConversation *conv, PurpleConversationUpdateType ty
 }
 
 static guint
-discord_conv_send_typing(PurpleConversation *conv, PurpleIMTypingState state, DiscordAccount *ya)
+discord_conv_send_typing(PurpleConversation *conv, PurpleIMTypingState state, DiscordAccount *da)
 {
 	PurpleConnection *pc;
 	gchar *url;
@@ -6219,7 +6384,7 @@ discord_conv_send_typing(PurpleConversation *conv, PurpleIMTypingState state, Di
 		return 0;
 	}
 
-	pc = ya ? ya->pc : purple_conversation_get_connection(conv);
+	pc = da ? da->pc : purple_conversation_get_connection(conv);
 
 	if (!PURPLE_CONNECTION_IS_CONNECTED(pc)) {
 		return 0;
@@ -6229,8 +6394,8 @@ discord_conv_send_typing(PurpleConversation *conv, PurpleIMTypingState state, Di
 		return 0;
 	}
 
-	if (ya == NULL) {
-		ya = purple_connection_get_protocol_data(pc);
+	if (da == NULL) {
+		da = purple_connection_get_protocol_data(pc);
 	}
 
 	guint64 *room_id_ptr = purple_conversation_get_data(conv, "id");
@@ -6239,15 +6404,15 @@ discord_conv_send_typing(PurpleConversation *conv, PurpleIMTypingState state, Di
 	if (room_id_ptr) {
 		room_id = *room_id_ptr;
 	} else {
-		room_id = to_int(g_hash_table_lookup(ya->one_to_ones_rev, purple_conversation_get_name(conv)));
+		room_id = to_int(g_hash_table_lookup(da->one_to_ones_rev, purple_conversation_get_name(conv)));
 	}
 
 	if (room_id == 0) {
 		return 0;
 	}
 
-	url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/channels/%" G_GUINT64_FORMAT "/typing", room_id);
-	discord_fetch_url(ya, url, "", NULL, NULL);
+	url = g_strdup_printf("https://%s/api/" DISCORD_API_VERSION "/channels/%" G_GUINT64_FORMAT "/typing", DISCORD_API_SERVER, room_id);
+	discord_fetch_url(da, url, "", NULL, NULL);
 	g_free(url);
 
 	return 10;
@@ -6309,7 +6474,7 @@ discord_conversation_send_image(DiscordAccount *da, guint64 room_id, PurpleImage
 	g_string_append_printf(postdata, "\r\n------PurpleBoundary\r\nContent-Disposition: form-data; name=\"payload_json\"\r\n\r\n{\"content\":\"\",\"nonce\":\"%s\",\"tts\":false}\r\n", nonce);
 	g_string_append(postdata, "------PurpleBoundary--\r\n");
 
-	url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/channels/%" G_GUINT64_FORMAT "/messages", room_id);
+	url = g_strdup_printf("https://%s/api/" DISCORD_API_VERSION "/channels/%" G_GUINT64_FORMAT "/messages", DISCORD_API_SERVER, room_id);
 
 	discord_fetch_url_with_method_len(da, "POST", url, postdata->str, postdata->len, NULL, NULL);
 
@@ -6385,7 +6550,7 @@ discord_conversation_send_message(DiscordAccount *da, guint64 room_id, const gch
 
 		g_hash_table_insert(da->sent_message_ids, nonce, nonce);
 
-		url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/channels/%" G_GUINT64_FORMAT "/messages", room_id);
+		url = g_strdup_printf("https://%s/api/" DISCORD_API_VERSION "/channels/%" G_GUINT64_FORMAT "/messages", DISCORD_API_SERVER, room_id);
 		postdata = json_object_to_string(data);
 
 		discord_fetch_url(da, url, postdata, NULL, NULL);
@@ -6544,8 +6709,10 @@ discord_send_im(PurpleConnection *pc,
 			JsonObject *data = json_object_new();
 			json_object_set_int_member(data, "recipient_id", user->id);
 			gchar *postdata = json_object_to_string(data);
-
-			discord_fetch_url(da, "https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/users/@me/channels", postdata, discord_created_direct_message_send, msg);
+	
+			gchar *url = g_strdup_printf("https://%s/api/" DISCORD_API_VERSION "/users/@me/channels", DISCORD_API_SERVER);
+			discord_fetch_url(da, url, postdata, discord_created_direct_message_send, msg);
+			g_free(url);
 
 			g_free(postdata);
 			json_object_unref(data);
@@ -6633,7 +6800,9 @@ discord_get_avatar(DiscordAccount *da, DiscordUser *user, gboolean is_buddy)
 	 * anyway, we specifically request the png version, for the best
 	 * balance of quality and non-animated-ness */
 
-	GString *url = g_string_new("https://" DISCORD_CDN_SERVER "/avatars/");
+	GString *url = g_string_new("https://");
+	g_string_append(url, DISCORD_CDN_SERVER);
+	g_string_append(url, "/avatars/");
 	g_string_append_printf(url, "%" G_GUINT64_FORMAT, user->id);
 	g_string_append_c(url, '/');
 	g_string_append_printf(url, "%s.png", purple_url_encode(user->avatar));
@@ -6684,7 +6853,9 @@ discord_add_buddy(PurpleConnection *pc, PurpleBuddy *buddy, PurpleGroup *group
 
 	postdata = json_object_to_string(data);
 
-	discord_fetch_url(da, "https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/users/@me/relationships", postdata, discord_add_buddy_cb, buddy);
+	gchar *url = g_strdup_printf("https://%s/api/" DISCORD_API_VERSION "/users/@me/relationships", DISCORD_API_SERVER);
+	discord_fetch_url(da, url, postdata, discord_add_buddy_cb, buddy);
+	g_free(url);
 
 	g_free(postdata);
 	g_strfreev(usersplit);
@@ -6703,7 +6874,7 @@ discord_buddy_remove(PurpleConnection *pc, PurpleBuddy *buddy, PurpleGroup *grou
 		return;
 	}
 
-	url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/users/@me/relationships/%" G_GUINT64_FORMAT, user->id);
+	url = g_strdup_printf("https://%s/api/" DISCORD_API_VERSION "/users/@me/relationships/%" G_GUINT64_FORMAT, DISCORD_API_SERVER, user->id);
 	discord_fetch_url_with_method(da, "DELETE", url, NULL, NULL, NULL);
 	g_free(url);
 }
@@ -6826,7 +6997,7 @@ discord_get_info(PurpleConnection *pc, const gchar *username)
 	}
 
 	/* TODO string format fix */
-	url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/users/%" G_GUINT64_FORMAT "/profile", user->id);
+	url = g_strdup_printf("https://%s/api/" DISCORD_API_VERSION "/users/%" G_GUINT64_FORMAT "/profile", DISCORD_API_SERVER, user->id);
 	discord_fetch_url(da, url, NULL, discord_got_info, user);
 	g_free(url);
 }
@@ -6912,7 +7083,7 @@ discord_toggle_mute(PurpleBlistNode *node, gpointer userdata)
 
 		gchar *postdata = json_object_to_string(data);
 
-		gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/users/@me/guilds/%" G_GUINT64_FORMAT "/settings", guild->id);
+		gchar *url = g_strdup_printf("https://%s/api/" DISCORD_API_VERSION "/users/@me/guilds/%" G_GUINT64_FORMAT "/settings", DISCORD_API_SERVER, guild->id);
 		discord_fetch_url_with_method(da, "PATCH", url, postdata, NULL, NULL);
 
 		g_free(channel_id);
@@ -6988,7 +7159,7 @@ discord_block_user(PurpleConnection *pc, const char *who)
 		return;
 	}
 
-	url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/users/@me/relationships/%" G_GUINT64_FORMAT, user->id);
+	url = g_strdup_printf("https://%s/api/" DISCORD_API_VERSION "/users/@me/relationships/%" G_GUINT64_FORMAT, DISCORD_API_SERVER, user->id);
 	discord_fetch_url_with_method(da, "PUT", url, "{\"type\":2}", NULL, NULL);
 	g_free(url);
 }
@@ -7004,7 +7175,7 @@ discord_unblock_user(PurpleConnection *pc, const char *who)
 		return;
 	}
 
-	url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/users/@me/relationships/%" G_GUINT64_FORMAT, user->id);
+	url = g_strdup_printf("https://%s/api/" DISCORD_API_VERSION "/users/@me/relationships/%" G_GUINT64_FORMAT, DISCORD_API_SERVER, user->id);
 	discord_fetch_url_with_method(da, "DELETE", url, NULL, NULL, NULL);
 	g_free(url);
 }
@@ -7129,7 +7300,7 @@ discord_join_server_text(gpointer user_data, const gchar *text)
 		invite_code += 1;
 	}
 
-	url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/invite/%s", purple_url_encode(invite_code));
+	url = g_strdup_printf("https://%s/api/" DISCORD_API_VERSION "/invite/%s", DISCORD_API_SERVER, purple_url_encode(invite_code));
 
 	discord_fetch_url(da, url, "", NULL, NULL);
 
@@ -7444,6 +7615,10 @@ plugin_init(PurplePlugin *plugin)
 	prpl_info->roomlist_room_serialize = discord_roomlist_serialize;
 
 	prpl_info->offline_message = discord_offline_messaging;
+	
+#ifdef FOSSCORD
+	prpl_info->user_splits = g_list_append(prpl_info->user_splits, purple_account_user_split_new("Host", "dev.fosscord.com", '%'));
+#endif
 }
 
 static PurplePluginInfo info = {
@@ -7458,7 +7633,7 @@ static PurplePluginInfo info = {
 	NULL,							/* dependencies */
 	PURPLE_PRIORITY_DEFAULT,		/* priority */
 	DISCORD_PLUGIN_ID,				/* id */
-	"Discord",						/* name */
+	DISCORD_PLUGIN_NAME,			/* name */
 	DISCORD_PLUGIN_VERSION,			/* version */
 	"",								/* summary */
 	"",								/* description */
@@ -7510,7 +7685,7 @@ discord_protocol_init(PurpleProtocol *prpl_info)
 	PurpleProtocol *info = prpl_info;
 
 	info->id = DISCORD_PLUGIN_ID;
-	info->name = "Discord";
+	info->name = DISCORD_PLUGIN_NAME;
 	info->options = OPT_PROTO_CHAT_TOPIC | OPT_PROTO_SLASH_COMMANDS_NATIVE | OPT_PROTO_UNIQUE_CHATNAME;
 	info->account_options = discord_add_account_options(info->account_options);
 }
@@ -7645,7 +7820,7 @@ plugin_query(GError **error)
 
 	return purple_plugin_info_new(
 		"id", DISCORD_PLUGIN_ID,
-		"name", "Discord",
+		"name", DISCORD_PLUGIN_NAME,
 		"version", DISCORD_PLUGIN_VERSION,
 		"category", _("Protocol"),
 		"summary", _("Discord Protocol Plugins."),
