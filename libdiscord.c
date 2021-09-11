@@ -217,6 +217,7 @@ typedef struct {
 
 	gint64 seq; /* incrementing counter */
 	guint heartbeat_timeout;
+	guint five_minute_restart;
 
 	GHashTable *one_to_ones;		/* A store of known room_id's -> username's */
 	GHashTable *one_to_ones_rev;	/* A store of known usernames's -> room_id's */
@@ -4707,6 +4708,9 @@ discord_close(PurpleConnection *pc)
 	if (da->heartbeat_timeout) {
 		g_source_remove(da->heartbeat_timeout);
 	}
+	if (da->five_minute_restart) {
+		g_source_remove(da->five_minute_restart);
+	}
 
 	if (da->websocket != NULL) {
 		purple_ssl_close(da->websocket);
@@ -4986,6 +4990,8 @@ discord_inflate(DiscordAccount *da, gchar *frame, gsize frame_len)
 	return g_string_free(ret, FALSE);
 }
 
+static gboolean discord_five_minute_restart(gpointer data);
+
 static void
 discord_socket_got_data(gpointer userdata, PurpleSslConnection *conn, PurpleInputCondition cond)
 {
@@ -5017,6 +5023,8 @@ discord_socket_got_data(gpointer userdata, PurpleSslConnection *conn, PurpleInpu
 				discord_socket_write_json(ya, ya->pending_writes->data);
 				ya->pending_writes = g_slist_delete_link(ya->pending_writes, ya->pending_writes);
 			}
+			
+			ya->five_minute_restart = g_timeout_add_seconds(5 * 60, discord_five_minute_restart, ya);
 		}
 	}
 
@@ -5201,6 +5209,9 @@ discord_start_socket(DiscordAccount *da)
 	if (da->heartbeat_timeout) {
 		g_source_remove(da->heartbeat_timeout);
 	}
+	if (da->five_minute_restart) {
+		g_source_remove(da->five_minute_restart);
+	}
 
 	/* Reset all the old stuff */
 	if (da->websocket != NULL) {
@@ -5221,6 +5232,16 @@ discord_start_socket(DiscordAccount *da)
 	da->frames_since_reconnect = 0;
 
 	da->websocket = purple_ssl_connect(da->account, DISCORD_GATEWAY_SERVER, DISCORD_GATEWAY_PORT, discord_socket_connected, discord_socket_failed, da);
+}
+
+static gboolean
+discord_five_minute_restart(gpointer data)
+{
+	DiscordAccount *da = data;
+	
+	discord_start_socket(da);
+	
+	return FALSE;
 }
 
 static void
