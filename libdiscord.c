@@ -1887,16 +1887,16 @@ discord_download_image_cb(DiscordAccount *da, JsonNode *node, gpointer user_data
 static time_t
 discord_str_to_time(const gchar *str) {
 	gboolean utc = FALSE;
-	
+
 	if (str == NULL || *str == '\0') {
 		return 0;
 	}
-	
+
 	//workaround for libpurple 2.14.7
 	if (strstr(str, "+00:00")) {
 		utc = TRUE;
 	}
-	
+
 	return purple_str_to_time(str, utc, NULL, NULL, NULL);
 }
 
@@ -2402,10 +2402,14 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 			gchar *reply_txt = g_strdup_printf("<font size=1>┌──@%s: %s</font>", reply_username ? reply_username : _("Unknown user"), prev_text);
 			g_free(prev_text);
 
-			PurpleChatConversation *chatconv = purple_conversations_find_chat(da->pc, discord_chat_hash(channel_id));
-			conv = PURPLE_CONVERSATION(chatconv);
+			if (conv == NULL) {
+				PurpleChatConversation *chatconv = purple_conversations_find_chat(da->pc, discord_chat_hash(channel_id));
+				conv = PURPLE_CONVERSATION(chatconv);
+			}
 
-			purple_conversation_write(conv, NULL, reply_txt, PURPLE_MESSAGE_SYSTEM, time(NULL));
+			if (conv != NULL) {
+				purple_conversation_write_system_message(conv, reply_txt, PURPLE_MESSAGE_SYSTEM);
+			}
 			g_free(reply_txt);
 		}
 
@@ -2413,14 +2417,17 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 			purple_serv_got_chat_in(da->pc, discord_chat_hash(channel_id), name, flags, escaped_content, timestamp);
 		} else if (msg_type == 7) {
 			gchar *join_txt = g_strdup_printf(_("%s joined the guild!"), name);
-			purple_conversation_write(conv, NULL, join_txt, PURPLE_MESSAGE_SYSTEM, timestamp);
+			if (conv != NULL)
+				purple_conversation_write(conv, NULL, join_txt, PURPLE_MESSAGE_SYSTEM, timestamp);
 			g_free(join_txt);
-			return msg_id;
+			//return msg_id;
 		} else if (msg_type == 3) {
 			gchar *call_txt = g_strdup_printf(_("%s started a call"), name);
-			purple_conversation_write(conv, NULL, call_txt, PURPLE_MESSAGE_SYSTEM, timestamp);
+			if (conv != NULL) {
+				purple_conversation_write(conv, NULL, call_txt, PURPLE_MESSAGE_SYSTEM, timestamp);
+			}
 			g_free(call_txt);
-			return msg_id;
+			//return msg_id;
 		}
 
 		if (attachments) {
@@ -2441,8 +2448,10 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 					img_context->flags = flags | PURPLE_MESSAGE_IMAGES;
 					img_context->timestamp = timestamp;
 
-					PurpleChatConversation *chatconv = purple_conversations_find_chat(da->pc, discord_chat_hash(channel_id));
- 					conv = PURPLE_CONVERSATION(chatconv);
+					if (conv == NULL) {
+						PurpleChatConversation *chatconv = purple_conversations_find_chat(da->pc, discord_chat_hash(channel_id));
+ 						conv = PURPLE_CONVERSATION(chatconv);
+					}
 
 					if (conv != NULL) {
 						int head_count = guild ? g_hash_table_size(guild->members) : 0;
@@ -2469,14 +2478,18 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 		}
 
 		if (reactions != NULL) {
-			PurpleChatConversation *chatconv = purple_conversations_find_chat(da->pc, discord_chat_hash(channel_id));
-			conv = PURPLE_CONVERSATION(chatconv);
+			if (conv == NULL) {
+				PurpleChatConversation *chatconv = purple_conversations_find_chat(da->pc, discord_chat_hash(channel_id));
+				conv = PURPLE_CONVERSATION(chatconv);
+			}
 			const gchar *someone = "Someone";
-			gchar *reaction_str = discord_get_react_text(conv, reactions, someone);
+			if (conv != NULL) {
+				gchar *reaction_str = discord_get_react_text(conv, reactions, someone);
 
-			if (reaction_str != NULL) {
-				purple_conversation_write_system_message(conv, reaction_str, PURPLE_MESSAGE_SYSTEM);
-				g_free(reaction_str);
+				if (reaction_str != NULL) {
+					purple_conversation_write_system_message(conv, reaction_str, PURPLE_MESSAGE_SYSTEM);
+					g_free(reaction_str);
+				}
 			}
 		}
 
@@ -5039,7 +5052,7 @@ discord_socket_got_data(gpointer userdata, PurpleSslConnection *conn, PurpleInpu
 				discord_socket_write_json(ya, ya->pending_writes->data);
 				ya->pending_writes = g_slist_delete_link(ya->pending_writes, ya->pending_writes);
 			}
-			
+
 			ya->five_minute_restart = g_timeout_add_seconds(5 * 60, discord_five_minute_restart, ya);
 		}
 	}
@@ -5254,9 +5267,9 @@ static gboolean
 discord_five_minute_restart(gpointer data)
 {
 	DiscordAccount *da = data;
-	
+
 	discord_start_socket(da);
-	
+
 	return FALSE;
 }
 
@@ -5287,7 +5300,7 @@ discord_react_cb(DiscordAccount *da, JsonNode *node, gpointer user_data)
 	PurpleConversation *conv = react->conv;
 	gchar *reactor_nick = react->reactor;
 	gchar *emoji_name = react->reaction;
-	
+
 	if (node == NULL) {
 		discord_free_reaction(react);
 		return;
@@ -6640,7 +6653,7 @@ discord_got_avatar(DiscordAccount *da, JsonNode *node, gpointer user_data)
 		} else {
 			purple_buddy_icons_set_for_user(da->account, username, response_dup, response_len, user->avatar);
 		}
-		
+
 		g_free(username);
 	}
 
