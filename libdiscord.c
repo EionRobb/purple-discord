@@ -5774,23 +5774,21 @@ static gboolean
 discord_get_room_history_limiting(DiscordAccount *da, guint64 id)
 {
 	PurpleBlistNode *blistnode = NULL;
+	gboolean is_limited = FALSE;
 	gchar *channel_id = from_int(id);
 
 	if (g_hash_table_contains(da->one_to_ones, channel_id)) {
-		/* is a direct message */
-		//blistnode = PURPLE_BLIST_NODE(purple_blist_find_buddy(da->account, g_hash_table_lookup(da->one_to_ones, channel_id)));
-		return FALSE;
+		// Don't limit DM's
 	} else {
-		/* twas a group chat */
 		blistnode = PURPLE_BLIST_NODE(purple_blist_find_chat(da->account, channel_id));
 	}
 
 	if (blistnode != NULL) {
-		gboolean is_limited = purple_blist_node_get_bool(blistnode, "limit_history");
-		return is_limited;
+		is_limited = purple_blist_node_get_bool(blistnode, "limit_history");
 	}
 
-	return FALSE;
+	g_free(channel_id);
+	return is_limited;
 }
 
 /* libpurple can't store a 64bit int on a 32bit machine, so convert to
