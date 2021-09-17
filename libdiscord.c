@@ -5770,6 +5770,29 @@ discord_got_history_static(DiscordAccount *da, JsonNode *node, gpointer user_dat
 	}
 }
 
+static gboolean
+discord_get_room_history_limiting(DiscordAccount *da, guint64 id)
+{
+	PurpleBlistNode *blistnode = NULL;
+	gchar *channel_id = from_int(id);
+
+	if (g_hash_table_contains(da->one_to_ones, channel_id)) {
+		/* is a direct message */
+		//blistnode = PURPLE_BLIST_NODE(purple_blist_find_buddy(da->account, g_hash_table_lookup(da->one_to_ones, channel_id)));
+		return FALSE;
+	} else {
+		/* twas a group chat */
+		blistnode = PURPLE_BLIST_NODE(purple_blist_find_chat(da->account, channel_id));
+	}
+
+	if (blistnode != NULL) {
+		gboolean is_limited = purple_blist_node_get_bool(blistnode, "limit_history");
+		return is_limited;
+	}
+
+	return FALSE;
+}
+
 /* libpurple can't store a 64bit int on a 32bit machine, so convert to
  * something more usable instead (puke). also needs to work cross platform, in
  * case the accounts.xml is being shared (double puke)
@@ -5795,9 +5818,9 @@ discord_get_room_last_id(DiscordAccount *da, guint64 id)
 
 		if (last_room_id != 0) {
 			last_room_id = (last_room_id << 32) | ((guint64) purple_blist_node_get_int(blistnode, "last_message_id_low") & 0xFFFFFFFF);
-
-			last_message_id = MAX(da->last_message_id, last_room_id);
 		}
+
+		last_message_id = last_room_id ? last_room_id : da->last_message_id;
 	}
 
 	g_free(channel_id);
@@ -6094,6 +6117,7 @@ discord_join_chat(PurpleConnection *pc, GHashTable *chatdata)
 
 	guint64 id = to_int(g_hash_table_lookup(chatdata, "id"));
 
+	/* Only returns channel when chat was not already joined */
 	DiscordChannel *channel = discord_open_chat(da, id, TRUE);
 
 	if (!channel) {
@@ -6102,12 +6126,22 @@ discord_join_chat(PurpleConnection *pc, GHashTable *chatdata)
 
 	/* Get any missing messages */
 	guint64 last_message_id = discord_get_room_last_id(da, id);
+	gboolean is_limited = discord_get_room_history_limiting(da, id);
 
-	if (last_message_id != 0 && channel->last_message_id > last_message_id) {
-		gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/channels/%" G_GUINT64_FORMAT "/messages?limit=100&after=%" G_GUINT64_FORMAT, id, last_message_id);
-		discord_fetch_url(da, url, NULL, discord_got_history_of_room, channel);
-		g_free(url);
+	if (is_limited) {
+		if (channel->last_message_id > last_message_id) {
+			gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/channels/%" G_GUINT64_FORMAT "/messages?limit=100&before=%" G_GUINT64_FORMAT, id, channel->last_message_id);
+			discord_fetch_url(da, url, NULL, discord_got_history_static, channel);
+			g_free(url);
+		}
+	} else {
+		if (channel->last_message_id > last_message_id) {
+			gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/channels/%" G_GUINT64_FORMAT "/messages?limit=100&after=%" G_GUINT64_FORMAT, id, last_message_id);
+			discord_fetch_url(da, url, NULL, discord_got_history_of_room, channel);
+			g_free(url);
+		}
 	}
+
 }
 
 static void
@@ -6877,6 +6911,23 @@ discord_status_types(PurpleAccount *account)
 	return types;
 }
 
+static void
+discord_toggle_history_limit(PurpleBlistNode *node, gpointer userdata)
+{
+	DiscordAccount *da = (DiscordAccount *) userdata;
+	PurpleChat *chat = PURPLE_CHAT(node);
+
+	DiscordChannel *channel = discord_channel_from_chat(da, chat);
+
+	if (channel == NULL) {
+		return;
+	}
+
+	/* Toggle the history limit */
+	gboolean is_limited = purple_blist_node_get_bool(node, "limit_history");
+	purple_blist_node_set_bool(node, "limit_history", !is_limited);
+}
+
 /* If a channel is muted, unmute it, or vice verse */
 
 static void
@@ -6947,6 +6998,11 @@ discord_blist_node_menu(PurpleBlistNode *node)
 		/* Make a menu */
 		const char *mute_toggle = channel->muted ? _("Unmute") : _("Mute");
 		PurpleMenuAction *act = purple_menu_action_new(mute_toggle, PURPLE_CALLBACK(discord_toggle_mute), da, NULL);
+		m = g_list_append(m, act);
+
+		gboolean is_limited = purple_blist_node_get_bool(node, "limit_history");
+		const char *hist_limit_toggle = is_limited ? _("Grab Full History") : _("Limit Grabbed History");
+		act = purple_menu_action_new(hist_limit_toggle, PURPLE_CALLBACK(discord_toggle_history_limit), da, NULL);
 		m = g_list_append(m, act);
 	}
 
