@@ -1884,6 +1884,18 @@ discord_download_image_cb(DiscordAccount *da, JsonNode *node, gpointer user_data
 	return;
 }
 
+static time_t
+discord_str_to_time(const gchar *str) {
+	gboolean utc = FALSE;
+	
+	//workaround for libpurple 2.14.7
+	if (strstr(str, "+00:00")) {
+		utc = TRUE;
+	}
+	
+	return purple_str_to_time(str, utc, NULL, NULL, NULL);
+}
+
 static guint64
 discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_type)
 {
@@ -1907,7 +1919,7 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 
 	const gchar *content = json_object_get_string_member(data, "content");
 	const gchar *timestamp_str = json_object_get_string_member(data, "timestamp");
-	time_t timestamp = purple_str_to_time(timestamp_str, FALSE, NULL, NULL, NULL);
+	time_t timestamp = discord_str_to_time(timestamp_str);
 	const gchar *nonce = json_object_get_string_member(data, "nonce");
 	gchar *escaped_content = purple_markup_escape_text(content, -1);
 	JsonObject *referenced_message = json_object_get_object_member(data, "referenced_message");
