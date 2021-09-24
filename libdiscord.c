@@ -1888,6 +1888,10 @@ static time_t
 discord_str_to_time(const gchar *str) {
 	gboolean utc = FALSE;
 	
+	if (str == NULL || *str == '\0') {
+		return 0;
+	}
+	
 	//workaround for libpurple 2.14.7
 	if (strstr(str, "+00:00")) {
 		utc = TRUE;
