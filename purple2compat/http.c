@@ -2618,10 +2618,9 @@ purple_http_request_get_keepalive_pool(PurpleHttpRequest *request)
 }
 
 void purple_http_request_set_contents(PurpleHttpRequest *request,
-	const gchar *contents, int length)
+	const gchar *contents, gsize length)
 {
 	g_return_if_fail(request != NULL);
-	g_return_if_fail(length >= -1);
 
 	request->contents_reader = NULL;
 	request->contents_reader_data = NULL;
@@ -2633,18 +2632,17 @@ void purple_http_request_set_contents(PurpleHttpRequest *request,
 		return;
 	}
 
-	if (length == -1)
+	if (length == 0)
 		length = strlen(contents);
-	request->contents = g_memdup(contents, length);
+	request->contents = g_memdup2(contents, length);
 	request->contents_length = length;
 }
 
 void purple_http_request_set_contents_reader(PurpleHttpRequest *request,
-	PurpleHttpContentReader reader, int contents_length, gpointer user_data)
+	PurpleHttpContentReader reader, gsize contents_length, gpointer user_data)
 {
 	g_return_if_fail(request != NULL);
 	g_return_if_fail(reader != NULL);
-	g_return_if_fail(contents_length >= -1);
 
 	g_free(request->contents);
 	request->contents = NULL;

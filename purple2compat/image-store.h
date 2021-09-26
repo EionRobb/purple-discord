@@ -6,7 +6,7 @@
 
 
 #define purple_image_store_add(img)  purple_imgstore_add_with_id( \
-	g_memdup(purple_imgstore_get_data(img), purple_imgstore_get_size(img)), \
+	g_memdup2(purple_imgstore_get_data(img), purple_imgstore_get_size(img)), \
 	purple_imgstore_get_size(img), purple_imgstore_get_filename(img))
 #define purple_image_store_get       purple_imgstore_find_by_id
 
