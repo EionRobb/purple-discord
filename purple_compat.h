@@ -211,7 +211,7 @@ purple_smiley_new_from_data(const gchar *shortcut, const guchar *data, gsize siz
 		return NULL;
 	}
 
-	stored_img = purple_imgstore_add(g_memdup(data, size), size, filename);
+	stored_img = purple_imgstore_add(g_memdup2(data, size), size, filename);
 	g_free(filename);
 
 	return purple_smiley_new(stored_img, shortcut);

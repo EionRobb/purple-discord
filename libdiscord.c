@@ -686,7 +686,7 @@ discord_alloc_nickname(DiscordUser *user, DiscordGuild *guild, const gchar *sugg
 	}
 
 	g_hash_table_replace_int64(guild->nicknames, user->id, g_strdup(nick));
-	g_hash_table_replace(guild->nicknames_rev, g_strdup(nick), g_memdup(&user->id, sizeof(user->id)));
+	g_hash_table_replace(guild->nicknames_rev, g_strdup(nick), g_memdup2(&user->id, sizeof(user->id)));
 
 	return nick;
 }
@@ -1855,7 +1855,7 @@ discord_download_image_cb(DiscordAccount *da, JsonNode *node, gpointer user_data
 		JsonObject *response = json_node_get_object(node);
 		const gchar *img_data_s = g_dataset_get_data(node, "raw_body");
 		gsize img_data_len = json_object_get_int_member(response, "len");
-		gpointer img_data = g_memdup(img_data_s, img_data_len);
+		gpointer img_data = g_memdup2(img_data_s, img_data_len);
 		int img_id = purple_imgstore_add_with_id(img_data, img_data_len, NULL);
 
 		if (img_id >= 0) {
@@ -2737,7 +2737,7 @@ discord_got_group_dm(DiscordAccount *da, JsonObject *data)
 			discord_upsert_user(da->new_users,
 								json_array_get_object_element(recipients, i));
 
-		channel->recipients = g_list_prepend(channel->recipients, g_memdup(&(recipient->id), sizeof(guint64)));
+		channel->recipients = g_list_prepend(channel->recipients, g_memdup2(&(recipient->id), sizeof(guint64)));
 
 		discord_got_group_dm_name(channel, recipient, TRUE);
 	}
@@ -3024,7 +3024,7 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 
 			discord_set_group_typing(&set);
 
-			struct discord_group_typing_data *clear = g_memdup(&set, sizeof(set));
+			struct discord_group_typing_data *clear = g_memdup2(&set, sizeof(set));
 			clear->set = FALSE;
 			clear->free_me = TRUE;
 
@@ -6106,7 +6106,7 @@ discord_open_chat(DiscordAccount *da, guint64 id, gboolean present)
 	chatconv = purple_serv_got_joined_chat(da->pc, discord_chat_hash(id), id_str);
 	g_free(id_str);
 
-	purple_conversation_set_data(PURPLE_CONVERSATION(chatconv), "id", g_memdup(&(id), sizeof(guint64)));
+	purple_conversation_set_data(PURPLE_CONVERSATION(chatconv), "id", g_memdup2(&(id), sizeof(guint64)));
 
 	purple_conversation_present(PURPLE_CONVERSATION(chatconv));
 
@@ -6632,7 +6632,7 @@ discord_got_avatar(DiscordAccount *da, JsonNode *node, gpointer user_data)
 
 		response_str = g_dataset_get_data(node, "raw_body");
 		response_len = json_object_get_int_member(response, "len");
-		response_dup = g_memdup(response_str, response_len);
+		response_dup = g_memdup2(response_str, response_len);
 
 		if (user->id == da->self_user_id) {
 			purple_buddy_icons_set_account_icon(da->account, response_dup, response_len);

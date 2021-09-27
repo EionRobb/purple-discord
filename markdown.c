@@ -252,7 +252,7 @@ markdown_convert_markdown(const gchar *html, gboolean escape_html, gboolean disc
 #ifdef MARKDOWN_PIDGIN
 				HTML_TOGGLE_OUT(s_spoiler, "<span style='foreground: black; background: black'>", "</span>");
 #else
-				HTML_TOGGLE_OUT(s_codebit, "<details><summary>Spoiler</summary>", "</details>");
+				HTML_TOGGLE_OUT(s_spoiler, "<details><summary>Spoiler</summary>", "</details>");
 #endif
 				i++;
 			}

@@ -600,7 +600,7 @@ purple_http_request_get_keepalive_pool(PurpleHttpRequest *request);
  * Sets contents of HTTP request (for example, POST data).
  */
 void purple_http_request_set_contents(PurpleHttpRequest *request,
-	const gchar *contents, int length);
+	const gchar *contents, gsize length);
 
 /**
  * purple_http_request_set_contents_reader:
@@ -613,7 +613,7 @@ void purple_http_request_set_contents(PurpleHttpRequest *request,
  * uploads.
  */
 void purple_http_request_set_contents_reader(PurpleHttpRequest *request,
-	PurpleHttpContentReader reader, int contents_length, gpointer user_data);
+	PurpleHttpContentReader reader, gsize contents_length, gpointer user_data);
 
 /**
  * purple_http_request_set_response_writer:
