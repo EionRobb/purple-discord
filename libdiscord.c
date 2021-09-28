@@ -1195,7 +1195,7 @@ discord_fetch_url_with_method_len(DiscordAccount *ya, const gchar *method, const
 static void
 discord_fetch_url_with_method(DiscordAccount *da, const gchar *method, const gchar *url, const gchar *postdata, DiscordProxyCallbackFunc callback, gpointer user_data)
 {
-	discord_fetch_url_with_method_len(da, method, url, postdata, strlen(postdata), callback, user_data);
+	discord_fetch_url_with_method_len(da, method, url, postdata, postdata ? strlen(postdata) : 0, callback, user_data);
 }
 
 static void
