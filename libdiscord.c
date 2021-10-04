@@ -20,6 +20,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #ifdef __GNUC__
 #include <unistd.h>
 #endif
@@ -5640,6 +5641,59 @@ discord_react_cb(DiscordAccount *da, JsonNode *node, gpointer user_data)
 	discord_free_reaction(react);
 }
 
+gint discord_msg_time_comp(gpointer pmsg, gpointer ptime)
+{
+	time_t given_time = *(time_t*)ptime;
+	PurpleConvMessage *msg = (PurpleConvMessage*)pmsg;
+	time_t msg_time = msg->when;
+
+	return !(msg_time == given_time);
+}
+
+static time_t
+discord_parse_timestamp(const gchar *timestring)
+{
+	time_t timestamp;
+	gchar *verified_timestring;
+	GTimeZone *local_time = g_time_zone_new_local();
+	GDateTime *now = g_date_time_new_now_local();
+	gint year = 1970, month = 1, day = 1;
+
+	if (!strchr(timestring, ' ') && !strchr(timestring, 't') && !strchr(timestring, 'T')) {
+		// no separator, so no date attached
+		g_date_time_get_ymd(now, &year, &month, &day);
+
+		verified_timestring = g_strdup_printf("%i-%02i-%02iT%s", year, month, day, timestring);
+	} else {
+		verified_timestring = g_strdup(timestring);
+	}
+
+	GDateTime *msg_time = g_date_time_new_from_iso8601(verified_timestring, local_time);
+	printf("%s \n", g_date_time_format_iso8601(msg_time));
+
+	g_free(verified_timestring);
+
+	if (msg_time == NULL) {
+		return 0;
+	}
+
+	if (g_date_time_difference(msg_time, now) > 0) {
+		// msg_time is in the future, user is probably up past midnight
+		GDateTime *temp = g_date_time_add_days(msg_time, -1);
+		g_date_time_unref(msg_time);
+		msg_time = temp;
+
+		if (g_date_time_difference(msg_time, now) > 0)
+			return 0;
+	}
+
+	timestamp = g_date_time_to_unix(msg_time);
+
+	g_time_zone_unref(local_time);
+	g_date_time_unref(msg_time);
+	return timestamp;
+}
+
 static void
 discord_got_pinned(DiscordAccount *da, JsonNode *node, gpointer user_data)
 {
@@ -7731,26 +7785,41 @@ discord_reply_cb(DiscordAccount *da, JsonNode *node, gpointer user_data)
 
 }
 
-static PurpleCmdRet
-discord_cmd_reply(PurpleConversation *conv, const gchar *cmd, gchar **args, gchar **error, gpointer data)
+static gchar *
+discord_get_message_id_from_timestamp(PurpleConversation *conv, const gchar *timestamp)
 {
-	PurpleConnection *pc = purple_conversation_get_connection(conv);
-	DiscordAccount *da = purple_connection_get_protocol_data(pc);
-	guint64 room_id = *(guint64 *) purple_conversation_get_data(conv, "id");
-	gint ret;
+  time_t msg_time = discord_parse_timestamp(timestamp);
 
-	if (pc == NULL || (int)room_id == -1) {
-		return PURPLE_CMD_RET_FAILED;
+	if (!msg_time) {
+		return NULL;
 	}
 
-	//gchar **parts = g_strsplit(args[0], " ", 2);
-	gchar *msg_txt = g_strdup(args[1]);
+  GList *msg_list = conv->message_history;
+  GList *msg_elem = g_list_find_custom(msg_list, &msg_time, (GCompareFunc)discord_msg_time_comp);
+  PurpleConvMessage *msg = msg_elem->data;
 
+  if (msg == NULL) {
+    return NULL;
+  }
+
+	const gchar *text = g_strrstr(msg->what, "dscmsg:");
+	g_return_val_if_fail(text && strlen(text) > DSCMSGSIZE, FALSE);
+	return g_strndup((char*)text + DSCMSGSIZE, 18);
+}
+
+static gboolean
+discord_chat_reply(DiscordAccount *da, PurpleConversation *conv, guint64 room_id, gchar **args)
+{
+
+	gchar *msg_txt = g_strdup(args[1]);
+	gchar *msg_id;
+	gint ret;
 
 	DiscordGuild *guild = NULL;
-	DiscordChannel *channel = discord_get_channel_global_int_guild(da, room_id, &guild);
-	guint64 last_message = channel->last_message_id;
+	//DiscordChannel *channel = discord_get_channel_global_int_guild(da, room_id, &guild);
+	discord_get_channel_global_int_guild(da, room_id, &guild);
 
+	/* Format outgoing message */
 	msg_txt = discord_make_mentions(da, guild, msg_txt);
 
 	if(guild) {
@@ -7762,9 +7831,21 @@ discord_cmd_reply(PurpleConversation *conv, const gchar *cmd, gchar **args, gcha
 		}
 	}
 
-	g_return_val_if_fail(discord_get_channel_global_int(da, room_id), -1); /* TODO rejoin room? */
+	g_return_val_if_fail(discord_get_channel_global_int(da, room_id), FALSE); /* TODO rejoin room? */
 
-	ret = discord_conversation_send_message(da, room_id, msg_txt, args[0]);
+	/* Get referenced message id */
+	if (strchr(args[0], ':')) {
+		msg_id = discord_get_message_id_from_timestamp(conv, args[0]);
+		if (msg_id == 0) {
+			g_free(msg_txt);
+			return FALSE;
+		}
+	} else {
+		msg_id = g_strdup(args[0]);
+	}
+
+	/* Send message */
+	ret = discord_conversation_send_message(da, room_id, msg_txt, msg_id);
 	if (ret > 0) {
 
 		DiscordReply *reply = g_new0(DiscordReply, 1);
@@ -7772,29 +7853,23 @@ discord_cmd_reply(PurpleConversation *conv, const gchar *cmd, gchar **args, gcha
 		reply->msg_txt = g_strdup(msg_txt);
 		reply->conv = conv;
 
-		gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/channels/%" G_GUINT64_FORMAT "/messages?limit=5&after=%" G_GUINT64_FORMAT, room_id, last_message-1);
+		gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/channels/%" G_GUINT64_FORMAT "/messages?limit=5&after=%" G_GUINT64_FORMAT, room_id, to_int(msg_id)-1);
 		discord_fetch_url(da, url, NULL, discord_reply_cb, reply);
 		g_free(url);
 	}
 
 	g_free(msg_txt);
+	g_free(msg_id);
 
-	return PURPLE_CMD_RET_OK;
+	return TRUE;
 }
 
-static PurpleCmdRet
-discord_cmd_react(PurpleConversation *conv, const gchar *cmd, gchar **args, gchar **error, gpointer data)
+static gboolean
+discord_chat_react(DiscordAccount *da, PurpleConversation *conv, guint64 id, gchar **args)
 {
-	PurpleConnection *pc = purple_conversation_get_connection(conv);
-	DiscordAccount *da = purple_connection_get_protocol_data(pc);
-	guint64 id = *(guint64 *) purple_conversation_get_data(conv, "id");
-
-	if (pc == NULL || id == -1) {
-		return PURPLE_CMD_RET_FAILED;
-	}
-
 	//gchar **parts = g_strsplit(args[0], " ", -1);
 
+	gchar *msg_id;
 	const gchar *raw_emoji = args[1];
 	gchar *emoji = NULL;
 	if (g_str_has_prefix(raw_emoji, ":") && g_str_has_suffix(raw_emoji, ":")) {
@@ -7816,11 +7891,61 @@ discord_cmd_react(PurpleConversation *conv, const gchar *cmd, gchar **args, gcha
 		emoji = tmp;
 	}
 
-	gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/channels/%" G_GUINT64_FORMAT "/messages/%s/reactions/%s/%%40me", id, args[0], purple_url_encode(emoji));
+	/* Get referenced message id */
+	if (strchr(args[0], ':')) {
+		msg_id = discord_get_message_id_from_timestamp(conv, args[0]);
+		if (msg_id == 0) {
+			return FALSE;
+		}
+	} else {
+		msg_id = g_strdup(args[0]);
+	}
+
+	gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/channels/%" G_GUINT64_FORMAT "/messages/%s/reactions/%s/%%40me", id, msg_id, purple_url_encode(emoji));
 	discord_fetch_url_with_method(da, "PUT", url, "{}", NULL, NULL);
 	g_free(url);
+	g_free(msg_id);
+	return TRUE;
 
-	return PURPLE_CMD_RET_OK;
+}
+
+static PurpleCmdRet
+discord_cmd_reply(PurpleConversation *conv, const gchar *cmd, gchar **args, gchar **error, gpointer data)
+{
+	PurpleConnection *pc = purple_conversation_get_connection(conv);
+	DiscordAccount *da = purple_connection_get_protocol_data(pc);
+	guint64 room_id = *(guint64 *) purple_conversation_get_data(conv, "id");
+
+	if (pc == NULL || (int)room_id == -1) {
+		return PURPLE_CMD_RET_FAILED;
+	}
+
+	gboolean is_okay = discord_chat_reply(da, conv, room_id, args);
+
+	if (is_okay)
+		return PURPLE_CMD_RET_OK;
+	else
+		return PURPLE_CMD_RET_FAILED;
+}
+
+static PurpleCmdRet
+discord_cmd_react(PurpleConversation *conv, const gchar *cmd, gchar **args, gchar **error, gpointer data)
+{
+	PurpleConnection *pc = purple_conversation_get_connection(conv);
+	DiscordAccount *da = purple_connection_get_protocol_data(pc);
+	guint64 id = *(guint64 *) purple_conversation_get_data(conv, "id");
+
+	if (pc == NULL || id == -1) {
+		return PURPLE_CMD_RET_FAILED;
+	}
+
+
+	gboolean is_okay = discord_chat_react(da, conv, id, args);
+
+	if (is_okay)
+		return PURPLE_CMD_RET_OK;
+	else
+		return PURPLE_CMD_RET_FAILED;
 }
 
 static PurpleCmdRet
@@ -7930,14 +8055,14 @@ plugin_load(PurplePlugin *plugin, GError **error)
 		"reply", "ws", PURPLE_CMD_P_PLUGIN,
 		PURPLE_CMD_FLAG_CHAT | PURPLE_CMD_FLAG_PROTOCOL_ONLY | PURPLE_CMD_FLAG_ALLOW_WRONG_ARGS,
 		DISCORD_PLUGIN_ID, discord_cmd_reply,
-		_("reply <msg_id> <message>:  Replies to message"), NULL
+		_("reply <msg_id> <message> or reply <timestamp> <message>:  Replies to message"), NULL
 	);
 
 	purple_cmd_register(
 		"react", "ws", PURPLE_CMD_P_PLUGIN,
 		PURPLE_CMD_FLAG_CHAT | PURPLE_CMD_FLAG_PROTOCOL_ONLY | PURPLE_CMD_FLAG_ALLOW_WRONG_ARGS,
 		DISCORD_PLUGIN_ID, discord_cmd_react,
-		_("react <msg_id> <emoji>:  Reacts to message with emoji"), NULL
+		_("react <msg_id> <emoji> pr react <timestamp> <emoji>:  Reacts to message with emoji"), NULL
 	);
 
 	purple_cmd_register(
@@ -7988,6 +8113,7 @@ plugin_load(PurplePlugin *plugin, GError **error)
 		DISCORD_PLUGIN_ID, discord_cmd_roles,
 		_("roles:  Display server roles"), NULL
 	);
+
 
 
 #if 0
