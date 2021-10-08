@@ -100,8 +100,40 @@ typedef enum {
 	CHANNEL_DM = 1,
 	CHANNEL_VOICE = 2,
 	CHANNEL_GROUP_DM = 3,
-	CHANNEL_GUILD_CATEGORY = 4
+	CHANNEL_GUILD_CATEGORY = 4,
+	CHANNEL_GUILD_NEWS = 5,
+	CHANNEL_GUILD_STORE = 6,
+	CHANNEL_GUILD_NEWS_THREAD = 10,
+	CHANNEL_GUILD_PUBLIC_THREAD = 11,
+	CHANNEL_GUILD_PRIVATE_THREAD = 12,
+	CHANNEL_GUILD_STAGE_VOICE = 13,
 } DiscordChannelType;
+
+typedef enum {
+	MESSAGE_DEFAULT = 0,
+	MESSAGE_RECIPIENT_ADD = 1,
+	MESSAGE_RECIPIENT_REMOVE = 2,
+	MESSAGE_CALL = 3,
+	MESSAGE_CHANNEL_NAME_CHANGE = 4,
+	MESSAGE_CHANNEL_ICON_CHANGE = 5,
+	MESSAGE_CHANNEL_PINNED_MESSAGE = 6,
+	MESSAGE_GUILD_MEMBER_JOIN = 7,
+	MESSAGE_USER_PREMIUM_GUILD_SUBSCRIPTION = 8,
+	MESSAGE_USER_PREMIUM_GUILD_SUBSCRIPTION_TIER_1 = 9,
+	MESSAGE_USER_PREMIUM_GUILD_SUBSCRIPTION_TIER_2 = 10,
+	MESSAGE_USER_PREMIUM_GUILD_SUBSCRIPTION_TIER_3 = 11,
+	MESSAGE_CHANNEL_FOLLOW_ADD = 12,
+	MESSAGE_GUILD_DISCOVERY_DISQUALIFIED = 14,
+	MESSAGE_GUILD_DISCOVERY_REQUALIFIED = 15,
+	MESSAGE_GUILD_DISCOVERY_GRACE_PERIOD_INITIAL_WARNING = 16,
+	MESSAGE_GUILD_DISCOVERY_GRACE_PERIOD_FINAL_WARNING = 17,
+	MESSAGE_THREAD_CREATED = 18,
+	MESSAGE_REPLY = 19,
+	MESSAGE_CHAT_INPUT_COMMAND = 20,
+	MESSAGE_THREAD_STARTER_MESSAGE = 21,
+	MESSAGE_GUILD_INVITE_REMINDER = 22,
+	MESSAGE_CONTEXT_MENU_COMMAND = 23,
+} DiscordMessageType;
 
 typedef enum {
 	NOTIFICATIONS_ALL = 0,
@@ -116,7 +148,50 @@ typedef enum {
 	GAME_TYPE_LISTENING = 2,
 	GAME_TYPE_WATCHING = 3,
 	GAME_TYPE_CUSTOM_STATUS = 4,
+	GAME_TYPE_COMPETING = 5,
 } DiscordGameType;
+
+typedef enum {
+	PERM_CREATE_INSTANT_INVITE = 0x1,               //1 << 0
+	PERM_KICK_MEMBERS = 0x2,                        //1 << 1
+	PERM_BAN_MEMBERS = 0x4,                         //1 << 2
+	PERM_ADMINISTRATOR = 0x8,                       //1 << 3
+	PERM_MANAGE_CHANNELS = 0x10,                    //1 << 4
+	PERM_MANAGE_GUILD = 0x20,                       //1 << 5
+	PERM_ADD_REACTIONS = 0x40,                      //1 << 6
+	PERM_VIEW_AUDIT_LOG = 0x80,                     //1 << 7
+	PERM_PRIORITY_SPEAKER = 0x100,                  //1 << 8
+	PERM_STREAM = 0x200,                            //1 << 9
+	PERM_VIEW_CHANNEL = 0x400,                      //1 << 10
+	PERM_SEND_MESSAGES = 0x800,                     //1 << 11
+	PERM_SEND_TTS_MESSAGES = 0x1000,                //1 << 12
+	PERM_MANAGE_MESSAGES = 0x2000,                  //1 << 13
+	PERM_EMBED_LINKS = 0x4000,                      //1 << 14
+	PERM_ATTACH_FILES = 0x8000,                     //1 << 15
+	PERM_READ_MESSAGE_HISTORY = 0x10000,            //1 << 16
+	PERM_MENTION_EVERYONE = 0x20000,                //1 << 17
+	PERM_USE_EXTERNAL_EMOJIS = 0x40000,             //1 << 18
+	PERM_VIEW_GUILD_INSIGHTS = 0x80000,             //1 << 19
+	PERM_CONNECT = 0x100000,                        //1 << 20
+	PERM_SPEAK = 0x200000,                          //1 << 21
+	PERM_MUTE_MEMBERS = 0x400000,                   //1 << 22
+	PERM_DEAFEN_MEMBERS = 0x800000,                 //1 << 23
+	PERM_MOVE_MEMBERS = 0x1000000,                  //1 << 24
+	PERM_USE_VAD = 0x2000000,                       //1 << 25
+	PERM_CHANGE_NICKNAME = 0x4000000,               //1 << 26
+	PERM_MANAGE_NICKNAMES = 0x8000000,              //1 << 27
+	PERM_MANAGE_ROLES = 0x10000000,                 //1 << 28
+	PERM_MANAGE_WEBHOOKS = 0x20000000,              //1 << 29
+	PERM_MANAGE_EMOJIS_AND_STICKERS = 0x40000000,   //1 << 30
+	PERM_USE_APPLICATION_COMMANDS = 0x80000000,     //1 << 31
+	PERM_REQUEST_TO_SPEAK = 0x100000000,            //1 << 32
+	PERM_MANAGE_THREADS = 0x400000000,              //1 << 34
+	PERM_CREATE_PUBLIC_THREADS = 0x800000000,       //1 << 35
+	PERM_CREATE_PRIVATE_THREADS = 0x1000000000,     //1 << 36
+	PERM_USE_EXTERNAL_STICKERS = 0x2000000000,      //1 << 37
+	PERM_SEND_MESSAGES_IN_THREADS = 0x4000000000,   //1 << 38
+	PERM_START_EMBEDDED_ACTIVITIES = 0x8000000000   //1 << 39
+} DiscordPermissionFlags;
 
 typedef struct {
 	guint64 id;
@@ -949,10 +1024,10 @@ discord_print_users(GHashTable *users)
 PurpleChatUserFlags
 discord_get_user_flags_from_permissions(DiscordUser *user, guint64 permissions)
 {
-	if (permissions & 0x8) { // Admin
+	if (permissions & PERM_ADMINISTRATOR) { // Admin
 		return PURPLE_CHAT_USER_OP;
 	}
-	if (permissions & (0x2 | 0x4)) { // Ban or Kick
+	if (permissions & (PERM_BAN_MEMBERS | PERM_KICK_MEMBERS)) { // Ban or Kick
 		return PURPLE_CHAT_USER_HALFOP;
 	}
 
@@ -987,9 +1062,9 @@ discord_get_user_flags(DiscordAccount *da, DiscordGuild *guild, DiscordUser *use
 		PurpleChatUserFlags this_flag = PURPLE_CHAT_USER_NONE;
 
 		if (role != NULL) {
-			if (role->permissions & 0x8) { /* Admin */
+			if (role->permissions & PERM_ADMINISTRATOR) { /* Admin */
 				this_flag = PURPLE_CHAT_USER_OP;
-			} else if (role->permissions & (0x2 | 0x4)) { /* Ban/kick */
+			} else if (role->permissions & (PERM_BAN_MEMBERS | PERM_KICK_MEMBERS)) { /* Ban/kick */
 				this_flag = PURPLE_CHAT_USER_HALFOP;
 			}
 		}
@@ -1907,7 +1982,7 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 	gboolean pinned = special_type == DISCORD_MESSAGE_PINNED;
 
 	guint64 msg_id = to_int(json_object_get_string_member(data, "id"));
-	guint64 msg_type = json_object_get_int_member(data, "type");
+	DiscordMessageType msg_type = json_object_get_int_member(data, "type");
 
 	if (!json_object_get_object_member(data, "author")) {
 		/* Possibly edited message? */
@@ -2286,9 +2361,9 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 				g_free(reply_txt);
 			}
 
-			if (escaped_content && *escaped_content && msg_type != 3) {
+			if (escaped_content && *escaped_content && msg_type != MESSAGE_CALL) {
 				purple_serv_got_im(da->pc, merged_username, escaped_content, flags, timestamp);
-			} else if (msg_type == 3) {
+			} else if (msg_type == MESSAGE_CALL) {
 				gchar *call_txt = g_strdup_printf(_("%s started a call"), merged_username);
 				purple_conversation_write(conv, NULL, call_txt, PURPLE_MESSAGE_SYSTEM, timestamp);
 				g_free(call_txt);
@@ -2413,15 +2488,15 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 			g_free(reply_txt);
 		}
 
-		if (escaped_content && *escaped_content && msg_type != 7 && msg_type != 3) {
+		if (escaped_content && *escaped_content && msg_type != MESSAGE_GUILD_MEMBER_JOIN && msg_type != MESSAGE_CALL) {
 			purple_serv_got_chat_in(da->pc, discord_chat_hash(channel_id), name, flags, escaped_content, timestamp);
-		} else if (msg_type == 7) {
+		} else if (msg_type == MESSAGE_GUILD_MEMBER_JOIN) {
 			gchar *join_txt = g_strdup_printf(_("%s joined the guild!"), name);
 			if (conv != NULL)
 				purple_conversation_write(conv, NULL, join_txt, PURPLE_MESSAGE_SYSTEM, timestamp);
 			g_free(join_txt);
 			//return msg_id;
-		} else if (msg_type == 3) {
+		} else if (msg_type == MESSAGE_CALL) {
 			gchar *call_txt = g_strdup_printf(_("%s started a call"), name);
 			if (conv != NULL) {
 				purple_conversation_write(conv, NULL, call_txt, PURPLE_MESSAGE_SYSTEM, timestamp);
@@ -2830,7 +2905,7 @@ discord_handle_guild_member_update(DiscordAccount *da, guint64 guild_id, JsonObj
 				guint64 permission = discord_compute_permission(da, user, channel);
 
 				/* must have READ_MESSAGES */
-				if ((permission & 0x400)) {
+				if ((permission & PERM_VIEW_CHANNEL)) {
 					if (user->id == da->self_user_id) {
 						purple_chat_conversation_set_nick(chat, nickname);
 					}
@@ -2889,7 +2964,7 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 						guint64 permission = discord_compute_permission(da, user, channel);
 
 						/* must have READ_MESSAGES */
-						if ((permission & 0x400)) {
+						if ((permission & PERM_VIEW_CHANNEL)) {
 							if (user->id == da->self_user_id) {
 								purple_chat_conversation_set_nick(chat, nickname);
 							}
@@ -3094,7 +3169,7 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 					guint64 permission = discord_compute_permission(da, user, channel);
 
 					/* must have READ_MESSAGES */
-					if ((permission & 0x400)) {
+					if ((permission & PERM_VIEW_CHANNEL)) {
 						discord_add_channel_to_blist(da, channel, NULL);
 					}
 				}
@@ -3349,7 +3424,7 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 				guint64 permission = discord_compute_permission(da, user, channel);
 
 				/* must have READ_MESSAGES */
-				if ((permission & 0x400)) {
+				if ((permission & PERM_VIEW_CHANNEL)) {
 					PurpleChatUserFlags cbflags = discord_get_user_flags_from_permissions(user, permission);
 					gchar *nickname = discord_create_nickname(user, guild, channel);
 
@@ -3685,7 +3760,7 @@ discord_is_channel_visible(DiscordAccount *da, DiscordUser *user, DiscordChannel
 	guint64 permission = discord_compute_permission(da, user, channel);
 
 	/* must have READ_MESSAGES */
-	if (!(permission & 0x400))
+	if (!(permission & PERM_VIEW_CHANNEL))
 		return FALSE;
 
 	/* Drop voice channels since we don't support them anyway */
@@ -4482,14 +4557,14 @@ discord_got_read_states(DiscordAccount *da, JsonNode *node, gpointer user_data)
 				discord_get_history(da, channel, last_id, mentions * 2);
 			} else {
 				/* TODO: fetch channel history */
-				DiscordChannel *dchannel = discord_get_channel_global(da, channel);
+				DiscordChannel *dchannel = discord_get_channel_global_int(da, to_int(channel));
 				if (dchannel != NULL) {
 					purple_debug_misc("discord", "%d unhandled mentions in channel %s\n", mentions, dchannel->name);
 				}
 			}
 		}
 
-		g_free(last_id);
+		g_free(last_id_s);
 	}
 }
 
@@ -5927,7 +6002,7 @@ discord_compute_permission(DiscordAccount *da, DiscordUser *user, DiscordChannel
 			permissions = discord_permission_role(guild, r, permissions);
 		}
 
-		if (permissions & 0x8)
+		if (permissions & PERM_ADMINISTRATOR)
 			return G_MAXUINT64; // All permissions for admins
 
 		// Calculate the channel permissions
@@ -5981,9 +6056,9 @@ discord_got_channel_info(DiscordAccount *da, JsonNode *node, gpointer user_data)
 		return;
 	}
 
-	guint64 tmp = to_int(id);
-	DiscordChannel *chan = discord_get_channel_global_int(da, tmp);
-	chatconv = purple_conversations_find_chat(da->pc, discord_chat_hash(tmp));
+	guint64 int_id = to_int(id);
+	DiscordChannel *chan = discord_get_channel_global_int(da, int_id);
+	chatconv = purple_conversations_find_chat(da->pc, discord_chat_hash(int_id));
 
 	if (chatconv == NULL) {
 		return;
@@ -6052,7 +6127,7 @@ discord_got_channel_info(DiscordAccount *da, JsonNode *node, gpointer user_data)
 				guint64 permission = discord_compute_permission(da, user, chan);
 
 				/* must have READ_MESSAGES */
-				if ((permission & 0x400)) {
+				if ((permission & PERM_VIEW_CHANNEL)) {
 					PurpleChatUserFlags cbflags = discord_get_user_flags_from_permissions(user, permission);
 					gchar *nickname = discord_create_nickname(user, guild, chan);
 
