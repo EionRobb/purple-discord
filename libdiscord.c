@@ -35,7 +35,6 @@
 #      define GETTEXT_PACKAGE "purple-discord"
 #      include <glib/gi18n-lib.h>
 #	ifdef _WIN32
-#include <windows.h>
 #		ifdef LOCALEDIR
 #			unset LOCALEDIR
 #		endif
@@ -1142,7 +1141,7 @@ discord_cookies_to_string(DiscordAccount *ya)
 	return g_string_free(str, FALSE);
 }
 
-static void discord_fetch_url_with_method(DiscordAccount *da, const gchar *method, const gchar *url, const gchar *postdata, DiscordProxyCallbackFunc callback, gpointer user_data);
+static void discord_fetch_url_with_method_delay(DiscordAccount *da, const gchar *method, const gchar *url, const gchar *postdata, DiscordProxyCallbackFunc callback, gpointer user_data, guint delay);
 
 static void
 discord_response_callback(PurpleHttpConnection *http_conn,
@@ -1161,16 +1160,17 @@ discord_response_callback(PurpleHttpConnection *http_conn,
 
 	if (response_code == 429) {
 		const gchar *retry_after_s = purple_http_response_get_header(response,"Retry-After");
-		guint64 retry_after = retry_after_s ? to_int(retry_after_s) : 5;
+		gdouble retry_after = retry_after_s ? g_ascii_strtod(retry_after_s, NULL) : 5;
 		PurpleHttpRequest *request = purple_http_conn_get_request(http_conn);
 
-		sleep(retry_after);
+		discord_fetch_url_with_method_delay(conn->ya,
+																				purple_http_request_get_method(request),
+																				purple_http_request_get_url(request),
+																				purple_http_request_get_contents(request),
+																				conn->callback, conn->user_data,
+																				(guint) retry_after*1000);
 
-		discord_fetch_url_with_method(conn->ya,
-																	purple_http_request_get_method(request),
-																	purple_http_request_get_url(request),
-																	purple_http_request_get_contents(request),
-																	conn->callback, conn->user_data);
+		g_free(conn);
 		return;
 	}
 
@@ -1182,7 +1182,7 @@ discord_response_callback(PurpleHttpConnection *http_conn,
 			conn->callback(conn->ya, NULL, conn->user_data);
 		}
 
-		/* connection error - unersolvable dns name, non existing server */
+		/* connection error - unresolvable dns name, non existing server */
 		gchar *error_msg_formatted = g_strdup_printf(_("Connection error: %s."), error_message);
 		purple_connection_error(conn->ya->pc, PURPLE_CONNECTION_ERROR_NETWORK_ERROR, error_msg_formatted);
 		g_free(error_msg_formatted);
@@ -1280,26 +1280,68 @@ discord_fetch_url_with_method_len(DiscordAccount *ya, const gchar *method, const
 		purple_http_request_set_contents(request, postdata, postdata_len);
 	}
 
-		guint nap = 30;
-#ifdef WIN32
-   	Sleep(nap);
-#else
-   	struct timespec ts;
-   	ts.tv_sec = nap / 1000;
-   	ts.tv_nsec = (nap % 1000) * 1000000;
-   	nanosleep(&ts, NULL);
-#endif
-
 	purple_http_request(ya->pc, request, discord_response_callback, conn);
 	purple_http_request_unref(request);
 
 	g_free(cookies);
 }
 
+typedef struct {
+	DiscordAccount *ya;
+	gchar *method;
+	gchar *url;
+	gchar *contents;
+	DiscordProxyCallbackFunc callback;
+	gpointer user_data;
+} DiscordDelayedRequest;
+
+static gboolean
+discord_fetch_url_with_method_delay_cb(gpointer data)
+{
+	DiscordDelayedRequest *request = data;
+	discord_fetch_url_with_method_len(request->ya,
+																		request->method,
+																		request->url,
+																		request->contents,
+																		request-> contents ? strlen(request->contents) : 0,
+																		request->callback,
+																		request->user_data);
+	g_free(request->method);
+	g_free(request->url);
+	if (request->contents) {
+		g_free(request->contents);
+	}
+	g_free(request);
+
+	return FALSE;
+}
+
+static void
+discord_fetch_url_with_method_delay(DiscordAccount *da, const gchar *method, const gchar *url, const gchar *postdata, DiscordProxyCallbackFunc callback, gpointer user_data, guint delay)
+{
+		DiscordDelayedRequest *request;
+		request = g_new0(DiscordDelayedRequest, 1);
+		request->ya = da;
+		request->callback = callback;
+		request->user_data = user_data;
+		request->method = g_strdup(method);
+		request->url = g_strdup(url);
+		request->contents = postdata ? g_strdup(postdata) : NULL;
+
+		purple_timeout_add(delay + 30, discord_fetch_url_with_method_delay_cb, request);
+}
+
+static void
+discord_fetch_url_with_delay(DiscordAccount *da, const gchar *url, const gchar *postdata, DiscordProxyCallbackFunc callback, gpointer user_data, guint delay)
+{
+	discord_fetch_url_with_method_delay(da, (postdata ? "POST" : "GET"), url, postdata, callback, user_data, delay);
+}
+
 static void
 discord_fetch_url_with_method(DiscordAccount *da, const gchar *method, const gchar *url, const gchar *postdata, DiscordProxyCallbackFunc callback, gpointer user_data)
 {
-	discord_fetch_url_with_method_len(da, method, url, postdata, postdata ? strlen(postdata) : 0, callback, user_data);
+	//discord_fetch_url_with_method_len(da, method, url, postdata, postdata ? strlen(postdata) : 0, callback, user_data);
+	discord_fetch_url_with_method_delay(da, method, url, postdata, callback, user_data, 0);
 }
 
 static void
@@ -3320,8 +3362,8 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		discord_got_private_channels(da, json_object_get_member(data, "private_channels"), NULL);
 		discord_got_presences(da, json_object_get_member(data, "presences"), NULL);
 		discord_got_guilds(da, json_object_get_member(data, "guilds"), NULL);
-		discord_got_read_states(da, json_object_get_member(data, "read_state"), NULL);
 		discord_got_guild_settings(da, json_object_get_member(data, "user_guild_settings"));
+		discord_got_read_states(da, json_object_get_member(data, "read_state"), NULL);
 
 		/* Fetch our own avatar */
 		self_user_obj = discord_get_user(da, da->self_user_id);
@@ -4624,8 +4666,16 @@ discord_got_read_states(DiscordAccount *da, JsonNode *node, gpointer user_data)
 				DiscordGuild *dguild = NULL;
 				DiscordChannel *dchannel = discord_get_channel_global_int_guild(da, to_int(channel), &dguild);
 				guint64 remote_last_id = 0;
-				if (dchannel)
+				if (!dchannel) {
+					dchannel = discord_get_channel_global_int(da, to_int(channel));
+				}
+				if (dchannel) {
+					if (dchannel->muted)
+						return;
 					remote_last_id = dchannel->last_message_id;
+				} else {
+					purple_debug_warning("discord", "Got read state for uninited channel with id %s\n", channel);
+				}
 
 				int head_count = dguild ? g_hash_table_size(dguild->members) : 0;
 
@@ -5935,8 +5985,8 @@ discord_got_history_of_room(DiscordAccount *da, JsonNode *node, gpointer user_da
 			/* Request the next 100 messages */
 			gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/channels/%" G_GUINT64_FORMAT "/messages?limit=100&after=%" G_GUINT64_FORMAT, channel->id, rolling_last_message_id);
 
-			sleep(1);
-			discord_fetch_url(da, url, NULL, discord_got_history_of_room, channel);
+			discord_fetch_url_with_delay(da, url, NULL, discord_got_history_of_room, channel, 1000);
+
 			g_free(url);
 		}
 	}
