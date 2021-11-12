@@ -285,6 +285,7 @@ typedef struct {
 	PurpleSslConnection *websocket;
 	gboolean websocket_header_received;
 	gboolean sync_complete;
+	gchar *ready_cache;
 	guchar packet_code;
 	gchar *frame;
 	guint64 frame_len;
@@ -3023,6 +3024,172 @@ discord_handle_guild_member_update(DiscordAccount *da, guint64 guild_id, JsonObj
 }
 
 static void
+discord_process_ready(DiscordAccount *da, JsonObject *data)
+{
+
+	da->sync_complete = FALSE;
+
+	if (da->ready_cache) {
+		g_free(da->ready_cache);
+	}
+	da->ready_cache = g_strdup(json_object_to_string(data));
+
+}
+
+static void
+discord_process_supplemental_ready(DiscordAccount *da, JsonObject *data)
+{
+	JsonParser *parser = json_parser_new();
+	JsonNode *root;
+
+	if (!json_parser_load_from_data(parser, da->ready_cache, -1, NULL)) {
+		purple_debug_error("discord", "Error parsing response: %s\n", da->ready_cache);
+		//return;
+	}
+
+	root = json_parser_get_root(parser);
+
+	if (root != NULL) {
+
+		JsonObject *ready_data = json_node_get_object(root);
+
+		/* Init self user */
+		JsonObject *self_user = json_object_get_object_member(ready_data, "user");
+		DiscordUser *self_user_obj = NULL;
+		da->self_user_id = to_int(json_object_get_string_member(self_user, "id"));
+
+		if (!purple_account_get_private_alias(da->account)) {
+			purple_account_set_private_alias(da->account, json_object_get_string_member(self_user, "username"));
+		}
+
+		g_free(da->self_username);
+		da->self_username = discord_combine_username(json_object_get_string_member(self_user, "username"), json_object_get_string_member(self_user, "discriminator"));
+		purple_connection_set_display_name(da->pc, da->self_username);
+
+		g_free(da->session_id);
+		da->session_id = g_strdup(json_object_get_string_member(ready_data, "session_id"));
+
+		self_user_obj = discord_get_user(da, da->self_user_id);
+		if (!self_user_obj) {
+			/* Ensure user is non-null... */
+			discord_upsert_user(da->new_users, self_user);
+		}
+
+		// New ready-handshake has self-membership of a guild outside of that guild
+		// hack it back in so that the existing code can cope with it
+		if (json_object_has_member(ready_data, "merged_members")) {
+			JsonArray *merged_members = json_object_get_array_member(ready_data, "merged_members");
+			JsonArray *supp_merged_members = json_object_get_array_member(data, "merged_members");
+			JsonArray *guilds = json_object_get_array_member(ready_data, "guilds");
+
+			for (int i = json_array_get_length(merged_members) - 1; i >= 0; i--) {
+				JsonObject *user_member = json_array_get_object_element(json_array_get_array_element(merged_members, i), 0);
+				JsonArray *members = json_array_get_array_element(supp_merged_members, i);
+				JsonObject *guild = json_array_get_object_element(guilds, i);
+
+				json_array_add_object_element(members, user_member);
+
+				json_array_ref(members);
+				json_object_set_array_member(guild, "members", members);
+			}
+		}
+
+		discord_got_initial_load_users(da, json_object_get_member(ready_data, "users"), NULL);
+		discord_got_relationships(da, json_object_get_member(ready_data, "relationships"), NULL);
+		discord_got_private_channels(da, json_object_get_member(ready_data, "private_channels"), NULL);
+		discord_got_presences(da, json_object_get_member(ready_data, "presences"), NULL);
+		discord_got_presences(da, json_object_get_member(data, "merged_presences"), NULL);
+		discord_got_guilds(da, json_object_get_member(ready_data, "guilds"), NULL);
+		discord_got_guild_settings(da, json_object_get_member(ready_data, "user_guild_settings"));
+
+		/* Fetch our own avatar */
+		self_user_obj = discord_get_user(da, da->self_user_id);
+		discord_get_avatar(da, self_user_obj, FALSE);
+
+		if (!self_user_obj) {
+			/* ...But remove afterward, this user object is partial */
+			g_hash_table_remove(da->new_users, &da->self_user_id);
+		}
+
+		discord_add_group_dms_to_blist(da);
+		if (purple_account_get_bool(da->account, "populate-blist", TRUE)) {
+			GHashTableIter iter;
+			gpointer key, value;
+			g_hash_table_iter_init(&iter, da->new_guilds);
+
+			while (g_hash_table_iter_next(&iter, &key, &value)) {
+				DiscordGuild *guild = value;
+
+				discord_buddy_guild(da, guild);
+			}
+		}
+
+		/* ready for libpurple to join chats etc */
+		purple_connection_set_state(da->pc, PURPLE_CONNECTION_CONNECTED);
+
+		discord_got_read_states(da, json_object_get_member(ready_data, "read_state"), NULL);
+
+		if (da->ready_cache)
+			g_free(da->ready_cache);
+		da->sync_complete = TRUE;
+
+	} else {
+		purple_debug_error("discord", "Error extracting READY payload from cache\n");
+	}
+	g_object_unref(parser);
+}
+
+/*static void
+discord_process_supplemental_ready(DiscordAccount *da, JsonObject *data)
+{
+
+	discord_got_presences(da, json_object_get_member(data, "merged_presences"), NULL);
+
+	// Server membership for users other than ourselves comes through here
+
+	if (json_object_has_member(data, "merged_members")) {
+		JsonArray *merged_members = json_object_get_array_member(data, "merged_members");
+		JsonArray *guilds = json_object_get_array_member(data, "guilds");
+
+		for (int i = json_array_get_length(merged_members) - 1; i >= 0; i--) {
+			JsonArray *members = json_array_get_array_element(merged_members, i);
+			JsonObject *guild_obj = json_array_get_object_element(guilds, i);
+			const gchar *guild_id_str = json_object_get_string_member(guild_obj, "guild_id");
+			guint64 guild_id = to_int(guild_id_str);
+
+			DiscordGuild *guild = discord_get_guild(da, guild_id);
+
+			if (guild == NULL) {
+				continue;
+			}
+
+			for (int j = json_array_get_length(members) - 1; j >= 0; j--) {
+				JsonObject *member = json_array_get_object_element(members, j);
+				const gchar *user_id = json_object_get_string_member(member, "user_id");
+				DiscordUser *u = discord_get_user(da, to_int(user_id));
+
+				if (u == NULL) {
+					continue;
+				}
+
+				DiscordGuildMembership *membership = discord_new_guild_membership(guild_id, member);
+				g_hash_table_replace_int64(u->guild_memberships, membership->id, membership);
+				g_hash_table_replace_int64(guild->members, u->id, NULL);
+
+				g_free(discord_alloc_nickname(u, guild, membership->nick));
+
+				JsonArray *roles = json_object_get_array_member(member, "roles");
+				int roles_len = json_array_get_length(roles);
+				for (int k = 0; k < roles_len; k++) {
+					guint64 role = to_int(json_array_get_string_element(roles, k));
+					g_array_append_val(membership->roles, role);
+				}
+			}
+		}
+	}
+}*/
+
+static void
 discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data)
 {
 	if (purple_strequal(type, "PRESENCE_UPDATE")) {
@@ -3321,121 +3488,9 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 	} else if (purple_strequal(type, "RESUMED")) {
 		purple_connection_set_state(da->pc, PURPLE_CONNECTION_CONNECTED);
 	} else if (purple_strequal(type, "READY")) {
-		JsonObject *self_user = json_object_get_object_member(data, "user");
-		DiscordUser *self_user_obj = NULL;
-		da->self_user_id = to_int(json_object_get_string_member(self_user, "id"));
-
-		if (!purple_account_get_private_alias(da->account)) {
-			purple_account_set_private_alias(da->account, json_object_get_string_member(self_user, "username"));
-		}
-
-		g_free(da->self_username);
-		da->self_username = discord_combine_username(json_object_get_string_member(self_user, "username"), json_object_get_string_member(self_user, "discriminator"));
-		purple_connection_set_display_name(da->pc, da->self_username);
-
-		g_free(da->session_id);
-		da->session_id = g_strdup(json_object_get_string_member(data, "session_id"));
-
-		self_user_obj = discord_get_user(da, da->self_user_id);
-		if (!self_user_obj) {
-			/* Ensure user is non-null... */
-			discord_upsert_user(da->new_users, self_user);
-		}
-
-		// New ready-handshake has membership of a guild outside of that guild
-		// hack it back in so that the existing code can cope with it
-		if (json_object_has_member(data, "merged_members")) {
-			JsonArray *merged_members = json_object_get_array_member(data, "merged_members");
-			JsonArray *guilds = json_object_get_array_member(data, "guilds");
-
-			for (int i = json_array_get_length(merged_members) - 1; i >= 0; i--) {
-				JsonArray *members = json_array_get_array_element(merged_members, i);
-				JsonObject *guild = json_array_get_object_element(guilds, i);
-
-				json_array_ref(members);
-				json_object_set_array_member(guild, "members", members);
-			}
-		}
-
-		discord_got_initial_load_users(da, json_object_get_member(data, "users"), NULL);
-		discord_got_relationships(da, json_object_get_member(data, "relationships"), NULL);
-		discord_got_private_channels(da, json_object_get_member(data, "private_channels"), NULL);
-		discord_got_presences(da, json_object_get_member(data, "presences"), NULL);
-		discord_got_guilds(da, json_object_get_member(data, "guilds"), NULL);
-		discord_got_guild_settings(da, json_object_get_member(data, "user_guild_settings"));
-		discord_got_read_states(da, json_object_get_member(data, "read_state"), NULL);
-
-		/* Fetch our own avatar */
-		self_user_obj = discord_get_user(da, da->self_user_id);
-		discord_get_avatar(da, self_user_obj, FALSE);
-
-		if (!self_user_obj) {
-			/* ...But remove afterward, this user object is partial */
-			g_hash_table_remove(da->new_users, &da->self_user_id);
-		}
-
-		/* ready for libpurple to join chats etc */
-		purple_connection_set_state(da->pc, PURPLE_CONNECTION_CONNECTED);
-
-		discord_add_group_dms_to_blist(da);
-		if (purple_account_get_bool(da->account, "populate-blist", TRUE)) {
-			GHashTableIter iter;
-			gpointer key, value;
-			g_hash_table_iter_init(&iter, da->new_guilds);
-
-			while (g_hash_table_iter_next(&iter, &key, &value)) {
-				DiscordGuild *guild = value;
-
-				discord_buddy_guild(da, guild);
-			}
-		}
-
+		discord_process_ready(da, data);
 	} else if (purple_strequal(type, "READY_SUPPLEMENTAL")) {
-
-		discord_got_presences(da, json_object_get_member(data, "merged_presences"), NULL);
-
-		// Server membership for users other than ourselves comes through here
-
-		if (json_object_has_member(data, "merged_members")) {
-			JsonArray *merged_members = json_object_get_array_member(data, "merged_members");
-			JsonArray *guilds = json_object_get_array_member(data, "guilds");
-
-			for (int i = json_array_get_length(merged_members) - 1; i >= 0; i--) {
-				JsonArray *members = json_array_get_array_element(merged_members, i);
-				JsonObject *guild_obj = json_array_get_object_element(guilds, i);
-				const gchar *guild_id_str = json_object_get_string_member(guild_obj, "guild_id");
-				guint64 guild_id = to_int(guild_id_str);
-
-				DiscordGuild *guild = discord_get_guild(da, guild_id);
-
-				if (guild == NULL) {
-					continue;
-				}
-
-				for (int j = json_array_get_length(members) - 1; j >= 0; j--) {
-					JsonObject *member = json_array_get_object_element(members, j);
-					const gchar *user_id = json_object_get_string_member(member, "user_id");
-					DiscordUser *u = discord_get_user(da, to_int(user_id));
-
-					if (u == NULL) {
-						continue;
-					}
-
-					DiscordGuildMembership *membership = discord_new_guild_membership(guild_id, member);
-					g_hash_table_replace_int64(u->guild_memberships, membership->id, membership);
-					g_hash_table_replace_int64(guild->members, u->id, NULL);
-
-					g_free(discord_alloc_nickname(u, guild, membership->nick));
-
-					JsonArray *roles = json_object_get_array_member(member, "roles");
-					int roles_len = json_array_get_length(roles);
-					for (int k = 0; k < roles_len; k++) {
-						guint64 role = to_int(json_array_get_string_element(roles, k));
-						g_array_append_val(membership->roles, role);
-					}
-				}
-			}
-		}
+		discord_process_supplemental_ready(da, data);
 
 	} else if (purple_strequal(type, "GUILD_SYNC") || purple_strequal(type, "GUILD_CREATE") || purple_strequal(type, "GUILD_MEMBERS_CHUNK")) {
 		const gchar *guild_id_str = json_object_get_string_member(data, "id");
