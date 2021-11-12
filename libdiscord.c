@@ -4670,11 +4670,13 @@ discord_got_read_states(DiscordAccount *da, JsonNode *node, gpointer user_data)
 					dchannel = discord_get_channel_global_int(da, to_int(channel));
 				}
 				if (dchannel) {
-					if (dchannel->muted)
-						return;
+					if (dchannel->muted || dchannel->notification_level == NOTIFICATIONS_NONE) {
+						continue;
+					}
 					remote_last_id = dchannel->last_message_id;
 				} else {
-					purple_debug_warning("discord", "Got read state for uninited channel with id %s\n", channel);
+					purple_debug_warning("discord", "Read state given for non-initialized channel with id %s\n", channel);
+					continue;
 				}
 
 				int head_count = dguild ? g_hash_table_size(dguild->members) : 0;
@@ -4682,7 +4684,6 @@ discord_got_read_states(DiscordAccount *da, JsonNode *node, gpointer user_data)
 				if ((last_id < remote_last_id && discord_treat_room_as_small(da, to_int(channel), head_count)) ||
 						(mentions && purple_account_get_bool(da->account, "open-chat-on-mention", TRUE))) {
 
-					//discord_get_history(da, channel, last_id_s, mentions * 2);
 					discord_join_chat_by_id(da, to_int(channel));
 
 				} else if (mentions) {
@@ -6034,7 +6035,7 @@ static gboolean
 discord_get_room_force_small(DiscordAccount *da, guint64 id)
 {
 	PurpleBlistNode *blistnode = NULL;
-	gboolean is_large = FALSE;
+	gboolean is_small = FALSE;
 	gchar *channel_id = from_int(id);
 
 	if (channel_id) {
@@ -6044,12 +6045,12 @@ discord_get_room_force_small(DiscordAccount *da, guint64 id)
 		blistnode = PURPLE_BLIST_NODE(purple_blist_find_chat(da->account, channel_id));
 
 		if (blistnode != NULL) {
-			is_large = purple_blist_node_get_bool(blistnode, "small_channel");
+			is_small = purple_blist_node_get_bool(blistnode, "small_channel");
 		}
 		g_free(channel_id);
 	}
 
-	return is_large;
+	return is_small;
 }
 
 static gboolean
