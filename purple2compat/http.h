@@ -603,6 +603,15 @@ void purple_http_request_set_contents(PurpleHttpRequest *request,
 	const gchar *contents, gsize length);
 
 /**
+ * purple_http_request_get_contents:
+ * @request: The request.
+ *
+ * Gets HTTP postdata set for the request.
+ *
+ * Returns:        The contents.
+ */
+const gchar * purple_http_request_get_contents(PurpleHttpRequest *request);
+/**
  * purple_http_request_set_contents_reader:
  * @request:              The request.
  * @reader: (scope call): The reader callback.
