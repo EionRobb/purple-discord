@@ -1141,6 +1141,8 @@ discord_cookies_to_string(DiscordAccount *ya)
 	return g_string_free(str, FALSE);
 }
 
+static void discord_fetch_url_with_method_delay(DiscordAccount *da, const gchar *method, const gchar *url, const gchar *postdata, DiscordProxyCallbackFunc callback, gpointer user_data, guint delay);
+
 static void
 discord_response_callback(PurpleHttpConnection *http_conn,
 							PurpleHttpResponse *response, gpointer user_data)
@@ -1154,6 +1156,23 @@ discord_response_callback(PurpleHttpConnection *http_conn,
 	JsonParser *parser = json_parser_new();
 
 	discord_update_cookies(conn->ya, purple_http_response_get_headers_by_name(response, "Set-Cookie"));
+	int response_code = purple_http_response_get_code(response);
+
+	if (response_code == 429) {
+		const gchar *retry_after_s = purple_http_response_get_header(response,"Retry-After");
+		gdouble retry_after = retry_after_s ? g_ascii_strtod(retry_after_s, NULL) : 5;
+		PurpleHttpRequest *request = purple_http_conn_get_request(http_conn);
+
+		discord_fetch_url_with_method_delay(conn->ya,
+																				purple_http_request_get_method(request),
+																				purple_http_request_get_url(request),
+																				purple_http_request_get_contents(request),
+																				conn->callback, conn->user_data,
+																				(guint) retry_after*1000);
+
+		g_free(conn);
+		return;
+	}
 
 	body = url_text;
 	body_len = len;
@@ -1163,7 +1182,7 @@ discord_response_callback(PurpleHttpConnection *http_conn,
 			conn->callback(conn->ya, NULL, conn->user_data);
 		}
 
-		/* connection error - unersolvable dns name, non existing server */
+		/* connection error - unresolvable dns name, non existing server */
 		gchar *error_msg_formatted = g_strdup_printf(_("Connection error: %s."), error_message);
 		purple_connection_error(conn->ya->pc, PURPLE_CONNECTION_ERROR_NETWORK_ERROR, error_msg_formatted);
 		g_free(error_msg_formatted);
@@ -1267,10 +1286,62 @@ discord_fetch_url_with_method_len(DiscordAccount *ya, const gchar *method, const
 	g_free(cookies);
 }
 
+typedef struct {
+	DiscordAccount *ya;
+	gchar *method;
+	gchar *url;
+	gchar *contents;
+	DiscordProxyCallbackFunc callback;
+	gpointer user_data;
+} DiscordDelayedRequest;
+
+static gboolean
+discord_fetch_url_with_method_delay_cb(gpointer data)
+{
+	DiscordDelayedRequest *request = data;
+	discord_fetch_url_with_method_len(request->ya,
+																		request->method,
+																		request->url,
+																		request->contents,
+																		request-> contents ? strlen(request->contents) : 0,
+																		request->callback,
+																		request->user_data);
+	g_free(request->method);
+	g_free(request->url);
+	if (request->contents) {
+		g_free(request->contents);
+	}
+	g_free(request);
+
+	return FALSE;
+}
+
+static void
+discord_fetch_url_with_method_delay(DiscordAccount *da, const gchar *method, const gchar *url, const gchar *postdata, DiscordProxyCallbackFunc callback, gpointer user_data, guint delay)
+{
+		DiscordDelayedRequest *request;
+		request = g_new0(DiscordDelayedRequest, 1);
+		request->ya = da;
+		request->callback = callback;
+		request->user_data = user_data;
+		request->method = g_strdup(method);
+		request->url = g_strdup(url);
+		request->contents = postdata ? g_strdup(postdata) : NULL;
+
+		purple_timeout_add(delay + 30, discord_fetch_url_with_method_delay_cb, request);
+}
+
+static void
+discord_fetch_url_with_delay(DiscordAccount *da, const gchar *url, const gchar *postdata, DiscordProxyCallbackFunc callback, gpointer user_data, guint delay)
+{
+	discord_fetch_url_with_method_delay(da, (postdata ? "POST" : "GET"), url, postdata, callback, user_data, delay);
+}
+
 static void
 discord_fetch_url_with_method(DiscordAccount *da, const gchar *method, const gchar *url, const gchar *postdata, DiscordProxyCallbackFunc callback, gpointer user_data)
 {
-	discord_fetch_url_with_method_len(da, method, url, postdata, postdata ? strlen(postdata) : 0, callback, user_data);
+	//discord_fetch_url_with_method_len(da, method, url, postdata, postdata ? strlen(postdata) : 0, callback, user_data);
+	discord_fetch_url_with_method_delay(da, method, url, postdata, callback, user_data, 0);
 }
 
 static void
@@ -1865,6 +1936,9 @@ bail:
 	return g_strdup(who);
 }
 
+static gboolean discord_get_room_force_large(DiscordAccount *da, guint64 id);
+static gboolean discord_get_room_force_small(DiscordAccount *da, guint64 id);
+
 static void discord_react_cb(DiscordAccount *da, JsonNode *node, gpointer user_data);
 
 static gchar *
@@ -1975,6 +2049,21 @@ discord_str_to_time(const gchar *str) {
 	return purple_str_to_time(str, utc, NULL, NULL, NULL);
 }
 
+static gboolean
+discord_treat_room_as_small(DiscordAccount *da, guint64 room_id, int head_count)
+{
+	if (discord_get_room_force_small(da, room_id)) {
+		return TRUE;
+	}
+	if (discord_get_room_force_large(da, room_id)) {
+		return FALSE;
+	}
+	if (head_count < purple_account_get_int(da->account, "large-channel-count", 20)) {
+		return TRUE;
+	}
+	return FALSE;
+}
+
 static guint64
 discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_type)
 {
@@ -1982,7 +2071,7 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 	gboolean pinned = special_type == DISCORD_MESSAGE_PINNED;
 
 	guint64 msg_id = to_int(json_object_get_string_member(data, "id"));
-	DiscordMessageType msg_type = json_object_get_int_member(data, "type");
+	guint64 msg_type = json_object_get_int_member(data, "type");
 
 	if (!json_object_get_object_member(data, "author")) {
 		/* Possibly edited message? */
@@ -2438,8 +2527,9 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 		gboolean mentioned = flags & PURPLE_MESSAGE_NICK;
 
 		if ((mentioned && purple_account_get_bool(da->account, "open-chat-on-mention", TRUE)) ||
-			(head_count > 0 && head_count < purple_account_get_int(da->account, "large-channel-count", 20))) {
-			discord_open_chat(da, channel_id, mentioned);
+			  discord_treat_room_as_small(da, channel->id, head_count)) {
+			//discord_open_chat(da, channel_id, mentioned);
+			discord_join_chat_by_id(da, channel_id);
 		}
 
 		gchar *name = NULL;
@@ -2530,7 +2620,7 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 
 					if (conv != NULL) {
 						int head_count = guild ? g_hash_table_size(guild->members) : 0;
-						if (head_count < purple_account_get_int(da->account, "large-channel-count", 20) || purple_account_get_bool(da->account, "display-images-large-servers", FALSE) ) {
+						if (discord_treat_room_as_small(da, channel_id, head_count) || purple_account_get_bool(da->account, "display-images-large-servers", FALSE) ) {
 							discord_fetch_url(da, img_context->url, NULL, discord_download_image_cb, img_context);
 							GList *l = conv->logs;
 							if (l != NULL) {
@@ -2565,6 +2655,15 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 					purple_conversation_write_system_message(conv, reaction_str, PURPLE_MESSAGE_SYSTEM);
 					g_free(reaction_str);
 				}
+			}
+		}
+		if (msg_type == MESSAGE_THREAD_CREATED) {
+			if (conv == NULL) {
+				PurpleChatConversation *chatconv = purple_conversations_find_chat(da->pc, discord_chat_hash(channel_id));
+				conv = PURPLE_CONVERSATION(chatconv);
+			}
+			if (conv != NULL) {
+				purple_conversation_write_system_message(conv, _("A new thread has been started!"), PURPLE_MESSAGE_SYSTEM);
 			}
 		}
 
@@ -4517,14 +4616,19 @@ discord_got_guilds(DiscordAccount *da, JsonNode *node, gpointer user_data)
  * TODO: Possible edge case if there are over 100 incoming DMs?
  */
 
+static gboolean discord_get_room_history_limiting(DiscordAccount *da, guint64 id);
+
 static void
 discord_get_history(DiscordAccount *da, const gchar *channel_id, const gchar *last, int count)
 {
 	gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/channels/%s/messages?limit=%d&after=%s", channel_id, count ? count : 100, last);
 	DiscordChannel *channel = discord_get_channel_global(da, channel_id);
+	gboolean is_limited = discord_get_room_history_limiting(da, to_int(channel_id));
 
-	if (count && channel) {
+	if (channel && !is_limited) {
 		discord_fetch_url(da, url, NULL, discord_got_history_of_room, channel);
+	} else if (channel) {
+		discord_fetch_url(da, url, NULL, discord_got_history_static, channel);
 	} else {
 		discord_fetch_url(da, url, NULL, discord_got_history_static, NULL);
 	}
@@ -5829,9 +5933,13 @@ discord_get_chat_name(GHashTable *data)
 static void
 discord_got_history_of_room(DiscordAccount *da, JsonNode *node, gpointer user_data)
 {
-	JsonArray *messages = json_node_get_array(node);
 	DiscordChannel *channel = user_data;
 	g_return_if_fail(channel);
+	if (json_node_get_node_type(node) != JSON_NODE_ARRAY) {
+		// Null object?
+		return;
+	}
+	JsonArray *messages = json_node_get_array(node);
 
 	gint i, len = json_array_get_length(messages);
 	guint64 last_message = channel->last_message_id;
@@ -5853,7 +5961,9 @@ discord_got_history_of_room(DiscordAccount *da, JsonNode *node, gpointer user_da
 		if (rolling_last_message_id < last_message) {
 			/* Request the next 100 messages */
 			gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/channels/%" G_GUINT64_FORMAT "/messages?limit=100&after=%" G_GUINT64_FORMAT, channel->id, rolling_last_message_id);
-			discord_fetch_url(da, url, NULL, discord_got_history_of_room, channel);
+
+			discord_fetch_url_with_delay(da, url, NULL, discord_got_history_of_room, channel, 1000);
+
 			g_free(url);
 		}
 	}
@@ -5872,6 +5982,51 @@ discord_got_history_static(DiscordAccount *da, JsonNode *node, gpointer user_dat
 
 		discord_process_message(da, message, DISCORD_MESSAGE_NORMAL);
 	}
+}
+
+static gboolean
+discord_get_room_force_large(DiscordAccount *da, guint64 id)
+{
+	PurpleBlistNode *blistnode = NULL;
+	gboolean is_large = FALSE;
+	gchar *channel_id = from_int(id);
+
+	if (channel_id) {
+		if (g_hash_table_contains(da->one_to_ones, channel_id)) {
+			return FALSE;
+		}
+
+		blistnode = PURPLE_BLIST_NODE(purple_blist_find_chat(da->account, channel_id));
+
+		if (blistnode != NULL) {
+			is_large = purple_blist_node_get_bool(blistnode, "large_channel");
+		}
+		g_free(channel_id);
+	}
+
+	return is_large;
+}
+
+static gboolean
+discord_get_room_force_small(DiscordAccount *da, guint64 id)
+{
+	PurpleBlistNode *blistnode = NULL;
+	gboolean is_small = FALSE;
+	gchar *channel_id = from_int(id);
+
+	if (channel_id) {
+		if (g_hash_table_contains(da->one_to_ones, channel_id)) {
+			return FALSE;
+		}
+		blistnode = PURPLE_BLIST_NODE(purple_blist_find_chat(da->account, channel_id));
+
+		if (blistnode != NULL) {
+			is_small = purple_blist_node_get_bool(blistnode, "small_channel");
+		}
+		g_free(channel_id);
+	}
+
+	return is_small;
 }
 
 static gboolean
@@ -6070,6 +6225,20 @@ discord_got_channel_info(DiscordAccount *da, JsonNode *node, gpointer user_data)
 		purple_chat_conversation_set_topic(chatconv, NULL, json_object_get_string_member(channel, "name"));
 	}
 
+	if (json_object_has_member(channel, "last_pin_timestamp")) {
+		guint64 last_message_id = discord_get_room_last_id(da, int_id);
+		guint64 last_message_time = ((last_message_id >> 22) + 1420070400000)/1000;
+
+		const gchar *last_pin = json_object_get_string_member(channel, "last_pin_timestamp");
+		GDateTime *pin_gdtime = g_date_time_new_from_iso8601(last_pin, NULL);
+		guint64 pin_time = g_date_time_to_unix(pin_gdtime);
+		g_date_time_unref(pin_gdtime);
+
+		if (pin_time > last_message_time) {
+				purple_conversation_write_system_message(PURPLE_CONVERSATION(chatconv), "This channel's pinned messages have been updated. Type \"/pinned\" to see them.", PURPLE_MESSAGE_SYSTEM);
+		}
+	}
+
 	if (json_object_has_member(channel, "recipients")) {
 		// This is a Group DM
 		JsonArray *recipients = json_object_get_array_member(channel, "recipients");
@@ -6213,12 +6382,8 @@ discord_open_chat(DiscordAccount *da, guint64 id, gboolean present)
 }
 
 static void
-discord_join_chat(PurpleConnection *pc, GHashTable *chatdata)
+discord_join_chat_by_id(DiscordAccount *da, guint64 id)
 {
-	DiscordAccount *da = purple_connection_get_protocol_data(pc);
-
-	guint64 id = to_int(g_hash_table_lookup(chatdata, "id"));
-
 	/* Only returns channel when chat was not already joined */
 	DiscordChannel *channel = discord_open_chat(da, id, TRUE);
 
@@ -6244,6 +6409,16 @@ discord_join_chat(PurpleConnection *pc, GHashTable *chatdata)
 		}
 	}
 
+}
+
+static void
+discord_join_chat(PurpleConnection *pc, GHashTable *chatdata)
+{
+	DiscordAccount *da = purple_connection_get_protocol_data(pc);
+
+	guint64 id = to_int(g_hash_table_lookup(chatdata, "id"));
+
+	discord_join_chat_by_id(da, id);
 }
 
 static void
@@ -7014,6 +7189,46 @@ discord_status_types(PurpleAccount *account)
 }
 
 static void
+discord_toggle_large_handling(PurpleBlistNode *node, gpointer userdata)
+{
+	DiscordAccount *da = (DiscordAccount *) userdata;
+	PurpleChat *chat = PURPLE_CHAT(node);
+
+	DiscordChannel *channel = discord_channel_from_chat(da, chat);
+
+	if (channel == NULL) {
+		return;
+	}
+
+	/* Toggle the large flag */
+	gboolean is_large = purple_blist_node_get_bool(node, "large_channel");
+	purple_blist_node_set_bool(node, "large_channel", !is_large);
+	if (!is_large) { // Unset small flag if we're setting the large flag
+		purple_blist_node_set_bool(node, "small_channel", FALSE);
+	}
+}
+
+static void
+discord_toggle_small_handling(PurpleBlistNode *node, gpointer userdata)
+{
+	DiscordAccount *da = (DiscordAccount *) userdata;
+	PurpleChat *chat = PURPLE_CHAT(node);
+
+	DiscordChannel *channel = discord_channel_from_chat(da, chat);
+
+	if (channel == NULL) {
+		return;
+	}
+
+	/* Toggle the small flag */
+	gboolean is_small = purple_blist_node_get_bool(node, "small_channel");
+	purple_blist_node_set_bool(node, "small_channel", !is_small);
+	if (!is_small) { // Unset small flag if we're setting the small flag
+		purple_blist_node_set_bool(node, "large_channel", FALSE);
+	}
+}
+
+static void
 discord_toggle_history_limit(PurpleBlistNode *node, gpointer userdata)
 {
 	DiscordAccount *da = (DiscordAccount *) userdata;
@@ -7086,6 +7301,7 @@ discord_blist_node_menu(PurpleBlistNode *node)
 		return NULL;
 
 	GList *m = NULL;
+	GList *m_size = NULL;
 
 	/* Grab a DiscordAccount */
 	PurpleChat *chat = PURPLE_CHAT(node);
@@ -7105,6 +7321,22 @@ discord_blist_node_menu(PurpleBlistNode *node)
 		gboolean is_limited = purple_blist_node_get_bool(node, "limit_history");
 		const char *hist_limit_toggle = is_limited ? _("Grab Full History") : _("Limit Grabbed History");
 		act = purple_menu_action_new(hist_limit_toggle, PURPLE_CALLBACK(discord_toggle_history_limit), da, NULL);
+		m = g_list_append(m, act);
+
+		gboolean is_large = purple_blist_node_get_bool(node, "large_channel");
+		const char *large_handle_toggle = is_large ? _("Default") : _("Large Channel");
+		act = purple_menu_action_new(large_handle_toggle, PURPLE_CALLBACK(discord_toggle_large_handling), da, NULL);
+		//m = g_list_append(m, act);
+		m_size = g_list_append(m_size, act);
+
+		gboolean is_small = purple_blist_node_get_bool(node, "small_channel");
+		const char *small_handle_toggle = is_small ? _("Default") : _("Small Channel");
+		act = purple_menu_action_new(small_handle_toggle, PURPLE_CALLBACK(discord_toggle_small_handling), da, NULL);
+		//m = g_list_append(m, act);
+		m_size = g_list_append(m_size, act);
+
+		const char *size_handle_toggles = _("Force Treat as...");
+		act = purple_menu_action_new(size_handle_toggles, NULL, da, m_size);
 		m = g_list_append(m, act);
 	}
 
