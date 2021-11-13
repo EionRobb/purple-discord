@@ -2652,8 +2652,8 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 				PurpleChatConversation *chatconv = purple_conversations_find_chat(da->pc, discord_chat_hash(channel_id));
 				conv = PURPLE_CONVERSATION(chatconv);
 			}
-			const gchar *someone = "Someone";
 			if (conv != NULL) {
+				const gchar *someone = "Someone";
 				gchar *reaction_str = discord_get_react_text(conv, reactions, someone);
 
 				if (reaction_str != NULL) {
