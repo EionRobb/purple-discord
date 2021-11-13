@@ -362,6 +362,9 @@ static void discord_free_guild_role(gpointer data);
 static void discord_free_channel(gpointer data);
 static gboolean discord_permission_is_role(JsonObject *json);
 
+
+static void discord_join_chat_by_id(DiscordAccount *da, guint64 id);
+
 /* creating */
 
 static DiscordUser *
@@ -4651,14 +4654,14 @@ discord_got_read_states(DiscordAccount *da, JsonNode *node, gpointer user_data)
 		JsonObject *state = json_array_get_object_element(states, i);
 
 		const gchar *channel = json_object_get_string_member(state, "id");
-		gchar *last_id = from_int(discord_get_room_last_id(da, to_int(channel)));
+		gchar *last_id_s = from_int(discord_get_room_last_id(da, to_int(channel)));
 		gint mentions = json_object_get_int_member(state, "mention_count");
 
 		if (mentions && channel) {
 			gboolean isDM = g_hash_table_contains(da->one_to_ones, channel);
 
 			if (isDM) {
-				discord_get_history(da, channel, last_id, mentions * 2);
+				discord_get_history(da, channel, last_id_s, mentions * 2);
 			} else {
 				/* TODO: fetch channel history */
 				DiscordChannel *dchannel = discord_get_channel_global_int(da, to_int(channel));
@@ -5993,6 +5996,7 @@ discord_get_room_force_large(DiscordAccount *da, guint64 id)
 
 	if (channel_id) {
 		if (g_hash_table_contains(da->one_to_ones, channel_id)) {
+			g_free(channel_id);
 			return FALSE;
 		}
 
@@ -6016,6 +6020,7 @@ discord_get_room_force_small(DiscordAccount *da, guint64 id)
 
 	if (channel_id) {
 		if (g_hash_table_contains(da->one_to_ones, channel_id)) {
+			g_free(channel_id);
 			return FALSE;
 		}
 		blistnode = PURPLE_BLIST_NODE(purple_blist_find_chat(da->account, channel_id));
@@ -6230,9 +6235,7 @@ discord_got_channel_info(DiscordAccount *da, JsonNode *node, gpointer user_data)
 		guint64 last_message_time = ((last_message_id >> 22) + 1420070400000)/1000;
 
 		const gchar *last_pin = json_object_get_string_member(channel, "last_pin_timestamp");
-		GDateTime *pin_gdtime = g_date_time_new_from_iso8601(last_pin, NULL);
-		guint64 pin_time = g_date_time_to_unix(pin_gdtime);
-		g_date_time_unref(pin_gdtime);
+		guint64 pin_time = discord_str_to_time(last_pin);
 
 		if (pin_time > last_message_time) {
 				purple_conversation_write_system_message(PURPLE_CONVERSATION(chatconv), "This channel's pinned messages have been updated. Type \"/pinned\" to see them.", PURPLE_MESSAGE_SYSTEM);
