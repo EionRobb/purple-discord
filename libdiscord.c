@@ -2531,7 +2531,7 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 
 		if (
 			(mentioned && purple_account_get_bool(da->account, "open-chat-on-mention", TRUE)) ||
-			discord_treat_room_as_small(da, channel->id, head_count)
+			discord_treat_room_as_small(da, channel_id, head_count)
 		) {
 			//discord_open_chat(da, channel_id, mentioned);
 			discord_join_chat_by_id(da, channel_id);
