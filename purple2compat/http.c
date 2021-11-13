@@ -338,7 +338,7 @@ static time_t purple_http_rfc1123_to_time(const gchar *str)
 		g_free(iso_date);
 		return 0;
 	}
-	
+
 	g_free(d_month);
 
 	t = purple_str_to_time(iso_date, TRUE, NULL, NULL, NULL);
@@ -1448,7 +1448,7 @@ static void _purple_http_disconnect(PurpleHttpConnection *hc,
 	if (hc->response_buffer)
 		g_string_free(hc->response_buffer, TRUE);
 	hc->response_buffer = NULL;
-	
+
 	if (hc->gz_stream)
 		purple_http_gz_free(hc->gz_stream);
 	hc->gz_stream = NULL;
@@ -2051,13 +2051,13 @@ void purple_http_cookie_jar_set(PurpleHttpCookieJar *cookie_jar,
 {
 	gchar *escaped_name = g_strdup(purple_url_encode(name));
 	gchar *escaped_value = NULL;
-	
+
 	if (value) {
 		escaped_value = g_strdup(purple_url_encode(value));
 	}
-	
+
 	purple_http_cookie_jar_set_ext(cookie_jar, escaped_name, escaped_value, -1);
-	
+
 	g_free(escaped_name);
 	g_free(escaped_value);
 }
@@ -2636,6 +2636,13 @@ void purple_http_request_set_contents(PurpleHttpRequest *request,
 		length = strlen(contents);
 	request->contents = g_memdup2(contents, length);
 	request->contents_length = length;
+}
+
+const gchar * purple_http_request_get_contents(PurpleHttpRequest *request)
+{
+	g_return_val_if_fail(request != NULL, NULL);
+
+	return request->contents;
 }
 
 void purple_http_request_set_contents_reader(PurpleHttpRequest *request,
