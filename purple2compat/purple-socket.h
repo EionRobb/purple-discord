@@ -159,7 +159,7 @@ purple_socket_write(PurpleSocket *ps, const guchar *buf, size_t len);
  * Adds an input handler for the socket.
  *
  * If the specified socket had input handler already registered, it will be
- * removed. To remove any input handlers, pass an NULL handler function.
+ * removed. To remove any input handlers, pass a NULL handler function.
  */
 void
 purple_socket_watch(PurpleSocket *ps, PurpleInputCondition cond,

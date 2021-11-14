@@ -894,7 +894,7 @@ static gboolean _purple_http_recv_headers(PurpleHttpConnection *hc,
 				} else {
 					purple_debug_warning("http", "Got empty"
 						" line at the beginning - this "
-						"may be a HTTP server quirk\n");
+						"may be an HTTP server quirk\n");
 				}
 			} else /* hc->main_header_got */ {
 				hc->headers_got = TRUE;
