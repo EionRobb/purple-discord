@@ -2808,7 +2808,7 @@ discord_channel_from_chat(DiscordAccount *da, PurpleChat *chat)
 }
 
 PurpleChat *
-discord_find_chat_from_node(PurpleAccount *account, const char *id, PurpleBlistNode *root)
+discord_find_chat_from_node(const PurpleAccount *account, const char *id, PurpleBlistNode *root)
 {
 	PurpleBlistNode *node;
 
@@ -5063,7 +5063,7 @@ discord_process_frame(DiscordAccount *da, const gchar *frame)
 }
 
 static guchar *
-discord_websocket_mask(guchar key[4], const guchar *pload, guint64 psize)
+discord_websocket_mask(const guchar key[4], const guchar *pload, guint64 psize)
 {
 	guint64 i;
 	guchar *ret = g_new0(guchar, psize);
