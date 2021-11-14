@@ -761,7 +761,7 @@ static void _purple_http_gen_headers(PurpleHttpConnection *hc)
 
 	proxy_http = (purple_proxy_info_get_proxy_type(proxy) == PURPLE_PROXY_HTTP ||
 		purple_proxy_info_get_proxy_type(proxy) == PURPLE_PROXY_USE_ENVVAR);
-	/* this is HTTP proxy, but used with tunelling with CONNECT */
+	/* this is HTTP proxy, but used with tunneling with CONNECT */
 	if (proxy_http && url->port != 80)
 		proxy_http = FALSE;
 
@@ -894,7 +894,7 @@ static gboolean _purple_http_recv_headers(PurpleHttpConnection *hc,
 				} else {
 					purple_debug_warning("http", "Got empty"
 						" line at the beginning - this "
-						"may be a HTTP server quirk\n");
+						"may be an HTTP server quirk\n");
 				}
 			} else /* hc->main_header_got */ {
 				hc->headers_got = TRUE;

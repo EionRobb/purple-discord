@@ -177,8 +177,15 @@ purple_message_destroy(PurpleMessage *message)
 #undef purple_notify_error
 #endif
 #define purple_notify_error(handle, title, primary, secondary, cpar)  \
-	purple_notify_message((handle), PURPLE_NOTIFY_MSG_ERROR, (title), \
-						  (primary), (secondary), NULL, NULL)
+	purple_notify_message( \
+		(handle), \
+		PURPLE_NOTIFY_MSG_ERROR, \
+		(title), \
+		(primary), \
+		(secondary), \
+		NULL, \
+		NULL \
+	)
 
 
 #define purple_conversation_get_smiley(conv, smiley)  (!purple_conv_custom_smiley_add((conv), (smiley), NULL, NULL, TRUE))

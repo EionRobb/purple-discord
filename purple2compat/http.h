@@ -64,7 +64,7 @@ typedef struct _PurpleHttpURL PurpleHttpURL;
 /**
  * PurpleHttpCookieJar:
  *
- * An collection of cookies, got from HTTP response or provided for HTTP
+ * A collection of cookies, got from HTTP response or provided for HTTP
  * request.
  */
 typedef struct _PurpleHttpCookieJar PurpleHttpCookieJar;
@@ -86,7 +86,7 @@ typedef struct _PurpleHttpConnectionSet PurpleHttpConnectionSet;
 /**
  * PurpleHttpCallback:
  *
- * An callback called after performing (successfully or not) HTTP request.
+ * A callback called after performing (successfully or not) HTTP request.
  */
 typedef void (*PurpleHttpCallback)(PurpleHttpConnection *http_conn,
 	PurpleHttpResponse *response, gpointer user_data);
@@ -94,7 +94,7 @@ typedef void (*PurpleHttpCallback)(PurpleHttpConnection *http_conn,
 /**
  * PurpleHttpContentReaderCb:
  *
- * An callback called after storing data requested by PurpleHttpContentReader.
+ * A callback called after storing data requested by PurpleHttpContentReader.
  */
 typedef void (*PurpleHttpContentReaderCb)(PurpleHttpConnection *http_conn,
 	gboolean success, gboolean eof, size_t stored);
@@ -108,7 +108,7 @@ typedef void (*PurpleHttpContentReaderCb)(PurpleHttpConnection *http_conn,
  * @user_data: The user data passed with callback function.
  * @cb:        The function to call after storing data to buffer.
  *
- * An callback for getting large request contents (ie. from file stored on
+ * A callback for getting large request contents (ie. from file stored on
  * disk).
  */
 typedef void (*PurpleHttpContentReader)(PurpleHttpConnection *http_conn,
@@ -125,7 +125,7 @@ typedef void (*PurpleHttpContentReader)(PurpleHttpConnection *http_conn,
  * @length:    Length of data read.
  * @user_data: The user data passed with callback function.
  *
- * An callback for writting large response contents.
+ * A callback for writing large response contents.
  *
  * Returns:          TRUE, if succeeded, FALSE otherwise.
  */
@@ -142,7 +142,7 @@ typedef gboolean (*PurpleHttpContentWriter)(PurpleHttpConnection *http_conn,
  * @total:         Total amount of data (in current state).
  * @user_data:     The user data passed with callback function.
  *
- * An callback for watching HTTP connection progress.
+ * A callback for watching HTTP connection progress.
  */
 typedef void (*PurpleHttpProgressWatcher)(PurpleHttpConnection *http_conn,
 	gboolean reading_state, int processed, int total, gpointer user_data);
@@ -175,7 +175,7 @@ PurpleHttpConnection * purple_http_get(PurpleConnection *gc,
  * @user_data: The user data to pass to the callback function.
  * @format:    The format string.
  *
- * Constructs an URL and fetches the data from it with GET request, then passes
+ * Constructs a URL and fetches the data from it with GET request, then passes
  * it to a callback function.
  *
  * Returns:          The HTTP connection struct.
@@ -191,7 +191,7 @@ PurpleHttpConnection * purple_http_get_printf(PurpleConnection *gc,
  * @callback:  (scope call): The callback function.
  * @user_data: The user data to pass to the callback function.
  *
- * Fetches a HTTP request and passes the response to a callback function.
+ * Fetches an HTTP request and passes the response to a callback function.
  * Provided request struct can be shared by multiple http requests but can not
  * be modified when any of these is running.
  *
@@ -530,7 +530,7 @@ void purple_http_request_set_url(PurpleHttpRequest *request, const gchar *url);
  * @request: The request.
  * @format:  The format string.
  *
- * Constructs and sets an URL for HTTP request.
+ * Constructs and sets a URL for HTTP request.
  */
 void purple_http_request_set_url_printf(PurpleHttpRequest *request,
 	const gchar *format, ...) G_GNUC_PRINTF(2, 3);
