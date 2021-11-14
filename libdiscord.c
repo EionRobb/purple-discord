@@ -2529,8 +2529,10 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 
 		gboolean mentioned = flags & PURPLE_MESSAGE_NICK;
 
-		if ((mentioned && purple_account_get_bool(da->account, "open-chat-on-mention", TRUE)) ||
-			  discord_treat_room_as_small(da, channel->id, head_count)) {
+		if (
+			(mentioned && purple_account_get_bool(da->account, "open-chat-on-mention", TRUE)) ||
+			discord_treat_room_as_small(da, channel->id, head_count)
+		) {
 			//discord_open_chat(da, channel_id, mentioned);
 			discord_join_chat_by_id(da, channel_id);
 		}
@@ -2810,9 +2812,11 @@ discord_find_chat_from_node(PurpleAccount *account, const char *id, PurpleBlistN
 {
 	PurpleBlistNode *node;
 
-	for (node = root;
-		 node != NULL;
-		 node = purple_blist_node_next(node, TRUE)) {
+	for (
+		node = root;
+		node != NULL;
+		node = purple_blist_node_next(node, TRUE)
+	) {
 		if (PURPLE_IS_CHAT(node)) {
 			PurpleChat *chat = PURPLE_CHAT(node);
 
@@ -4103,9 +4107,11 @@ discord_build_groups_from_blist(DiscordAccount *ya)
 {
 	PurpleBlistNode *node;
 
-	for (node = purple_blist_get_root();
-		 node != NULL;
-		 node = purple_blist_node_next(node, TRUE)) {
+	for (
+		node = purple_blist_get_root();
+		node != NULL;
+		node = purple_blist_node_next(node, TRUE)
+	) {
 		if (PURPLE_IS_BUDDY(node)) {
 			const gchar *discord_id;
 			const gchar *name;
@@ -4791,14 +4797,17 @@ discord_login_response(DiscordAccount *da, JsonNode *node, gpointer user_data)
 			g_free(da->mfa_ticket);
 			da->mfa_ticket = g_strdup(json_object_get_string_member(response, "ticket"));
 
-			purple_request_input(da->pc, _("Two-factor authentication"),
-								 _("Enter Discord auth code"),
-								 _("You can get this token from your two-factor authentication mobile app."),
-								 NULL, FALSE, FALSE, "",
-								 _("_Login"), G_CALLBACK(discord_mfa_text_entry),
-								 _("_Cancel"), G_CALLBACK(discord_mfa_cancel),
-								 purple_request_cpar_from_connection(da->pc),
-								 da);
+			purple_request_input(
+				da->pc,
+				_("Two-factor authentication"),
+				_("Enter Discord auth code"),
+				_("You can get this token from your two-factor authentication mobile app."),
+				NULL, FALSE, FALSE, "",
+				_("_Login"), G_CALLBACK(discord_mfa_text_entry),
+				_("_Cancel"), G_CALLBACK(discord_mfa_cancel),
+				purple_request_cpar_from_connection(da->pc),
+				da
+			);
 			return;
 		}
 
@@ -5381,18 +5390,20 @@ discord_socket_connected(gpointer userdata, PurpleSslConnection *conn, PurpleInp
 
 	purple_ssl_input_add(da->websocket, discord_socket_got_data, da);
 
-	websocket_header = g_strdup_printf("GET %s%s HTTP/1.1\r\n"
-									 	"Host: %s\r\n"
-									 	"Connection: Upgrade\r\n"
-									 	"Pragma: no-cache\r\n"
-									 	"Cache-Control: no-cache\r\n"
-									 	"Upgrade: websocket\r\n"
-									 	"Sec-WebSocket-Version: 13\r\n"
-									 	"Sec-WebSocket-Key: %s\r\n"
-									 	"User-Agent: " DISCORD_USERAGENT "\r\n"
-									 	"\r\n",
-									 	DISCORD_GATEWAY_SERVER_PATH, da->compress ? "&compress=zlib-stream" : "",
-									 	DISCORD_GATEWAY_SERVER, websocket_key);
+	websocket_header = g_strdup_printf(
+		"GET %s%s HTTP/1.1\r\n"
+		"Host: %s\r\n"
+		"Connection: Upgrade\r\n"
+		"Pragma: no-cache\r\n"
+		"Cache-Control: no-cache\r\n"
+		"Upgrade: websocket\r\n"
+		"Sec-WebSocket-Version: 13\r\n"
+		"Sec-WebSocket-Key: %s\r\n"
+		"User-Agent: " DISCORD_USERAGENT "\r\n"
+		"\r\n",
+		DISCORD_GATEWAY_SERVER_PATH, da->compress ? "&compress=zlib-stream" : "",
+		DISCORD_GATEWAY_SERVER, websocket_key
+	);
 
 	purple_ssl_write(da->websocket, websocket_header, strlen(websocket_header));
 
@@ -7535,14 +7546,17 @@ discord_join_server(PurpleProtocolAction *action)
 	PurpleConnection *pc = purple_protocol_action_get_connection(action);
 	DiscordAccount *da = purple_connection_get_protocol_data(pc);
 
-	purple_request_input(pc, _("Join a server"),
-						 _("Join a server"),
-						 _("Enter the join URL here"),
-						 NULL, FALSE, FALSE, "https://discord.gg/ABC123",
-						 _("_Join"), G_CALLBACK(discord_join_server_text),
-						 _("_Cancel"), NULL,
-						 purple_request_cpar_from_connection(pc),
-						 da);
+	purple_request_input(
+		pc,
+		_("Join a server"),
+		_("Join a server"),
+		_("Enter the join URL here"),
+		NULL, FALSE, FALSE, "https://discord.gg/ABC123",
+		_("_Join"), G_CALLBACK(discord_join_server_text),
+		_("_Cancel"), NULL,
+		purple_request_cpar_from_connection(pc),
+		da
+	);
 }
 
 static GList *
@@ -7666,58 +7680,78 @@ plugin_load(PurplePlugin *plugin, GError **error)
 	discord_mention_regex = g_regex_new("(?:^|\\s)@([^\\s@]+)\\b", G_REGEX_OPTIMIZE, 0, NULL);
 	discord_spaced_mention_regex = g_regex_new("(?:^|\\s)@([^\\s@]+ [^\\s@]+)\\b", G_REGEX_OPTIMIZE, 0, NULL);
 
-	purple_cmd_register("nick", "s", PURPLE_CMD_P_PLUGIN, PURPLE_CMD_FLAG_CHAT |
-															PURPLE_CMD_FLAG_PROTOCOL_ONLY | PURPLE_CMD_FLAG_ALLOW_WRONG_ARGS,
-						DISCORD_PLUGIN_ID, discord_cmd_nick,
-						_("nick <new nickname>:  Changes nickname on a server"), NULL);
+	purple_cmd_register(
+		"nick", "s", PURPLE_CMD_P_PLUGIN,
+		PURPLE_CMD_FLAG_CHAT | PURPLE_CMD_FLAG_PROTOCOL_ONLY | PURPLE_CMD_FLAG_ALLOW_WRONG_ARGS,
+		DISCORD_PLUGIN_ID, discord_cmd_nick,
+		_("nick <new nickname>:  Changes nickname on a server"), NULL
+	);
 
-	purple_cmd_register("kick", "s", PURPLE_CMD_P_PLUGIN, PURPLE_CMD_FLAG_CHAT |
-															PURPLE_CMD_FLAG_PROTOCOL_ONLY | PURPLE_CMD_FLAG_ALLOW_WRONG_ARGS,
-						DISCORD_PLUGIN_ID, discord_cmd_kick,
-						_("kick <username>:  Remove someone from a server"), NULL);
+	purple_cmd_register(
+		"kick", "s", PURPLE_CMD_P_PLUGIN,
+		PURPLE_CMD_FLAG_CHAT | PURPLE_CMD_FLAG_PROTOCOL_ONLY | PURPLE_CMD_FLAG_ALLOW_WRONG_ARGS,
+		DISCORD_PLUGIN_ID, discord_cmd_kick,
+		_("kick <username>:  Remove someone from a server"), NULL
+	);
 
-	purple_cmd_register("ban", "s", PURPLE_CMD_P_PLUGIN, PURPLE_CMD_FLAG_CHAT |
-															PURPLE_CMD_FLAG_PROTOCOL_ONLY | PURPLE_CMD_FLAG_ALLOW_WRONG_ARGS,
-						DISCORD_PLUGIN_ID, discord_cmd_ban,
-						_("ban <username>:  Remove someone from a server and prevent them rejoining"), NULL);
+	purple_cmd_register(
+		"ban", "s", PURPLE_CMD_P_PLUGIN,
+		PURPLE_CMD_FLAG_CHAT | PURPLE_CMD_FLAG_PROTOCOL_ONLY | PURPLE_CMD_FLAG_ALLOW_WRONG_ARGS,
+		DISCORD_PLUGIN_ID, discord_cmd_ban,
+		_("ban <username>:  Remove someone from a server and prevent them rejoining"), NULL
+	);
 
-	purple_cmd_register("leave", "", PURPLE_CMD_P_PLUGIN, PURPLE_CMD_FLAG_CHAT |
-															PURPLE_CMD_FLAG_PROTOCOL_ONLY | PURPLE_CMD_FLAG_ALLOW_WRONG_ARGS,
-						DISCORD_PLUGIN_ID, discord_cmd_leave,
-						_("leave:  Leave the channel"), NULL);
+	purple_cmd_register(
+		"leave", "", PURPLE_CMD_P_PLUGIN,
+		PURPLE_CMD_FLAG_CHAT | PURPLE_CMD_FLAG_PROTOCOL_ONLY | PURPLE_CMD_FLAG_ALLOW_WRONG_ARGS,
+		DISCORD_PLUGIN_ID, discord_cmd_leave,
+		_("leave:  Leave the channel"), NULL
+	);
 
-	purple_cmd_register("part", "", PURPLE_CMD_P_PLUGIN, PURPLE_CMD_FLAG_CHAT |
-														 	PURPLE_CMD_FLAG_PROTOCOL_ONLY | PURPLE_CMD_FLAG_ALLOW_WRONG_ARGS,
-						DISCORD_PLUGIN_ID, discord_cmd_leave,
-						_("part:  Leave the channel"), NULL);
+	purple_cmd_register(
+		"part", "", PURPLE_CMD_P_PLUGIN,
+		PURPLE_CMD_FLAG_CHAT | PURPLE_CMD_FLAG_PROTOCOL_ONLY | PURPLE_CMD_FLAG_ALLOW_WRONG_ARGS,
+		DISCORD_PLUGIN_ID, discord_cmd_leave,
+		_("part:  Leave the channel"), NULL
+	);
 
-	purple_cmd_register("pinned", "", PURPLE_CMD_P_PLUGIN, PURPLE_CMD_FLAG_CHAT |
-														 	PURPLE_CMD_FLAG_PROTOCOL_ONLY | PURPLE_CMD_FLAG_ALLOW_WRONG_ARGS,
-						DISCORD_PLUGIN_ID, discord_cmd_pinned,
-						_("pinned:  Display pinned messages"), NULL);
+	purple_cmd_register(
+		"pinned", "", PURPLE_CMD_P_PLUGIN,
+		PURPLE_CMD_FLAG_CHAT | PURPLE_CMD_FLAG_PROTOCOL_ONLY | PURPLE_CMD_FLAG_ALLOW_WRONG_ARGS,
+		DISCORD_PLUGIN_ID, discord_cmd_pinned,
+		_("pinned:  Display pinned messages"), NULL
+	);
 
-	purple_cmd_register("roles", "", PURPLE_CMD_P_PLUGIN, PURPLE_CMD_FLAG_CHAT |
-														 	PURPLE_CMD_FLAG_PROTOCOL_ONLY | PURPLE_CMD_FLAG_ALLOW_WRONG_ARGS,
-						DISCORD_PLUGIN_ID, discord_cmd_roles,
-						_("roles:  Display server roles"), NULL);
+	purple_cmd_register(
+		"roles", "", PURPLE_CMD_P_PLUGIN,
+		PURPLE_CMD_FLAG_CHAT | PURPLE_CMD_FLAG_PROTOCOL_ONLY | PURPLE_CMD_FLAG_ALLOW_WRONG_ARGS,
+		DISCORD_PLUGIN_ID, discord_cmd_roles,
+		_("roles:  Display server roles"), NULL
+	);
 
 
 
 #if 0
-	purple_cmd_register("mute", "s", PURPLE_CMD_P_PLUGIN, PURPLE_CMD_FLAG_CHAT |
-	PURPLE_CMD_FLAG_PROTOCOL_ONLY | PURPLE_CMD_FLAG_ALLOW_WRONG_ARGS,
-	DISCORD_PLUGIN_ID, discord_slash_command,
-	_("mute <username>:  Mute someone in channel"), NULL);
+	purple_cmd_register(
+		"mute", "s", PURPLE_CMD_P_PLUGIN,
+		PURPLE_CMD_FLAG_CHAT | PURPLE_CMD_FLAG_PROTOCOL_ONLY | PURPLE_CMD_FLAG_ALLOW_WRONG_ARGS,
+		DISCORD_PLUGIN_ID, discord_slash_command,
+		_("mute <username>:  Mute someone in channel"), NULL
+	);
 
-	purple_cmd_register("unmute", "s", PURPLE_CMD_P_PLUGIN, PURPLE_CMD_FLAG_CHAT |
-	PURPLE_CMD_FLAG_PROTOCOL_ONLY | PURPLE_CMD_FLAG_ALLOW_WRONG_ARGS,
-	DISCORD_PLUGIN_ID, discord_slash_command,
-	_("unmute <username>:  Un-mute someone in channel"), NULL);
+	purple_cmd_register(
+		"unmute", "s", PURPLE_CMD_P_PLUGIN,
+		PURPLE_CMD_FLAG_CHAT | PURPLE_CMD_FLAG_PROTOCOL_ONLY | PURPLE_CMD_FLAG_ALLOW_WRONG_ARGS,
+		DISCORD_PLUGIN_ID, discord_slash_command,
+		_("unmute <username>:  Un-mute someone in channel"), NULL
+	);
 
-	purple_cmd_register("topic", "s", PURPLE_CMD_P_PLUGIN, PURPLE_CMD_FLAG_CHAT |
-	PURPLE_CMD_FLAG_PROTOCOL_ONLY | PURPLE_CMD_FLAG_ALLOW_WRONG_ARGS,
-	DISCORD_PLUGIN_ID, discord_slash_command,
-	_("topic <description>:  Set the channel topic description"), NULL);
+	purple_cmd_register(
+		"topic", "s", PURPLE_CMD_P_PLUGIN,
+		PURPLE_CMD_FLAG_CHAT | PURPLE_CMD_FLAG_PROTOCOL_ONLY | PURPLE_CMD_FLAG_ALLOW_WRONG_ARGS,
+		DISCORD_PLUGIN_ID, discord_slash_command,
+		_("topic <description>:  Set the channel topic description"), NULL
+	);
 #endif
 
 	return TRUE;
@@ -8045,9 +8079,11 @@ plugin_query(GError **error)
 		"description", _("Adds Discord protocol support to libpurple."),
 		"website", DISCORD_PLUGIN_WEBSITE,
 		"abi-version", PURPLE_ABI_VERSION,
-		"flags", PURPLE_PLUGIN_INFO_FLAGS_INTERNAL |
-				 PURPLE_PLUGIN_INFO_FLAGS_AUTO_LOAD,
-		NULL);
+		"flags",
+		PURPLE_PLUGIN_INFO_FLAGS_INTERNAL |
+		PURPLE_PLUGIN_INFO_FLAGS_AUTO_LOAD,
+		NULL
+	);
 }
 
 PURPLE_PLUGIN_INIT(discord, plugin_query, libpurple3_plugin_load, libpurple3_plugin_unload);
