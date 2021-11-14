@@ -16,7 +16,7 @@ static inline const gchar *
 purple_image_get_mimetype(PurpleImage *image)
 {
 	const gchar *extension = purple_image_get_extension(image);
-	
+
 	if (purple_strequal(extension, "jpg") || purple_strequal(extension, "jpeg")) {
 		return "image/jpeg";
 	} else if (purple_strequal(extension, "png")) {
