@@ -193,7 +193,7 @@ purple_socket_set_data(PurpleSocket *ps, const gchar *key, gpointer data);
 /**
  * purple_socket_get_data:
  * @ps:  The socket.
- * @key: The unqiue key.
+ * @key: The unique key.
  *
  * Returns extra data in a socket.
  *

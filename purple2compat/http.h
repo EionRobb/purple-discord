@@ -125,7 +125,7 @@ typedef void (*PurpleHttpContentReader)(PurpleHttpConnection *http_conn,
  * @length:    Length of data read.
  * @user_data: The user data passed with callback function.
  *
- * An callback for writting large response contents.
+ * An callback for writing large response contents.
  *
  * Returns:          TRUE, if succeeded, FALSE otherwise.
  */
