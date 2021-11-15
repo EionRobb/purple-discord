@@ -5486,9 +5486,9 @@ discord_chat_leave_by_room_id(PurpleConnection *pc, guint64 room_id)
 static void
 discord_react_cb(DiscordAccount *da, JsonNode *node, gpointer user_data)
 {
-	JsonArray *data = json_node_get_array(node);
-	guint len = json_array_get_length(data);
-	JsonObject *data = json_array_get_object_element(data, len-1);
+	JsonArray *data_items = json_node_get_array(node);
+	guint len = json_array_get_length(data_items);
+	JsonObject *data = json_array_get_object_element(data_items, len-1);
 	DiscordReaction *react = user_data;
 	PurpleConversation *conv = react->conv;
 	gchar *reactor_nick = react->reactor;
