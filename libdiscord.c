@@ -73,7 +73,7 @@
 #define DISCORD_API_VERSION "v9"
 #define DISCORD_CDN_SERVER "cdn.discordapp.com"
 
-#define DISCORD_EPOCH_MS 1420070400000
+#define DISCORD_EPOCH_MS	1420070400000
 
 #define DISCORD_MESSAGE_NORMAL (0)
 #define DISCORD_MESSAGE_EDITED (1)
@@ -364,6 +364,7 @@ typedef struct _DiscordImgMsgContext {
 	gchar* url;
 	PurpleMessageFlags flags;
 	time_t timestamp;
+	guint64 msg_id;
 } DiscordImgMsgContext;
 
 typedef struct {
@@ -371,6 +372,17 @@ typedef struct {
 	gchar *reactor;
 	gchar *reaction;
 } DiscordReaction;
+
+typedef struct {
+	guint64 room_id;
+	gchar *msg_txt;
+	PurpleConversation *conv;
+} DiscordReply;
+
+typedef struct {
+	guint64 msg_id;
+	time_t when;
+} DiscordMsgTimestamp;
 
 static guint64
 to_int(const gchar *id)
@@ -2067,9 +2079,29 @@ discord_truncate_message(const gchar *msg_text, guint trunc_len)
 }
 
 static void
+discord_save_message_timestamp(PurpleConversation *conv, time_t timestamp, guint64 msg_id)
+{
+	if (conv == NULL) {
+		return;
+	}
+
+	DiscordMsgTimestamp *msg_timestamp = g_new0(DiscordMsgTimestamp, 1);
+	msg_timestamp->when = timestamp;
+	msg_timestamp->msg_id = msg_id;
+	GList *msg_list = purple_conversation_get_data(conv, "msg_timestamp_map");
+	if (msg_list) {
+		msg_list = g_list_append(msg_list, msg_timestamp);
+	} else {
+		msg_list = g_list_append(msg_list, msg_timestamp);
+		purple_conversation_set_data(conv, "msg_timestamp_map", msg_list);
+	}
+}
+
+static void
 discord_download_image_cb(DiscordAccount *da, JsonNode *node, gpointer user_data) {
 	//The returned size can be changed by appending a querystring of ?size=desired_size to the URL. Image size can be any power of two between 16 and 4096.
 	DiscordImgMsgContext *img_context = user_data;
+	PurpleConversation *conv;
 
 	if (node != NULL) {
 		gchar *attachment_show;
@@ -2087,8 +2119,18 @@ discord_download_image_cb(DiscordAccount *da, JsonNode *node, gpointer user_data
 
 		if (img_context->conv_id >= 0) {
 			purple_serv_got_chat_in(da->pc, img_context->conv_id, img_context->from, img_context->flags, attachment_show, img_context->timestamp);
+
+			PurpleChatConversation *chatconv = purple_conversations_find_chat(da->pc, discord_chat_hash(img_context->conv_id));
+			conv = PURPLE_CONVERSATION(chatconv);
+			discord_save_message_timestamp(conv, img_context->timestamp, img_context->msg_id);
+
 		} else {
 			purple_serv_got_im(da->pc, img_context->from, attachment_show, img_context->flags, img_context->timestamp);
+
+			PurpleConvIm *imconv = purple_conversations_find_im_with_account(img_context->from, da->account);
+			conv = PURPLE_CONVERSATION(imconv);
+			discord_save_message_timestamp(conv, img_context->timestamp, img_context->msg_id);
+
 		}
 		g_free(attachment_show);
 
@@ -2096,8 +2138,16 @@ discord_download_image_cb(DiscordAccount *da, JsonNode *node, gpointer user_data
 		purple_debug_error("discord", "Image response node is null!\n");
 		if (img_context->conv_id >= 0) {
 			purple_serv_got_chat_in(da->pc, img_context->conv_id, img_context->from, img_context->flags, img_context->url, img_context->timestamp);
+
+			PurpleChatConversation *chatconv = purple_conversations_find_chat(da->pc, discord_chat_hash(img_context->conv_id));
+			conv = PURPLE_CONVERSATION(chatconv);
+			discord_save_message_timestamp(conv, img_context->timestamp, img_context->msg_id);
 		} else {
 			purple_serv_got_im(da->pc, img_context->from, img_context->url, img_context->flags, img_context->timestamp);
+
+			PurpleConvIm *imconv = purple_conversations_find_im_with_account(img_context->from, da->account);
+			conv = PURPLE_CONVERSATION(imconv);
+			discord_save_message_timestamp(conv, img_context->timestamp, img_context->msg_id);
 		}
 	}
 
@@ -2479,6 +2529,7 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 					msg = purple_message_new_outgoing(username, escaped_content, flags);
 					purple_message_set_time(msg, timestamp);
 					purple_conversation_write_message(conv, msg);
+					discord_save_message_timestamp(conv, timestamp, msg_id);
 					purple_message_destroy(msg);
 				}
 
@@ -2490,6 +2541,9 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 						msg = purple_message_new_outgoing(username, url, flags);
 						purple_message_set_time(msg, timestamp);
 						purple_conversation_write_message(conv, msg);
+						if (!escaped_content || !*escaped_content) {
+							discord_save_message_timestamp(conv, timestamp, msg_id);
+						}
 						purple_message_destroy(msg);
 					}
 				}
@@ -2563,6 +2617,7 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 						img_context->url = sized_url;
 						img_context->flags = flags | PURPLE_MESSAGE_IMAGES;
 						img_context->timestamp = timestamp;
+						img_context->msg_id = msg_id;
 
 						if (conv == NULL) {
 							PurpleIMConversation *imconv;
@@ -2585,6 +2640,7 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 
 					} else {
 						purple_serv_got_im(da->pc, merged_username, url, flags, timestamp);
+						discord_save_message_timestamp(conv, timestamp, msg_id);
 					}
 
 				}
@@ -2656,6 +2712,12 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 
 		if (escaped_content && *escaped_content && msg_type != MESSAGE_GUILD_MEMBER_JOIN && msg_type != MESSAGE_CALL) {
 			purple_serv_got_chat_in(da->pc, discord_chat_hash(channel_id), name, flags, escaped_content, timestamp);
+			if (conv == NULL) {
+				PurpleChatConversation *chatconv = purple_conversations_find_chat(da->pc, discord_chat_hash(channel_id));
+				conv = PURPLE_CONVERSATION(chatconv);
+			}
+
+			discord_save_message_timestamp(conv, timestamp, msg_id);
 		} else if (msg_type == MESSAGE_GUILD_MEMBER_JOIN) {
 			gchar *join_txt = g_strdup_printf(_("%s joined the guild!"), name);
 			if (conv != NULL)
@@ -2697,6 +2759,7 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 					img_context->url = sized_url;
 					img_context->flags = flags | PURPLE_MESSAGE_IMAGES;
 					img_context->timestamp = timestamp;
+					img_context->msg_id = msg_id;
 
 					if (conv == NULL) {
 						PurpleChatConversation *chatconv = purple_conversations_find_chat(da->pc, discord_chat_hash(channel_id));
@@ -2714,13 +2777,18 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 							}
 						} else {
 							purple_serv_got_chat_in(da->pc, discord_chat_hash(channel_id), name, flags, url_log, timestamp);
+							discord_save_message_timestamp(conv, timestamp, msg_id);
 						}
 					} else {
 						purple_serv_got_chat_in(da->pc, discord_chat_hash(channel_id), name, flags, url_log, timestamp);
+						PurpleChatConversation *chatconv = purple_conversations_find_chat(da->pc, discord_chat_hash(channel_id));
+						conv = PURPLE_CONVERSATION(chatconv);
+						discord_save_message_timestamp(conv, timestamp, msg_id);
 					}
 
 				} else {
 					purple_serv_got_chat_in(da->pc, discord_chat_hash(channel_id), name, flags, url_log, timestamp);
+					discord_save_message_timestamp(conv, timestamp, msg_id);
 				}
 
 			}
@@ -2753,6 +2821,14 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 		}
 
 		g_free(name);
+	} else {
+		// Your sent msgs in chats
+		if (conv == NULL) {
+			PurpleChatConversation *chatconv = purple_conversations_find_chat(da->pc, discord_chat_hash(channel_id));
+			conv = PURPLE_CONVERSATION(chatconv);
+		}
+
+		discord_save_message_timestamp(conv, timestamp, msg_id);
 	}
 
 	g_free(escaped_content);
@@ -5641,15 +5717,6 @@ discord_react_cb(DiscordAccount *da, JsonNode *node, gpointer user_data)
 	discord_free_reaction(react);
 }
 
-gint discord_msg_time_comp(gpointer pmsg, gpointer ptime)
-{
-	time_t given_time = *(time_t*)ptime;
-	PurpleConvMessage *msg = (PurpleConvMessage*)pmsg;
-	time_t msg_time = msg->when;
-
-	return !(msg_time == given_time);
-}
-
 static time_t
 discord_parse_timestamp(const gchar *timestring)
 {
@@ -5669,7 +5736,7 @@ discord_parse_timestamp(const gchar *timestring)
 	}
 
 	GDateTime *msg_time = g_date_time_new_from_iso8601(verified_timestring, local_time);
-	printf("%s \n", g_date_time_format_iso8601(msg_time));
+
 
 	g_free(verified_timestring);
 
@@ -6497,6 +6564,7 @@ discord_open_chat(DiscordAccount *da, guint64 id, gboolean present)
 	g_free(id_str);
 
 	purple_conversation_set_data(PURPLE_CONVERSATION(chatconv), "id", g_memdup2(&(id), sizeof(guint64)));
+	purple_conversation_set_data(PURPLE_CONVERSATION(chatconv), "msg_timestamp_map", (GList*)NULL);
 
 	/* Get info about the channel */
 	gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/channels/%" G_GUINT64_FORMAT, id);
@@ -7716,12 +7784,6 @@ discord_actions(
 	return m;
 }
 
-typedef struct {
-	guint64 room_id;
-	gchar *msg_txt;
-	PurpleConversation *conv;
-} DiscordReply;
-
 static void
 discord_reply_cb(DiscordAccount *da, JsonNode *node, gpointer user_data)
 {
@@ -7794,17 +7856,22 @@ discord_get_message_id_from_timestamp(PurpleConversation *conv, const gchar *tim
 		return NULL;
 	}
 
-  GList *msg_list = conv->message_history;
-  GList *msg_elem = g_list_find_custom(msg_list, &msg_time, (GCompareFunc)discord_msg_time_comp);
-  PurpleConvMessage *msg = msg_elem->data;
+  GList *msg_list = purple_conversation_get_data(conv, "msg_timestamp_map");
+	GList *msg_elem;
+	purple_debug_info("discord", "Msg_list: ");
+		for (msg_elem = msg_list; msg_elem != NULL; msg_elem = msg_elem->next) {
+			DiscordMsgTimestamp *t = msg_elem->data;
+			if (t->when == msg_time) {
+				break;
+			}
+		}
 
-  if (msg == NULL) {
-    return NULL;
-  }
-
-	const gchar *text = g_strrstr(msg->what, "dscmsg:");
-	g_return_val_if_fail(text && strlen(text) > DSCMSGSIZE, FALSE);
-	return g_strndup((char*)text + DSCMSGSIZE, 18);
+	if (msg_elem) {
+		DiscordMsgTimestamp *msg_timestamp = msg_elem->data;
+		return from_int(msg_timestamp->msg_id);
+	}
+	purple_debug_info("discord", "Can't find message at %ld\n", msg_time);
+	return NULL;
 }
 
 static gboolean
