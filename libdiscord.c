@@ -72,6 +72,8 @@
 #define DISCORD_API_VERSION "v9"
 #define DISCORD_CDN_SERVER "cdn.discordapp.com"
 
+#define DISCORD_EPOCH_MS 1420070400000
+
 #define DISCORD_MESSAGE_NORMAL (0)
 #define DISCORD_MESSAGE_EDITED (1)
 #define DISCORD_MESSAGE_PINNED (2)
@@ -89,11 +91,45 @@ static GRegex *discord_mention_regex = NULL;
 static GRegex *discord_spaced_mention_regex = NULL;
 
 typedef enum {
+	OP_DISPATCH = 0,
+	OP_HEARTBEAT = 1,
+	OP_IDENTIFY = 2,
+	OP_PRESENCE_UPDATE = 3,
+	OP_VOICE_STATE_UPDATE = 4,
+	OP_VOICE_SERVER_PING = 5,
+	OP_RESUME = 6,
+	OP_RECONNECT = 7,
+	OP_REQUEST_GUILD_MEMBERS = 8,
+	OP_INVALID_SESSION = 9,
+	OP_HELLO = 10,
+	OP_HEARTBEAT_ACK = 11,
+	OP_DM_UPDATE = 13,
+	OP_GUILD_SYNC = 12,
+	OP_LAZY_GUILD_REQUEST = 14,
+	OP_LOBBY_CONNECT = 15,
+	OP_LOBBY_DISCONNECT = 16,
+	OP_LOBBY_VOICE_STATES_UPDATE = 17,
+	OP_STREAM_CREATE = 18,
+	OP_STREAM_DELETE = 19,
+	OP_STREAM_WATCH = 20,
+	OP_STREAM_PING = 21,
+	OP_STREAM_SET_PAUSED = 22,
+	OP_REQUEST_APPLICATION_COMMANDS = 24,
+} DiscordOpCode;
+
+typedef enum {
 	USER_ONLINE,
 	USER_IDLE,
 	USER_OFFLINE,
 	USER_DND
 } DiscordStatus;
+
+typedef enum {
+	RELATIONSHIP_FRIEND = 1,
+	RELATIONSHIP_BLOCKED = 2,
+	RELATIONSHIP_PENDING_INCOMING = 3,
+	RELATIONSHIP_PENDING_OUTGOING = 4,
+} DiscordRelationshipType;
 
 typedef enum {
 	CHANNEL_GUILD_TEXT = 0,
@@ -361,7 +397,6 @@ static void discord_free_guild_membership(gpointer data);
 static void discord_free_guild_role(gpointer data);
 static void discord_free_channel(gpointer data);
 static gboolean discord_permission_is_role(JsonObject *json);
-
 
 static void discord_join_chat_by_id(DiscordAccount *da, guint64 id);
 
@@ -1366,7 +1401,7 @@ discord_send_auth(DiscordAccount *da)
 	json_object_set_string_member(data, "token", da->token);
 
 	if (da->seq && da->session_id) {
-		json_object_set_int_member(obj, "op", 6);
+		json_object_set_int_member(obj, "op", OP_RESUME);
 
 		json_object_set_string_member(data, "session_id", da->session_id);
 		json_object_set_int_member(data, "seq", da->seq);
@@ -1375,9 +1410,9 @@ discord_send_auth(DiscordAccount *da)
 		JsonObject *presence = json_object_new();
 		JsonObject *client_state = json_object_new();
 
-		json_object_set_int_member(obj, "op", 2);
+		json_object_set_int_member(obj, "op", OP_IDENTIFY);
 
-		json_object_set_int_member(data, "capabilities", 61);
+		json_object_set_int_member(data, "capabilities", 125);
 
 		json_object_set_string_member(properties, "os", "Windows");
 		json_object_set_string_member(properties, "browser", "Chrome");
@@ -1430,7 +1465,7 @@ discord_send_heartbeat(gpointer userdata)
 	DiscordAccount *da = userdata;
 	JsonObject *obj = json_object_new();
 
-	json_object_set_int_member(obj, "op", 1);
+	json_object_set_int_member(obj, "op", OP_HEARTBEAT);
 	json_object_set_int_member(obj, "d", da->seq);
 
 	discord_socket_write_json(da, obj);
@@ -1997,6 +2032,27 @@ discord_get_react_text(PurpleConversation *conv, JsonArray *reactions, const gch
 	return NULL;
 }
 
+static gchar *
+discord_truncate_message(const gchar *msg_text, guint trunc_len)
+{
+	size_t txt_len = g_utf8_strlen(msg_text, -1);
+	gchar *trunc_text;
+
+	// Truncate long messages
+	if (txt_len > trunc_len) {
+		// Get pointer to (trunc_len+1)th character of msg_text
+		gchar *tmp = g_utf8_offset_to_pointer(msg_text, trunc_len);
+		// (tmp - msg_text) is # bytes (char*) of first trunc_len characters
+		guint num_bytes = tmp - msg_text;
+		tmp = g_strndup(msg_text, num_bytes);
+		trunc_text = g_strdup_printf("%s...", tmp);
+		g_free(tmp);
+	} else {
+		trunc_text = g_strdup(msg_text);
+	}
+	return trunc_text;
+}
+
 static void
 discord_download_image_cb(DiscordAccount *da, JsonNode *node, gpointer user_data) {
 	//The returned size can be changed by appending a querystring of ?size=desired_size to the URL. Image size can be any power of two between 16 and 4096.
@@ -2419,21 +2475,7 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 				else
 					reply_name = reply_username;
 
-				size_t txt_len = g_utf8_strlen(msg_txt, -1);
-				gchar *prev_text;
-
-				// Truncate long messages
-				if (txt_len > 32) {
-					// Get pointer to 33th character of msg_text
-					gchar *tmp = g_utf8_offset_to_pointer(msg_txt, 32);
-					// (tmp - msg_txt) is # bytes (char*) of first 32 characters
-					guint num_bytes = tmp - msg_txt;
-					tmp = g_strndup(msg_txt, num_bytes);
-					prev_text = g_strdup_printf("%s...", tmp);
-					g_free(tmp);
-				} else {
-					prev_text = g_strdup(msg_txt);
-				}
+				gchar *prev_text = discord_truncate_message(msg_txt, 32);
 
 				gchar *reply_txt = g_strdup_printf("<font size=1>┌──@%s: %s</font>", reply_name ? reply_name : _("Unknown user"), prev_text);
 				g_free(reply_username);
@@ -2551,21 +2593,7 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 			DiscordUser *reply_user = discord_upsert_user(da->new_users, reply_author);
 			const gchar *reply_username = discord_create_nickname(reply_user, guild, channel);
 
-			size_t txt_len = g_utf8_strlen(msg_txt, -1);
-			gchar *prev_text;
-
-			// Truncate long messages
-			if (txt_len > 32) {
-				// Get pointer to 33th character of msg_text
-				gchar *tmp = g_utf8_offset_to_pointer(msg_txt, 32);
-				// (tmp - msg_txt) is # bytes (char*) of first 32 characters
-				guint num_bytes = tmp - msg_txt;
-				tmp = g_strndup(msg_txt, num_bytes);
-				prev_text = g_strdup_printf("%s...", tmp);
-				g_free(tmp);
-			} else {
-				prev_text = g_strdup(msg_txt);
-			}
+			gchar *prev_text = discord_truncate_message(msg_txt, 32);
 
 			// Formatting could be better. I went with something similar to Discord's
 			// format to make it familiar to the user
@@ -2653,7 +2681,7 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 				conv = PURPLE_CONVERSATION(chatconv);
 			}
 			if (conv != NULL) {
-				const gchar *someone = "Someone";
+				const gchar *someone = _("Someone");
 				gchar *reaction_str = discord_get_react_text(conv, reactions, someone);
 
 				if (reaction_str != NULL) {
@@ -3236,7 +3264,7 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		gint64 channel_type = json_object_get_int_member(data, "type");
 		const gchar *last_message_id = json_object_get_string_member(data, "last_message_id");
 
-		if (channel_type == 1) {
+		if (channel_type == CHANNEL_DM) {
 			/* 1:1 direct message */
 
 			JsonObject *first_recipient = json_array_get_object_element(json_object_get_array_member(data, "recipients"), 0);
@@ -3252,9 +3280,9 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 					g_hash_table_replace(da->one_to_ones_rev, combined_username, g_strdup(channel_id));
 				}
 			}
-		} else if (channel_type == 3) {
+		} else if (channel_type == CHANNEL_GROUP_DM) {
 			discord_got_group_dm(da, data);
-		} else if (channel_type == 0) {
+		} else if (channel_type == CHANNEL_GUILD_TEXT) {
 			const gchar *guild_id = json_object_get_string_member(data, "guild_id");
 			DiscordGuild *guild = discord_get_guild(da, to_int(guild_id));
 			if (guild != NULL) {
@@ -3286,11 +3314,11 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		guint64 channel_id = to_int(json_object_get_string_member(data, "id"));
 		gint64 channel_type = json_object_get_int_member(data, "type");
 
-		if ((channel_type == 0 && json_object_has_member(data, "topic")) || channel_type == 3) {
+		if ((channel_type == CHANNEL_GUILD_TEXT && json_object_has_member(data, "topic")) || channel_type == CHANNEL_GROUP_DM) {
 			PurpleChatConversation *chatconv = purple_conversations_find_chat(da->pc, discord_chat_hash(channel_id));
 
 			if (chatconv) {
-				const gchar *new_topic = json_object_get_string_member(data, (channel_type == 3 ? "name" : "topic"));
+				const gchar *new_topic = json_object_get_string_member(data, (channel_type == CHANNEL_GROUP_DM ? "name" : "topic"));
 				purple_chat_conversation_set_topic(chatconv, NULL, new_topic);
 			}
 		}
@@ -3305,7 +3333,7 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 			gint64 relationship_type = json_object_get_int_member(data, "type");
 
 			if (username != NULL) {
-				if (relationship_type == 2) {
+				if (relationship_type == RELATIONSHIP_BLOCKED) {
 					/* remove user from blocklist */
 					purple_account_privacy_deny_remove(da->account, username, TRUE);
 
@@ -4021,7 +4049,7 @@ discord_set_status(PurpleAccount *account, PurpleStatus *status)
 		status_id = &status_id[4];
 	}
 
-	json_object_set_int_member(obj, "op", 3);
+	json_object_set_int_member(obj, "op", OP_PRESENCE_UPDATE);
 	json_object_set_string_member(data, "status", status_id);
 	json_object_set_int_member(data, "since", 0);
 
@@ -4083,7 +4111,7 @@ discord_set_idle(PurpleConnection *pc, int idle_time)
 		since = 0;
 	}
 
-	json_object_set_int_member(obj, "op", 3);
+	json_object_set_int_member(obj, "op", OP_PRESENCE_UPDATE);
 	json_object_set_string_member(data, "status", status);
 	json_object_set_int_member(data, "since", since);
 	json_object_set_null_member(data, "game");
@@ -4210,7 +4238,7 @@ discord_create_relationship(DiscordAccount *da, JsonObject *json)
 	gint64 type = json_object_get_int_member(json, "type");
 	gchar *merged_username = discord_create_fullname(user);
 
-	if (type == 3) {
+	if (type == RELATIONSHIP_PENDING_INCOMING) {
 		/* request add */
 		DiscordUserInviteResponseStore *store = g_new0(DiscordUserInviteResponseStore, 1);
 
@@ -4218,7 +4246,7 @@ discord_create_relationship(DiscordAccount *da, JsonObject *json)
 		store->user = user;
 
 		purple_account_request_authorization(da->account, merged_username, NULL, NULL, NULL, FALSE, discord_friends_auth_accept, discord_friends_auth_reject, store);
-	} else if (type == 1) {
+	} else if (type == RELATIONSHIP_FRIEND) {
 		/* buddy on list */
 		PurpleBuddy *buddy = purple_blist_find_buddy(da->account, merged_username);
 
@@ -4229,11 +4257,11 @@ discord_create_relationship(DiscordAccount *da, JsonObject *json)
 
 		discord_get_avatar(da, user, TRUE);
 
-	} else if (type == 2) {
+	} else if (type == RELATIONSHIP_BLOCKED) {
 		/* blocked buddy */
 		purple_account_privacy_deny_add(da->account, merged_username, TRUE);
 
-	} else if (type == 4) {
+	} else if (type == RELATIONSHIP_PENDING_OUTGOING) {
 		/* pending buddy */
 	}
 
@@ -4512,7 +4540,7 @@ discord_guild_get_offline_users(DiscordAccount *da, const gchar *guild_id)
 	json_object_set_boolean_member(d, "presences", TRUE);
 
 	obj = json_object_new();
-	json_object_set_int_member(obj, "op", 8);
+	json_object_set_int_member(obj, "op", OP_REQUEST_GUILD_MEMBERS);
 	json_object_set_object_member(obj, "d", d);
 
 	discord_socket_write_json(da, obj);
@@ -4579,7 +4607,7 @@ discord_guild_get_offline_users(DiscordAccount *da, const gchar *guild_id)
 	json_object_set_object_member(d, "channels", channels);
 
 	obj = json_object_new();
-	json_object_set_int_member(obj, "op", 14);
+	json_object_set_int_member(obj, "op", OP_LAZY_GUILD_REQUEST);
 	json_object_set_object_member(obj, "d", d);
 
 	discord_socket_write_json(da, obj);
@@ -4612,7 +4640,7 @@ discord_got_guilds(DiscordAccount *da, JsonNode *node, gpointer user_data)
 	/* Request more info about guilds (online/offline buddy status) */
 	//XXX disable for now as it causes the websocket to disconnect with error 4001
 	obj = json_object_new();
-	json_object_set_int_member(obj, "op", 12);
+	json_object_set_int_member(obj, "op", OP_GUILD_SYNC);
 	json_object_set_array_member(obj, "d", guild_ids);
 
 	discord_socket_write_json(da, obj);
@@ -4726,7 +4754,7 @@ discord_got_guild_setting(DiscordAccount *da, JsonObject *settings)
 
 		/* Apply overrides */
 		channel->muted = json_object_get_boolean_member(override, "muted");
-		purple_debug_info("discord", "%s: %smute", channel->name, channel->muted ? "" : "un");
+		purple_debug_info("discord", "%s: %smute\n", channel->name, channel->muted ? "" : "un");
 		DiscordNotificationLevel level = json_object_get_int_member(override, "message_notifications");
 
 		if (level != NOTIFICATIONS_INHERIT)
@@ -5005,7 +5033,7 @@ discord_process_frame(DiscordAccount *da, const gchar *frame)
 		opcode = json_object_get_int_member(obj, "op");
 
 		switch (opcode) {
-		case 0: { /* Dispatch */
+		case OP_DISPATCH: { /* Dispatch */
 			const gchar *type = json_object_get_string_member(obj, "t");
 			gint64 seq = json_object_get_int_member(obj, "s");
 
@@ -5015,12 +5043,12 @@ discord_process_frame(DiscordAccount *da, const gchar *frame)
 			break;
 		}
 
-		case 7: { /* Reconnect */
+		case OP_RECONNECT: { /* Reconnect */
 			discord_start_socket(da);
 			break;
 		}
 
-		case 9: { /* Invalid session */
+		case OP_INVALID_SESSION: { /* Invalid session */
 			da->seq = 0;
 			g_free(da->session_id);
 			da->session_id = NULL;
@@ -5029,7 +5057,7 @@ discord_process_frame(DiscordAccount *da, const gchar *frame)
 			break;
 		}
 
-		case 10: { /* Hello */
+		case OP_HELLO: { /* Hello */
 			JsonObject *data = json_object_get_object_member(obj, "d");
 			gint64 heartbeat_interval = json_object_get_int_member(data, "heartbeat_interval");
 			discord_send_auth(da);
@@ -5047,7 +5075,7 @@ discord_process_frame(DiscordAccount *da, const gchar *frame)
 			break;
 		}
 
-		case 11: { /* Heartbeat ACK */
+		case OP_HEARTBEAT_ACK: { /* Heartbeat ACK */
 			break;
 		}
 
@@ -5504,21 +5532,7 @@ discord_react_cb(DiscordAccount *da, JsonNode *node, gpointer user_data)
 	guint64 user_id = to_int(json_object_get_string_member(user_obj, "id"));
 
 	const gchar *msg_text = json_object_get_string_member(data, "content");
-	size_t txt_len = g_utf8_strlen(msg_text, -1);
-	gchar *prev_text;
-
-	// Truncate long messages
-	if (txt_len > 64) {
-		// Get pointer to 65th character of msg_text
-		gchar *tmp = g_utf8_offset_to_pointer(msg_text, 64);
-		// (tmp - msg_text) is # bytes (char*) of first 64 characters
-		guint num_bytes = tmp - msg_text;
-		tmp = g_strndup(msg_text, num_bytes);
-		prev_text = g_strdup_printf("%s...", tmp);
-		g_free(tmp);
-	} else {
-		prev_text = g_strdup(msg_text);
-	}
+	gchar *prev_text = discord_truncate_message(msg_text, 64);
 
 	const gchar *user_nick = NULL;
 
@@ -5702,7 +5716,7 @@ discord_chat_invite(PurpleConnection *pc, int id, const char *message, const cha
 	user = discord_get_user_fullname(da, who);
 
 	if (!user) {
-		purple_debug_info("discord", "Missing user in invitation for %s", who);
+		purple_debug_info("discord", "Missing user in invitation for %s\n", who);
 		return;
 	}
 
@@ -6093,7 +6107,7 @@ discord_get_room_last_id(DiscordAccount *da, guint64 id)
 			last_room_id = (last_room_id << 32) | ((guint64) purple_blist_node_get_int(blistnode, "last_message_id_low") & 0xFFFFFFFF);
 		}
 
-		last_message_id = last_room_id ? last_room_id : da->last_message_id;
+		last_message_id = last_room_id ? last_room_id : da->last_load_last_message_id;
 	}
 
 	g_free(channel_id);
@@ -6243,7 +6257,7 @@ discord_got_channel_info(DiscordAccount *da, JsonNode *node, gpointer user_data)
 
 	if (json_object_has_member(channel, "last_pin_timestamp")) {
 		guint64 last_message_id = discord_get_room_last_id(da, int_id);
-		guint64 last_message_time = ((last_message_id >> 22) + 1420070400000)/1000;
+		guint64 last_message_time = ((last_message_id >> 22) + DISCORD_EPOCH_MS)/1000;
 
 		const gchar *last_pin = json_object_get_string_member(channel, "last_pin_timestamp");
 		guint64 pin_time = discord_str_to_time(last_pin);
