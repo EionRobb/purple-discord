@@ -121,7 +121,8 @@ typedef enum {
 	USER_ONLINE,
 	USER_IDLE,
 	USER_OFFLINE,
-	USER_DND
+	USER_DND,
+	USER_MOBILE
 } DiscordStatus;
 
 typedef enum {
@@ -626,6 +627,17 @@ discord_update_status(DiscordUser *user, JsonObject *json)
 			user->status = USER_DND;
 		} else {
 			user->status = USER_OFFLINE; /* All else fails probably offline */
+		}
+	}
+
+	if (json_object_has_member(json, "client_status")) {
+		JsonObject *client_status = json_object_get_object_member(json, "client_status");
+		if (
+			json_object_has_member(client_status, "mobile") &&
+			!json_object_has_member(client_status, "desktop") && !json_object_has_member(client_status, "web")
+			)
+		{
+			user->status |= USER_MOBILE;
 		}
 	}
 
@@ -3030,7 +3042,7 @@ discord_handle_guild_member_update(DiscordAccount *da, guint64 guild_id, JsonObj
 				continue;
 			}
 
-			if (user->status == USER_OFFLINE) {
+			if ((user->status ^ USER_MOBILE) == USER_OFFLINE) {
 				if (purple_chat_conversation_has_user(chat, nickname)) {
 					purple_chat_conversation_remove_user(chat, nickname, NULL);
 				}
@@ -3089,7 +3101,7 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 				PurpleChatConversation *chat = purple_conversations_find_chat(da->pc, discord_chat_hash(channel->id));
 
 				if (chat != NULL) {
-					if (user->status == USER_OFFLINE) {
+					if ((user->status ^ USER_MOBILE) == USER_OFFLINE) {
 						if (purple_chat_conversation_has_user(chat, nickname)) {
 							purple_chat_conversation_remove_user(chat, nickname, NULL);
 						}
@@ -6333,7 +6345,7 @@ discord_got_channel_info(DiscordAccount *da, JsonNode *node, gpointer user_data)
 							purple_chat_conversation_set_nick(chatconv, nickname);
 						}
 
-						if (user->status != USER_OFFLINE) {
+						if ((user->status ^ USER_MOBILE) != USER_OFFLINE) {
 							users = g_list_prepend(users, nickname);
 							flags = g_list_prepend(flags, GINT_TO_POINTER(cbflags));
 						} else {
@@ -7079,11 +7091,15 @@ discord_got_info(DiscordAccount *da, JsonNode *node, gpointer user_data)
 	purple_notify_user_info_add_pair_html(user_info, _("Username"), user->name);
 
 	/* Display other non-profile info that we know about this buddy */
-	gchar *status_strings[4] = {
+	gchar *status_strings[8] = {
 		_("Online"),
 		_("Idle"),
 		_("Offline"),
-		_("Do Not Disturb")
+		_("Do Not Disturb"),
+		_("Mobile - Online"),
+		_("Mobile - Idle"),
+		_("Mobile - Offline"),
+		_("Mobile - Do Not Disturb")
 	};
 
 	purple_notify_user_info_add_pair_html(user_info, _("Status"), status_strings[user->status]);
@@ -7198,6 +7214,9 @@ discord_status_types(PurpleAccount *account)
 	status = purple_status_type_new_with_attrs(PURPLE_STATUS_OFFLINE, "offline", _("Offline"), TRUE, FALSE, FALSE, "message", _("Playing"), purple_value_new(PURPLE_TYPE_STRING), NULL);
 	types = g_list_append(types, status);
 
+	status = purple_status_type_new_with_attrs(PURPLE_STATUS_MOBILE, "mobile", _("Mobile"), TRUE, FALSE, TRUE, "message", _("Playing"), purple_value_new(PURPLE_TYPE_STRING), NULL);
+	types = g_list_append(types, status);
+
 
 
 	// Legacy statuses - add last for backwards compat, without the UI trying to use them
@@ -7211,6 +7230,9 @@ discord_status_types(PurpleAccount *account)
 	types = g_list_append(types, status);
 
 	status = purple_status_type_new_full(PURPLE_STATUS_OFFLINE, "set-offline", _("Offline"), TRUE, TRUE, FALSE);
+	types = g_list_append(types, status);
+
+	status = purple_status_type_new_full(PURPLE_STATUS_MOBILE, "set-mobile", _("Mobile"), TRUE, FALSE, TRUE);
 	types = g_list_append(types, status);
 
 	return types;
