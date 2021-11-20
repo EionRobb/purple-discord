@@ -2522,14 +2522,22 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 					const gchar *url = json_object_get_string_member(attachment, "proxy_url");
 					const gchar *url_log = json_object_get_string_member(attachment, "url");
 					const gchar *type = json_object_get_string_member(attachment, "content_type");
-					//gsize size = json_object_get_int_member(attachment, "content_type");
-
 					if (url && type && g_str_has_prefix(type, "image") && (!strstr(url, "/SPOILER_")) && purple_account_get_bool(da->account, "display-images", FALSE)) {
+
+						gchar *sized_url;
+						guint height = json_object_get_int_member(attachment, "height");
+						guint width = json_object_get_int_member(attachment, "width");
+						if (purple_account_get_int(da->account, "image-size", 0) && purple_account_get_int(da->account, "image-size", 0) < width) {
+							gdouble factor = (double) purple_account_get_int(da->account, "image-size", 0) / (gdouble) width;
+							sized_url = g_strdup_printf("%s?width=%u&height=%u", url, (guint) ((gdouble) width * factor), (guint) ((gdouble) height * factor));
+						} else {
+							sized_url = g_strdup(url);
+						}
 
 						DiscordImgMsgContext *img_context = g_new0(DiscordImgMsgContext, 1);
 						img_context->conv_id = -1;
 						img_context->from = g_strdup(merged_username);
-						img_context->url = g_strdup(url);
+						img_context->url = sized_url;
 						img_context->flags = flags | PURPLE_MESSAGE_IMAGES;
 						img_context->timestamp = timestamp;
 
@@ -2647,14 +2655,23 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 				const gchar *url = json_object_get_string_member(attachment, "proxy_url");
 				const gchar *url_log = json_object_get_string_member(attachment, "url");
 				const gchar *type = json_object_get_string_member(attachment, "content_type");
-				//gsize size = json_object_get_int_member(attachment, "content_type");
 
 				if (url && type && g_str_has_prefix(type, "image") && (!strstr(url, "/SPOILER_")) && purple_account_get_bool(da->account, "display-images", FALSE)) {
+
+					gchar *sized_url;
+					guint height = json_object_get_int_member(attachment, "height");
+					guint width = json_object_get_int_member(attachment, "width");
+					if (purple_account_get_int(da->account, "image-size", 0) && purple_account_get_int(da->account, "image-size", 0) < width) {
+						gdouble factor = (double) purple_account_get_int(da->account, "image-size", 0) / (gdouble) width;
+						sized_url = g_strdup_printf("%s?width=%u&height=%u", url, (guint) ((gdouble) width * factor), (guint) ((gdouble) height * factor));
+					} else {
+						sized_url = g_strdup(url);
+					}
 
 					DiscordImgMsgContext *img_context = g_new0(DiscordImgMsgContext, 1);
 					img_context->conv_id = discord_chat_hash(channel_id);
 					img_context->from = g_strdup(name);
-					img_context->url = g_strdup(url);
+					img_context->url = sized_url;
 					img_context->flags = flags | PURPLE_MESSAGE_IMAGES;
 					img_context->timestamp = timestamp;
 
@@ -7537,6 +7554,9 @@ discord_add_account_options(GList *account_options)
 	account_options = g_list_append(account_options, option);
 
 	option = purple_account_option_bool_new(_("Display images in large servers"), "display-images-large-servers", FALSE);
+	account_options = g_list_append(account_options, option);
+
+	option = purple_account_option_int_new(_("Max displayed image width (0 disables)"), "image-size", 0);
 	account_options = g_list_append(account_options, option);
 
 	option = purple_account_option_bool_new(_("Display custom emoji as inline images"), "show-custom-emojis", TRUE);
