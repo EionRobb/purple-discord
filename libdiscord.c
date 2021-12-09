@@ -399,7 +399,7 @@ static void discord_free_guild_role(gpointer data);
 static void discord_free_channel(gpointer data);
 static gboolean discord_permission_is_role(JsonObject *json);
 
-static void discord_join_chat_by_id(DiscordAccount *da, guint64 id);
+static void discord_join_chat_by_id(DiscordAccount *da, guint64 id, gboolean present);
 
 /* creating */
 
@@ -2596,7 +2596,7 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 			discord_treat_room_as_small(da, channel_id, head_count)
 		) {
 			//discord_open_chat(da, channel_id, mentioned);
-			discord_join_chat_by_id(da, channel_id);
+			discord_join_chat_by_id(da, channel_id, mentioned);
 		}
 
 		gchar *name = NULL;
@@ -6422,8 +6422,6 @@ discord_open_chat(DiscordAccount *da, guint64 id, gboolean present)
 
 	purple_conversation_set_data(PURPLE_CONVERSATION(chatconv), "id", g_memdup2(&(id), sizeof(guint64)));
 
-	purple_conversation_present(PURPLE_CONVERSATION(chatconv));
-
 	/* Get info about the channel */
 	gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/channels/%" G_GUINT64_FORMAT, id);
 	discord_fetch_url(da, url, NULL, discord_got_channel_info, channel);
@@ -6439,10 +6437,10 @@ discord_open_chat(DiscordAccount *da, guint64 id, gboolean present)
 }
 
 static void
-discord_join_chat_by_id(DiscordAccount *da, guint64 id)
+discord_join_chat_by_id(DiscordAccount *da, guint64 id, gboolean present)
 {
 	/* Only returns channel when chat was not already joined */
-	DiscordChannel *channel = discord_open_chat(da, id, TRUE);
+	DiscordChannel *channel = discord_open_chat(da, id, present);
 
 	if (!channel) {
 		return;
@@ -6475,7 +6473,7 @@ discord_join_chat(PurpleConnection *pc, GHashTable *chatdata)
 
 	guint64 id = to_int(g_hash_table_lookup(chatdata, "id"));
 
-	discord_join_chat_by_id(da, id);
+	discord_join_chat_by_id(da, id, TRUE);
 }
 
 static void
