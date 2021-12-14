@@ -312,7 +312,7 @@ typedef struct {
 	gchar *self_username;
 
 	guint64 last_message_id;
-	gint64 last_load_last_message_id;
+	guint64 last_load_last_message_id;
 
 	gchar *token;
 	gchar *session_id;
@@ -2525,8 +2525,8 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 					if (url && type && g_str_has_prefix(type, "image") && (!strstr(url, "/SPOILER_")) && purple_account_get_bool(da->account, "display-images", FALSE)) {
 
 						gchar *sized_url;
-						guint height = json_object_get_int_member(attachment, "height");
-						guint width = json_object_get_int_member(attachment, "width");
+						gint64 height = json_object_get_int_member(attachment, "height");
+						gint64 width = json_object_get_int_member(attachment, "width");
 						if (purple_account_get_int(da->account, "image-size", 0) && purple_account_get_int(da->account, "image-size", 0) < width) {
 							gdouble factor = (double) purple_account_get_int(da->account, "image-size", 0) / (gdouble) width;
 							sized_url = g_strdup_printf("%s?width=%u&height=%u", url, (guint) ((gdouble) width * factor), (guint) ((gdouble) height * factor));
@@ -2659,8 +2659,8 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 				if (url && type && g_str_has_prefix(type, "image") && (!strstr(url, "/SPOILER_")) && purple_account_get_bool(da->account, "display-images", FALSE)) {
 
 					gchar *sized_url;
-					guint height = json_object_get_int_member(attachment, "height");
-					guint width = json_object_get_int_member(attachment, "width");
+					gint64 height = json_object_get_int_member(attachment, "height");
+					gint64 width = json_object_get_int_member(attachment, "width");
 					if (purple_account_get_int(da->account, "image-size", 0) && purple_account_get_int(da->account, "image-size", 0) < width) {
 						gdouble factor = (double) purple_account_get_int(da->account, "image-size", 0) / (gdouble) width;
 						sized_url = g_strdup_printf("%s?width=%u&height=%u", url, (guint) ((gdouble) width * factor), (guint) ((gdouble) height * factor));
@@ -4916,7 +4916,7 @@ discord_login(PurpleAccount *account)
 	da->cookie_table = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
 	da->http_keepalive_pool = purple_http_keepalive_pool_new();
 
-	da->last_load_last_message_id = purple_account_get_int(account, "last_message_id_high", 0);
+	da->last_load_last_message_id = (guint64) purple_account_get_int(account, "last_message_id_high", 0);
 
 	if (da->last_load_last_message_id != 0) {
 		da->last_load_last_message_id = (da->last_load_last_message_id << 32) | ((guint64) purple_account_get_int(account, "last_message_id_low", 0) & 0xFFFFFFFF);
