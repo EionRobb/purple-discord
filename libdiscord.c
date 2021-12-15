@@ -2737,13 +2737,10 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 					} else {
 						purple_serv_got_chat_in(da->pc, discord_chat_hash(channel_id), name, flags, url_log, timestamp);
 					}
-
 				} else {
 					purple_serv_got_chat_in(da->pc, discord_chat_hash(channel_id), name, flags, url_log, timestamp);
 				}
-
 			}
-
 		}
 
 		if (reactions != NULL) {
@@ -7802,10 +7799,18 @@ discord_reply_cb(DiscordAccount *da, JsonNode *node, gpointer user_data)
 	const gchar *reply_txt = json_object_get_string_member(referenced_message, "content");
 	DiscordUser *reply_user = discord_upsert_user(da->new_users, reply_author);
 	const gchar *reply_username = discord_create_fullname(reply_user);
+	PurpleBuddy *reply_buddy = purple_blist_find_buddy(da->account, reply_username);
+	const gchar *reply_name;
+	if (reply_buddy != NULL) {
+		reply_name = purple_buddy_get_alias(reply_buddy);
+	} else {
+		reply_name = reply_username;
+	}
 
 	gchar *prev_text = discord_truncate_message(reply_txt, 32);
 
-	gchar *reply_msg = g_strdup_printf("<font size=1>┌──@%s: %s</font>", reply_username, prev_text);
+	gchar *reply_msg = g_strdup_printf("<font size=1>┌──@%s: %s</font>", reply_name, prev_text);
+	g_free(reply_username);
 	g_free(prev_text);
 
 	purple_conversation_write(conv, NULL, reply_msg, PURPLE_MESSAGE_SYSTEM, time(NULL));
