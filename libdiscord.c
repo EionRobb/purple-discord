@@ -4273,7 +4273,7 @@ discord_is_channel_visible(DiscordAccount *da, DiscordUser *user, DiscordChannel
 		return FALSE;
 
 	/* Drop voice channels since we don't support them anyway */
-	if (channel->type == CHANNEL_VOICE)
+	if (channel->type == CHANNEL_VOICE || channel->type == CHANNEL_GUILD_STAGE_VOICE)
 		return FALSE;
 
 	/* Channel categories become new PurpleGroups so we don't
@@ -4812,7 +4812,7 @@ discord_buddy_guild(DiscordAccount *da, DiscordGuild *guild)
 	DiscordUser *user = discord_get_user(da, da->self_user_id);
 
 	if (!user) {
-		purple_debug_info("discord", "Null user; aborting blist population");
+		purple_debug_info("discord", "Null user; aborting blist population\n");
 		return;
 	}
 
@@ -6776,10 +6776,10 @@ discord_got_channel_info(DiscordAccount *da, JsonNode *node, gpointer user_data)
 
 	if (json_object_has_member(channel, "last_pin_timestamp")) {
 		guint64 last_message_id = discord_get_room_last_id(da, int_id);
-		guint64 last_message_time = ((last_message_id >> 22) + DISCORD_EPOCH_MS)/1000;
+		time_t last_message_time = discord_time_from_snowflake(last_message_id);
 
 		const gchar *last_pin = json_object_get_string_member(channel, "last_pin_timestamp");
-		guint64 pin_time = discord_str_to_time(last_pin);
+		time_t pin_time = discord_str_to_time(last_pin);
 
 		if (pin_time > last_message_time) {
 				purple_conversation_write_system_message(PURPLE_CONVERSATION(chatconv), "This channel's pinned messages have been updated. Type \"/pinned\" to see them.", PURPLE_MESSAGE_SYSTEM);
