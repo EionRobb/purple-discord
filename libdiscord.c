@@ -74,7 +74,7 @@
 #define DISCORD_API_VERSION "v9"
 #define DISCORD_CDN_SERVER "cdn.discordapp.com"
 
-#define DISCORD_EPOCH_MS	1420070400000
+#define DISCORD_EPOCH_MS 1420070400000
 
 #define DISCORD_MESSAGE_NORMAL (0)
 #define DISCORD_MESSAGE_EDITED (1)
@@ -374,7 +374,6 @@ typedef struct _DiscordImgMsgContext {
 	gchar* url;
 	PurpleMessageFlags flags;
 	time_t timestamp;
-	guint64 msg_id;
 } DiscordImgMsgContext;
 
 typedef struct {
@@ -434,7 +433,7 @@ static void discord_free_guild_role(gpointer data);
 static void discord_free_channel(gpointer data);
 static gboolean discord_permission_is_role(JsonObject *json);
 
-static void discord_join_chat_by_id(DiscordAccount *da, guint64 id, gboolean present);
+static gboolean discord_join_chat_by_id(DiscordAccount *da, guint64 id, gboolean present);
 
 /* creating */
 
@@ -2832,7 +2831,6 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 						img_context->url = sized_url;
 						img_context->flags = flags | PURPLE_MESSAGE_IMAGES;
 						img_context->timestamp = timestamp;
-						img_context->msg_id = msg_id;
 
 						if (conv == NULL) {
 							PurpleIMConversation *imconv;
@@ -3006,7 +3004,6 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 					img_context->url = sized_url;
 					img_context->flags = flags | PURPLE_MESSAGE_IMAGES;
 					img_context->timestamp = timestamp;
-					img_context->msg_id = msg_id;
 
 					if (conv == NULL) {
 						PurpleChatConversation *chatconv = purple_conversations_find_chat(da->pc, discord_chat_hash(channel_id));
@@ -3771,8 +3768,8 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		discord_got_private_channels(da, json_object_get_member(data, "private_channels"), NULL);
 		discord_got_presences(da, json_object_get_member(data, "presences"), NULL);
 		discord_got_guilds(da, json_object_get_member(data, "guilds"), NULL);
-		discord_got_read_states(da, json_object_get_member(data, "read_state"), NULL);
 		discord_got_guild_settings(da, json_object_get_member(data, "user_guild_settings"));
+		discord_got_read_states(da, json_object_get_member(data, "read_state"), NULL);
 
 		/* Fetch our own avatar */
 		self_user_obj = discord_get_user(da, da->self_user_id);
@@ -5072,12 +5069,12 @@ discord_got_read_states(DiscordAccount *da, JsonNode *node, gpointer user_data)
 		gchar *last_id_s = from_int(last_id);
 		gint mentions = json_object_get_int_member(state, "mention_count");
 
-		if (mentions && channel) {
+		if (channel) {
 			gboolean isDM = g_hash_table_contains(da->one_to_ones, channel);
 
-			if (isDM) {
+			if (isDM && mentions) {
 				discord_get_history(da, channel, last_id_s, mentions * 2);
-		} else if (!isDM) {
+			} else if (!isDM) {
 				DiscordGuild *dguild = NULL;
 				DiscordChannel *dchannel = discord_get_channel_global_int_guild(da, to_int(channel), &dguild);
 				guint64 remote_last_id = 0;
@@ -6927,14 +6924,14 @@ discord_open_chat(DiscordAccount *da, guint64 id, gboolean present)
 	return channel;
 }
 
-static void
+static gboolean
 discord_join_chat_by_id(DiscordAccount *da, guint64 id, gboolean present)
 {
 	/* Only returns channel when chat was not already joined */
 	DiscordChannel *channel = discord_open_chat(da, id, present);
 
 	if (!channel) {
-		return;
+		return FALSE;
 	}
 
 	/* Get any missing messages */
@@ -6959,7 +6956,7 @@ discord_join_chat_by_id(DiscordAccount *da, guint64 id, gboolean present)
 		g_free(url);
 		return TRUE;
 	}
-
+	return FALSE;
 }
 
 static void
@@ -8191,7 +8188,6 @@ discord_reply_cb(DiscordAccount *da, JsonNode *node, gpointer user_data)
 	gchar *prev_text = discord_truncate_message(reply_txt, 32);
 
 	gchar *reply_msg = g_strdup_printf("<font size=1>┌──@%s: %s</font>", reply_name, prev_text);
-	g_free(reply_username);
 	g_free(prev_text);
 
 	purple_conversation_write(conv, NULL, reply_msg, PURPLE_MESSAGE_SYSTEM, time(NULL));
@@ -8252,6 +8248,7 @@ static gboolean
 discord_chat_thread_reply(DiscordAccount *da, PurpleConversation *conv, guint64 room_id, gchar **args)
 {
 
+	PurpleConnection *pc = purple_conversation_get_connection(conv);
 	gchar *msg_txt = g_strdup(args[1]);
 	gchar *thread_id;
 	gint ret;
