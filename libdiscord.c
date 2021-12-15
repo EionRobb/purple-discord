@@ -380,9 +380,9 @@ typedef struct {
 } DiscordReply;
 
 typedef struct {
-	guint64 msg_id;
-	time_t when;
-} DiscordMsgTimestamp;
+	time_t msg_time;
+	gpointer data;
+} DiscordMsgInteraction;
 
 static guint64
 to_int(const gchar *id)
@@ -2079,29 +2079,9 @@ discord_truncate_message(const gchar *msg_text, guint trunc_len)
 }
 
 static void
-discord_save_message_timestamp(PurpleConversation *conv, time_t timestamp, guint64 msg_id)
-{
-	if (conv == NULL) {
-		return;
-	}
-
-	DiscordMsgTimestamp *msg_timestamp = g_new0(DiscordMsgTimestamp, 1);
-	msg_timestamp->when = timestamp;
-	msg_timestamp->msg_id = msg_id;
-	GList *msg_list = purple_conversation_get_data(conv, "msg_timestamp_map");
-	if (msg_list) {
-		msg_list = g_list_append(msg_list, msg_timestamp);
-	} else {
-		msg_list = g_list_append(msg_list, msg_timestamp);
-		purple_conversation_set_data(conv, "msg_timestamp_map", msg_list);
-	}
-}
-
-static void
 discord_download_image_cb(DiscordAccount *da, JsonNode *node, gpointer user_data) {
 	//The returned size can be changed by appending a querystring of ?size=desired_size to the URL. Image size can be any power of two between 16 and 4096.
 	DiscordImgMsgContext *img_context = user_data;
-	PurpleConversation *conv;
 
 	if (node != NULL) {
 		gchar *attachment_show;
@@ -2119,18 +2099,8 @@ discord_download_image_cb(DiscordAccount *da, JsonNode *node, gpointer user_data
 
 		if (img_context->conv_id >= 0) {
 			purple_serv_got_chat_in(da->pc, img_context->conv_id, img_context->from, img_context->flags, attachment_show, img_context->timestamp);
-
-			PurpleChatConversation *chatconv = purple_conversations_find_chat(da->pc, discord_chat_hash(img_context->conv_id));
-			conv = PURPLE_CONVERSATION(chatconv);
-			discord_save_message_timestamp(conv, img_context->timestamp, img_context->msg_id);
-
 		} else {
 			purple_serv_got_im(da->pc, img_context->from, attachment_show, img_context->flags, img_context->timestamp);
-
-			PurpleConvIm *imconv = purple_conversations_find_im_with_account(img_context->from, da->account);
-			conv = PURPLE_CONVERSATION(imconv);
-			discord_save_message_timestamp(conv, img_context->timestamp, img_context->msg_id);
-
 		}
 		g_free(attachment_show);
 
@@ -2138,16 +2108,8 @@ discord_download_image_cb(DiscordAccount *da, JsonNode *node, gpointer user_data
 		purple_debug_error("discord", "Image response node is null!\n");
 		if (img_context->conv_id >= 0) {
 			purple_serv_got_chat_in(da->pc, img_context->conv_id, img_context->from, img_context->flags, img_context->url, img_context->timestamp);
-
-			PurpleChatConversation *chatconv = purple_conversations_find_chat(da->pc, discord_chat_hash(img_context->conv_id));
-			conv = PURPLE_CONVERSATION(chatconv);
-			discord_save_message_timestamp(conv, img_context->timestamp, img_context->msg_id);
 		} else {
 			purple_serv_got_im(da->pc, img_context->from, img_context->url, img_context->flags, img_context->timestamp);
-
-			PurpleConvIm *imconv = purple_conversations_find_im_with_account(img_context->from, da->account);
-			conv = PURPLE_CONVERSATION(imconv);
-			discord_save_message_timestamp(conv, img_context->timestamp, img_context->msg_id);
 		}
 	}
 
@@ -2529,7 +2491,6 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 					msg = purple_message_new_outgoing(username, escaped_content, flags);
 					purple_message_set_time(msg, timestamp);
 					purple_conversation_write_message(conv, msg);
-					discord_save_message_timestamp(conv, timestamp, msg_id);
 					purple_message_destroy(msg);
 				}
 
@@ -2541,9 +2502,6 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 						msg = purple_message_new_outgoing(username, url, flags);
 						purple_message_set_time(msg, timestamp);
 						purple_conversation_write_message(conv, msg);
-						if (!escaped_content || !*escaped_content) {
-							discord_save_message_timestamp(conv, timestamp, msg_id);
-						}
 						purple_message_destroy(msg);
 					}
 				}
@@ -2640,7 +2598,6 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 
 					} else {
 						purple_serv_got_im(da->pc, merged_username, url, flags, timestamp);
-						discord_save_message_timestamp(conv, timestamp, msg_id);
 					}
 
 				}
@@ -2717,7 +2674,6 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 				conv = PURPLE_CONVERSATION(chatconv);
 			}
 
-			discord_save_message_timestamp(conv, timestamp, msg_id);
 		} else if (msg_type == MESSAGE_GUILD_MEMBER_JOIN) {
 			gchar *join_txt = g_strdup_printf(_("%s joined the guild!"), name);
 			if (conv != NULL)
@@ -2777,18 +2733,13 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 							}
 						} else {
 							purple_serv_got_chat_in(da->pc, discord_chat_hash(channel_id), name, flags, url_log, timestamp);
-							discord_save_message_timestamp(conv, timestamp, msg_id);
 						}
 					} else {
 						purple_serv_got_chat_in(da->pc, discord_chat_hash(channel_id), name, flags, url_log, timestamp);
-						PurpleChatConversation *chatconv = purple_conversations_find_chat(da->pc, discord_chat_hash(channel_id));
-						conv = PURPLE_CONVERSATION(chatconv);
-						discord_save_message_timestamp(conv, timestamp, msg_id);
 					}
 
 				} else {
 					purple_serv_got_chat_in(da->pc, discord_chat_hash(channel_id), name, flags, url_log, timestamp);
-					discord_save_message_timestamp(conv, timestamp, msg_id);
 				}
 
 			}
@@ -5640,6 +5591,35 @@ discord_chat_leave_by_room_id(PurpleConnection *pc, guint64 room_id)
 }
 
 static void
+discord_send_react_cb(DiscordAccount *da, JsonNode *node, gpointer user_data)
+{
+	JsonArray *messages = json_node_get_array(node);
+	guint len = json_array_get_length(messages);
+	JsonObject *message = json_array_get_object_element(messages, len-1);
+	const gchar *channel_id = json_object_get_string_member(message, "channel_id");
+	const gchar *msg_id = json_object_get_string_member(message, "id");
+	time_t msg_time = discord_time_from_snowflake(to_int(msg_id));
+
+	DiscordMsgInteraction *action  = (DiscordMsgInteraction *)user_data;
+	gchar *emoji = action->data;
+	time_t intended_time = action->msg_time;
+	g_free(action);
+
+	if (msg_time != intended_time) {
+		g_free(emoji);
+		return;
+	}
+
+
+	gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/channels/%s/messages/%s/reactions/%s/%%40me", channel_id, msg_id, purple_url_encode(emoji));
+	discord_fetch_url_with_method(da, "PUT", url, "{}", NULL, NULL);
+	g_free(url);
+	// No special free function for DiscordMsgInteraction because data may not
+	// need freeing
+	g_free(emoji);
+}
+
+static void
 discord_react_cb(DiscordAccount *da, JsonNode *node, gpointer user_data)
 {
 	JsonArray *data_items = json_node_get_array(node);
@@ -7787,10 +7767,13 @@ discord_actions(
 static void
 discord_reply_cb(DiscordAccount *da, JsonNode *node, gpointer user_data)
 {
-	DiscordReply *reply = user_data;
+	DiscordMsgInteraction *action = user_data;
+	time_t intended_time = action->msg_time;
+	DiscordReply *reply = action->data;
 	gchar *msg_txt = reply->msg_txt;
 	guint64 room_id = reply->room_id;
 	PurpleConversation *conv = reply->conv;
+	g_free(action);
 
 	PurpleConnection *pc = purple_conversation_get_connection(conv);
 
@@ -7800,26 +7783,27 @@ discord_reply_cb(DiscordAccount *da, JsonNode *node, gpointer user_data)
 	JsonArray *messages = json_node_get_array(node);
 	guint len = json_array_get_length(messages);
 	JsonObject *referenced_message = json_array_get_object_element(messages, len-1);
+	const gchar *msg_id = json_object_get_string_member(referenced_message, "id");
+	time_t msg_time = discord_time_from_snowflake(to_int(msg_id));
+
+	if (msg_time != intended_time) {
+		g_free(msg_txt);
+		return;
+	}
+
+	gint ret = discord_conversation_send_message(da, room_id, msg_txt, msg_id);
+	if (ret <= 0) {
+		g_free(msg_txt);
+		return;
+	}
+
+
 	JsonObject *reply_author = json_object_get_object_member(referenced_message, "author");
 	const gchar *reply_txt = json_object_get_string_member(referenced_message, "content");
 	DiscordUser *reply_user = discord_upsert_user(da->new_users, reply_author);
 	const gchar *reply_username = discord_create_fullname(reply_user);
 
-	size_t txt_len = g_utf8_strlen(reply_txt, -1);
-	gchar *prev_text;
-
-	// Truncate long messages
-	if (txt_len > 32) {
-		// Get pointer to 33th character of msg_text
-		gchar *tmp = g_utf8_offset_to_pointer(reply_txt, 32);
-		// (tmp - reply_txt) is # bytes (char*) of first 32 characters
-		guint num_bytes = tmp - reply_txt;
-		tmp = g_strndup(reply_txt, num_bytes);
-		prev_text = g_strdup_printf("%s...", tmp);
-		g_free(tmp);
-	} else {
-		prev_text = g_strdup(reply_txt);
-	}
+	gchar *prev_text = discord_truncate_message(reply_txt, 32);
 
 	gchar *reply_msg = g_strdup_printf("<font size=1>┌──@%s: %s</font>", reply_username, prev_text);
 	g_free(prev_text);
@@ -7900,33 +7884,28 @@ discord_chat_reply(DiscordAccount *da, PurpleConversation *conv, guint64 room_id
 
 	g_return_val_if_fail(discord_get_channel_global_int(da, room_id), FALSE); /* TODO rejoin room? */
 
-	/* Get referenced message id */
+	DiscordReply *reply = g_new0(DiscordReply, 1);
+	reply->room_id = room_id;
+	reply->msg_txt = g_strdup(msg_txt);
+	reply->conv = conv;
+
+	time_t msg_time;
 	if (strchr(args[0], ':')) {
-		msg_id = discord_get_message_id_from_timestamp(conv, args[0]);
-		if (msg_id == 0) {
-			g_free(msg_txt);
-			return FALSE;
-		}
+  	msg_time = discord_parse_timestring(args[0]);
 	} else {
-		msg_id = g_strdup(args[0]);
+		gchar *msg_id = g_strdup(args[0]);
+		msg_time = discord_time_from_snowflake(to_int(msg_id));
+		g_free(msg_id);
 	}
+	guint64 placeholder_id = discord_snowflake_from_time(msg_time);
+	DiscordMsgInteraction *send_reply = g_new0(DiscordMsgInteraction, 1);
+	send_reply->msg_time = msg_time;
+	send_reply->data = (gpointer) reply;
 
-	/* Send message */
-	ret = discord_conversation_send_message(da, room_id, msg_txt, msg_id);
-	if (ret > 0) {
-
-		DiscordReply *reply = g_new0(DiscordReply, 1);
-		reply->room_id = room_id;
-		reply->msg_txt = g_strdup(msg_txt);
-		reply->conv = conv;
-
-		gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/channels/%" G_GUINT64_FORMAT "/messages?limit=5&after=%" G_GUINT64_FORMAT, room_id, to_int(msg_id)-1);
-		discord_fetch_url(da, url, NULL, discord_reply_cb, reply);
-		g_free(url);
-	}
-
+	gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/channels/%" G_GUINT64_FORMAT "/messages?limit=5&after=%" G_GUINT64_FORMAT, room_id, placeholder_id);
+	discord_fetch_url(da, url, NULL, discord_reply_cb, send_reply);
+	g_free(url);
 	g_free(msg_txt);
-	g_free(msg_id);
 
 	return TRUE;
 }
@@ -7934,9 +7913,6 @@ discord_chat_reply(DiscordAccount *da, PurpleConversation *conv, guint64 room_id
 static gboolean
 discord_chat_react(DiscordAccount *da, PurpleConversation *conv, guint64 id, gchar **args)
 {
-	//gchar **parts = g_strsplit(args[0], " ", -1);
-
-	gchar *msg_id;
 	const gchar *raw_emoji = args[1];
 	gchar *emoji = NULL;
 	if (g_str_has_prefix(raw_emoji, ":") && g_str_has_suffix(raw_emoji, ":")) {
@@ -7949,7 +7925,10 @@ discord_chat_react(DiscordAccount *da, PurpleConversation *conv, guint64 id, gch
 
 	DiscordGuild *guild = NULL;
 	discord_get_channel_global_int_guild(da, id, &guild);
-	gchar *emoji_id = g_hash_table_lookup(guild->emojis, emoji);
+	gchar *emoji_id = NULL;
+	if (guild != NULL) {
+		emoji_id = g_hash_table_lookup(guild->emojis, emoji);
+	}
 
 	if (emoji_id != NULL) {
 		gchar *tmp = g_strdup_printf("%s:%s", emoji, emoji_id);
@@ -7958,21 +7937,70 @@ discord_chat_react(DiscordAccount *da, PurpleConversation *conv, guint64 id, gch
 		emoji = tmp;
 	}
 
+	if (emoji == NULL) {
+		return FALSE;
+	}
+
 	/* Get referenced message id */
 	if (strchr(args[0], ':')) {
-		msg_id = discord_get_message_id_from_timestamp(conv, args[0]);
-		if (msg_id == 0) {
-			return FALSE;
-		}
-	} else {
-		msg_id = g_strdup(args[0]);
+  	time_t msg_time = discord_parse_timestring(args[0]);
+		guint64 placeholder_id = discord_snowflake_from_time(msg_time);
+		DiscordMsgInteraction *send_react = g_new0(DiscordMsgInteraction, 1);
+		send_react->msg_time = msg_time;
+		send_react->data = (gpointer) emoji;
+
+		gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/channels/%" G_GUINT64_FORMAT "/messages?limit=5&after=%" G_GUINT64_FORMAT, id, placeholder_id);
+		discord_fetch_url(da, url, NULL, discord_send_react_cb, send_react);
+		g_free(url);
+		return TRUE;
 	}
+
+	gchar *msg_id = g_strdup(args[0]);
 
 	gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/channels/%" G_GUINT64_FORMAT "/messages/%s/reactions/%s/%%40me", id, msg_id, purple_url_encode(emoji));
 	discord_fetch_url_with_method(da, "PUT", url, "{}", NULL, NULL);
 	g_free(url);
 	g_free(msg_id);
+	g_free(emoji);
 	return TRUE;
+
+}
+
+static gchar **
+discord_parse_wS_args(gchar **args)
+{
+	gchar *new = purple_markup_strip_html(args[0]);
+	gchar **in_progress = g_strsplit(new, " ", 2);
+	gchar **matcher = g_strsplit(args[0], " ", -1);
+
+	if (g_strv_length(matcher) < 2)
+		return NULL;
+
+	gchar *remaining = NULL;
+	for (gchar **iter = matcher + 1; **iter != '\0'; iter++) {
+		remaining = g_strjoinv(" ", iter);
+		gchar *match = purple_markup_strip_html(remaining);
+
+		if (purple_strequal(match, in_progress[1])) {
+			break;
+		}
+
+		g_free(match);
+		g_free(remaining);
+		remaining = NULL;
+	}
+
+	gchar *tmp;
+	if (remaining == NULL) {
+		tmp = g_strjoin(" ", in_progress[0], in_progress[1], NULL);
+	} else {
+		tmp = g_strjoin(" ", in_progress[0], remaining, NULL);
+	}
+
+	gchar **parsed_args = g_strsplit(tmp, " ", 2);
+	g_free(tmp);
+	g_strfreev(in_progress);
+	return parsed_args;
 
 }
 
@@ -7986,8 +8014,14 @@ discord_cmd_reply(PurpleConversation *conv, const gchar *cmd, gchar **args, gcha
 	if (pc == NULL || (int)room_id == -1) {
 		return PURPLE_CMD_RET_FAILED;
 	}
+	gchar **parsed_args = discord_parse_wS_args(args);
+	if (parsed_args == NULL) {
+		return PURPLE_CMD_RET_FAILED;
+	}
 
-	gboolean is_okay = discord_chat_reply(da, conv, room_id, args);
+	gboolean is_okay = discord_chat_reply(da, conv, room_id, parsed_args);
+
+	g_strfreev(parsed_args);
 
 	if (is_okay)
 		return PURPLE_CMD_RET_OK;
@@ -8119,7 +8153,7 @@ plugin_load(PurplePlugin *plugin, GError **error)
 	discord_spaced_mention_regex = g_regex_new("(?:^|\\s)@([^\\s@]+ [^\\s@]+)\\b", G_REGEX_OPTIMIZE, 0, NULL);
 
 	purple_cmd_register(
-		"reply", "ws", PURPLE_CMD_P_PLUGIN,
+		"reply", "S", PURPLE_CMD_P_PLUGIN,
 		PURPLE_CMD_FLAG_CHAT | PURPLE_CMD_FLAG_PROTOCOL_ONLY | PURPLE_CMD_FLAG_ALLOW_WRONG_ARGS,
 		DISCORD_PLUGIN_ID, discord_cmd_reply,
 		_("reply <msg_id> <message> or reply <timestamp> <message>:  Replies to message"), NULL
@@ -8129,7 +8163,7 @@ plugin_load(PurplePlugin *plugin, GError **error)
 		"react", "ws", PURPLE_CMD_P_PLUGIN,
 		PURPLE_CMD_FLAG_CHAT | PURPLE_CMD_FLAG_PROTOCOL_ONLY | PURPLE_CMD_FLAG_ALLOW_WRONG_ARGS,
 		DISCORD_PLUGIN_ID, discord_cmd_react,
-		_("react <msg_id> <emoji> pr react <timestamp> <emoji>:  Reacts to message with emoji"), NULL
+		_("react <msg_id> <emoji> or react <timestamp> <emoji>:  Reacts to message with emoji"), NULL
 	);
 
 	purple_cmd_register(
