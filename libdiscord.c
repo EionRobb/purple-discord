@@ -8643,19 +8643,10 @@ discord_cmd_thread(PurpleConversation *conv, const gchar *cmd, gchar **args, gch
 	if (pc == NULL || (int)room_id == -1) {
 		return PURPLE_CMD_RET_FAILED;
 	}
-
-	//gchar *iter;
-	//for (iter = args[0]; *iter != '\0'; iter++) {
-	//}
-
-	gchar *new;
-	if (*args[0] == '<') {
-		new = g_strdup(strchr(args[0], '>') + 1);
-	} else {
-		new = args[0];
+	gchar **parsed_args = discord_parse_wS_args(args);
+	if (parsed_args == NULL) {
+		return PURPLE_CMD_RET_FAILED;
 	}
-
-	gchar **parsed_args = g_strsplit(new, " ", 2);
 
 	gboolean is_okay = discord_chat_thread_reply(da, conv, room_id, parsed_args);
 
@@ -8745,7 +8736,7 @@ plugin_load(PurplePlugin *plugin, GError **error)
 
 	purple_cmd_register(
 		"thread", "S", PURPLE_CMD_P_PLUGIN,
-		PURPLE_CMD_FLAG_CHAT | PURPLE_CMD_FLAG_PROTOCOL_ONLY,
+		PURPLE_CMD_FLAG_CHAT | PURPLE_CMD_FLAG_PROTOCOL_ONLY | PURPLE_CMD_FLAG_ALLOW_WRONG_ARGS,
 		DISCORD_PLUGIN_ID, discord_cmd_thread,
 		_("thread <timestamp> <message>:  Sends message to thread"), NULL
 	);
