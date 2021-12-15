@@ -2579,13 +2579,6 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 		}
 	}
 
-	if (purple_account_get_bool(da->account, "show-msg-id", FALSE)) {
-		/* Add msg_id */
-		tmp = g_strdup_printf("%s <a href=\"dscmsg:%ld\"><font size=1>.</font></a>", escaped_content, msg_id);
-		g_free(escaped_content);
-		escaped_content = tmp;
-	}
-
 	if (embeds != NULL) {
 		GString *embed_str = g_string_new(NULL);
 		guint embeds_len = json_array_get_length(embeds);
@@ -3058,15 +3051,7 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 		}
 
 		g_free(name);
-	} else {
-		// Your sent msgs in chats
-		if (conv == NULL) {
-			PurpleChatConversation *chatconv = purple_conversations_find_chat(da->pc, discord_chat_hash(channel_id));
-			conv = PURPLE_CONVERSATION(chatconv);
-		}
-
-		discord_save_message_timestamp(conv, timestamp, msg_id);
-	}
+}
 
 	g_free(escaped_content);
 
@@ -5075,11 +5060,16 @@ discord_got_read_states(DiscordAccount *da, JsonNode *node, gpointer user_data)
 	JsonArray *states = json_object_get_array_member(data, "entries");
 	guint len = json_array_get_length(states);
 
+	g_return_if_fail(purple_account_get_bool(da->account, "fetch-unread-on-start", TRUE));
+
 	for (int i = len - 1; i >= 0; i--) {
 		JsonObject *state = json_array_get_object_element(states, i);
 
 		const gchar *channel = json_object_get_string_member(state, "id");
-		gchar *last_id_s = from_int(discord_get_room_last_id(da, to_int(channel)));
+		guint64 last_id = discord_get_room_last_id(da, to_int(channel));
+		if (last_id == 0)
+			last_id = da->last_load_last_message_id;
+		gchar *last_id_s = from_int(last_id);
 		gint mentions = json_object_get_int_member(state, "mention_count");
 
 		if (mentions && channel) {
@@ -5087,10 +5077,33 @@ discord_got_read_states(DiscordAccount *da, JsonNode *node, gpointer user_data)
 
 			if (isDM) {
 				discord_get_history(da, channel, last_id_s, mentions * 2);
-			} else {
-				/* TODO: fetch channel history */
-				DiscordChannel *dchannel = discord_get_channel_global_int(da, to_int(channel));
-				if (dchannel != NULL) {
+		} else if (!isDM) {
+				DiscordGuild *dguild = NULL;
+				DiscordChannel *dchannel = discord_get_channel_global_int_guild(da, to_int(channel), &dguild);
+				guint64 remote_last_id = 0;
+				if (dchannel)
+					remote_last_id = dchannel->last_message_id;
+
+				int head_count = dguild ? g_hash_table_size(dguild->members) : 0;
+
+				if (
+					last_id < remote_last_id &&
+					(
+						discord_treat_room_as_small(da, to_int(channel), head_count) ||
+						(
+							mentions &&
+							purple_account_get_bool(da->account, "open-chat-on-mention", TRUE)
+						)
+					)
+				) {
+
+					// It's easier if we make use of the join_chat_by_id call in
+					// process_message, so retrieve a single message to send over there
+					gchar *tmp = from_int(remote_last_id - 1);
+					discord_get_history(da, channel, tmp, 1);
+					g_free(tmp);
+
+				} else if (mentions) {
 					purple_debug_misc("discord", "%d unhandled mentions in channel %s\n", mentions, dchannel->name);
 				}
 			}
@@ -6594,7 +6607,7 @@ discord_get_room_history_limiting(DiscordAccount *da, guint64 id)
 static guint64
 discord_get_room_last_id(DiscordAccount *da, guint64 id)
 {
-	guint64 last_message_id = da->last_load_last_message_id;
+	guint64 last_message_id = 0;
 	PurpleBlistNode *blistnode = NULL;
 	gchar *channel_id = from_int(id);
 
@@ -6613,7 +6626,7 @@ discord_get_room_last_id(DiscordAccount *da, guint64 id)
 			last_room_id = (last_room_id << 32) | ((guint64) purple_blist_node_get_int(blistnode, "last_message_id_low") & 0xFFFFFFFF);
 		}
 
-		last_message_id = last_room_id ? last_room_id : da->last_load_last_message_id;
+		last_message_id = last_room_id ? last_room_id : 0;
 	}
 
 	g_free(channel_id);
@@ -6928,18 +6941,23 @@ discord_join_chat_by_id(DiscordAccount *da, guint64 id, gboolean present)
 	guint64 last_message_id = discord_get_room_last_id(da, id);
 	gboolean is_limited = discord_get_room_history_limiting(da, id);
 
+	if (last_message_id == 0) {
+		// There's a problem retrieving the last message id, load last 100 messages
+		is_limited = TRUE;
+	} else if (channel->last_message_id <= last_message_id) {
+		return FALSE;
+	}
+
 	if (is_limited) {
-		if (channel->last_message_id > last_message_id) {
-			gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/channels/%" G_GUINT64_FORMAT "/messages?limit=100&before=%" G_GUINT64_FORMAT, id, channel->last_message_id);
-			discord_fetch_url(da, url, NULL, discord_got_history_static, channel);
-			g_free(url);
-		}
+		gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/channels/%" G_GUINT64_FORMAT "/messages?limit=100&before=%" G_GUINT64_FORMAT, id, channel->last_message_id);
+		discord_fetch_url(da, url, NULL, discord_got_history_static, channel);
+		g_free(url);
+		return TRUE;
 	} else {
-		if (channel->last_message_id > last_message_id) {
-			gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/channels/%" G_GUINT64_FORMAT "/messages?limit=100&after=%" G_GUINT64_FORMAT, id, last_message_id);
-			discord_fetch_url(da, url, NULL, discord_got_history_of_room, channel);
-			g_free(url);
-		}
+		gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/channels/%" G_GUINT64_FORMAT "/messages?limit=100&after=%" G_GUINT64_FORMAT, id, last_message_id);
+		discord_fetch_url(da, url, NULL, discord_got_history_of_room, channel);
+		g_free(url);
+		return TRUE;
 	}
 
 }
@@ -8044,6 +8062,7 @@ discord_add_account_options(GList *account_options)
 	option = purple_account_option_bool_new(_("Display custom emoji as inline images"), "show-custom-emojis", TRUE);
 	account_options = g_list_append(account_options, option);
 
+	option = purple_account_option_bool_new(_("Fetch unread chat messages when account connects"), "fetch-unread-on-start", TRUE);
 	account_options = g_list_append(account_options, option);
 
 	option = purple_account_option_bool_new(_("Open chat when you are @mention'd"), "open-chat-on-mention", TRUE);
