@@ -2169,11 +2169,11 @@ discord_get_thread_color(time_t ts)
 	guint val = (r >>  0) & 255;
 
 	// Make text not black/grey/white
-	if (val < 30) {
-		val |= 30;
+	if (val < 100) {
+		val |= 100;
 	}
-	if (sat < 30) {
-		sat |= 30;
+	if (sat < 75) {
+		sat |= 75;
 	}
 
 	// Formulas taken from Wikipedia:
