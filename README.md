@@ -43,7 +43,7 @@ Thank you to Penaz for this package.
 
 Compiling
 ---------
-Requires devel headers/libs for libpurple and libjson-glib [libglib2.0-dev, libjson-glib-dev and libpurple-dev], as well as ImageMagick [imagemagick] and [gettext].
+Requires devel headers/libs for libpurple and libjson-glib [libglib2.0-dev, libjson-glib-dev and libpurple-dev], [libnss3-dev and libqrencode-dev] (for QR Code authentication), as well as ImageMagick [imagemagick] (to build icons) and [gettext] (for translations).
 ```bash
 	git clone git://github.com/EionRobb/purple-discord.git
 	cd purple-discord
