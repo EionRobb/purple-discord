@@ -4963,15 +4963,16 @@ discord_login(PurpleAccount *account)
 
 	da->token = g_strdup(purple_account_get_string(account, "token", NULL));
 
+	const gchar *account_password = purple_connection_get_password(da->pc);
 	if (da->token) {
 		discord_start_socket(da);
 		
-	} else if (purple_connection_get_password(da->pc)) {
+	} else if (account_password && *account_password) {
 		JsonObject *data = json_object_new();
 		gchar *str;
 
 		json_object_set_string_member(data, "email", purple_account_get_username(account));
-		json_object_set_string_member(data, "password", purple_connection_get_password(da->pc));
+		json_object_set_string_member(data, "password", account_password);
 
 		str = json_object_to_string(data);
 		discord_fetch_url(da, "https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/auth/login", str, discord_login_response, NULL);
@@ -4985,7 +4986,7 @@ discord_login(PurpleAccount *account)
 		da->running_auth_qrcode = TRUE;
 		da->compress = FALSE;
 		discord_start_socket(da);
-#endif		
+#endif
 	}
 
 	if (!chat_conversation_typing_signal) {
