@@ -5125,10 +5125,6 @@ discord_process_qrcode_auth_frame(DiscordAccount *da, const gchar *frame)
 			gsize decrypted_nonce_len = 0;
 			guchar *decrypted_nonce = discord_qrauth_decrypt(da, encrypted_nonce, &decrypted_nonce_len);
 			
-			// proof = SHA256.new(data=decrypted_nonce).digest()
-			// proof = base64.urlsafe_b64encode(proof)
-			// proof = proof.decode().rstrip('=')
-			
 			// sha256 it
 			const guchar *proof_hash = discord_sha256(decrypted_nonce, decrypted_nonce_len);
 			gchar *proof_base64 = g_base64_encode(proof_hash, 32);
@@ -5150,8 +5146,8 @@ discord_process_qrcode_auth_frame(DiscordAccount *da, const gchar *frame)
 			const gchar *fingerprint = json_object_get_string_member(obj, "fingerprint");
 			
 			gchar *qrcode_url = g_strconcat("https://" DISCORD_API_SERVER "/ra/", fingerprint, NULL);
-			guchar *qrcode_image = NULL; //TODO
-			gsize qrcode_image_len = 0;  //TODO
+			guchar *qrcode_image = NULL;
+			gsize qrcode_image_len = 0;
 			gchar *qrcode_utf8 = NULL;
 			
 			QRcode *qrcode = QRcode_encodeString(qrcode_url, 0, QR_ECLEVEL_L, QR_MODE_8, 1);

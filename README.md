@@ -96,6 +96,10 @@ Bitlbee users can then set the token with `acc eionrobb-discord set token ......
 
 spectrum2 users will need to edit the accounts.xml file to add the token. `<setting name='token' type='string'>...</setting>`
 
+Alternatively, if you've compiled with QR Code auth support, leaving the
+password field empty will show a QR Code that you can scan from the Discord
+mobile app to login.
+
 Show your appreciation
 ----------------------
 Did this plugin make your life happier?  [Send me $1](https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=PZMBF2QVF69GA) to say thanks!

@@ -92,9 +92,9 @@ WIN32_PIDGIN3_CFLAGS = -I$(PIDGIN3_TREE_TOP)/libpurple -I$(PIDGIN3_TREE_TOP) -I$
 WIN32_PIDGIN2_LDFLAGS = -L$(PIDGIN_TREE_TOP)/libpurple $(WIN32_LDFLAGS)
 WIN32_PIDGIN3_LDFLAGS = -L$(PIDGIN3_TREE_TOP)/libpurple -L$(WIN32_DEV_TOP)/gplugin-dev/gplugin $(WIN32_LDFLAGS) -lgplugin
 
-ifeq ($(USE_QRCODE_AUTH), 1)
-	WIN32_CFLAGS += -DUSE_QRCODE_AUTH -I$(WIN32_DEV_TOP)/nss-3.24-nspr-4.12/include -I./qrencode-4.1.1
-	WIN32_LDFLAGS += -L$(WIN32_DEV_TOP)/nss-3.24-nspr-4.12/lib -L. -lnss3 -lqrencode
+ifneq ($(USE_QRCODE_AUTH), 0)
+	WIN32_CFLAGS += -DUSE_QRCODE_AUTH -I$(WIN32_DEV_TOP)/nss-3.24-nspr-4.12/include -I$(WIN32_DEV_TOP)/qrencode-4.1.1
+	WIN32_LDFLAGS += -L$(WIN32_DEV_TOP)/nss-3.24-nspr-4.12/lib -L$(WIN32_DEV_TOP)/qrencode-4.1.1 -lnss3 -lqrencode
 	
 	ifneq ($(OS),Windows_NT)
 		CFLAGS += $(shell ${PKG_CONFIG} --cflags nss qrencode)
