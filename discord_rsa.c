@@ -41,7 +41,7 @@ discord_null_cb() {
 }
 
 static void
-discord_display_qrcode(PurpleConnection *pc, const gchar *qr_code_raw, const guchar *image_data, gsize image_data_len)
+discord_display_qrcode(PurpleConnection *pc, const gchar *qr_code_raw, const gchar *qrcode_utf8, const guchar *image_data, gsize image_data_len)
 {
     DiscordAccount *da = purple_connection_get_protocol_data(pc);
 
@@ -49,11 +49,18 @@ discord_display_qrcode(PurpleConnection *pc, const gchar *qr_code_raw, const guc
     PurpleRequestFieldGroup *group = purple_request_field_group_new(NULL);
     purple_request_fields_add_group(fields, group);
 
-    PurpleRequestField *string_field = purple_request_field_string_new("qr_string", _("QR Code Data"), qr_code_raw, FALSE);
-    purple_request_field_group_add_field(group, string_field);
+	PurpleRequestField *field;
+    field = purple_request_field_string_new("qr_string", _("QR Code Data"), qr_code_raw, FALSE);
+	purple_request_field_string_set_editable(field, FALSE);
+    purple_request_field_group_add_field(group, field);
 	
-    PurpleRequestField *image_field = purple_request_field_image_new("qr_image", _("QR Code Image"), (const gchar *)image_data, image_data_len);
-    purple_request_field_group_add_field(group, image_field);
+    field = purple_request_field_image_new("qr_image", _("QR Code Image"), (const gchar *)image_data, image_data_len);
+	purple_request_field_image_set_scale(field, 2, 2);
+    purple_request_field_group_add_field(group, field);
+	
+	field = purple_request_field_string_new("qr_code", _("QR Code Data"), qrcode_utf8, TRUE);
+	purple_request_field_string_set_editable(field, FALSE);
+    purple_request_field_group_add_field(group, field);
 
     const gchar *username = purple_account_get_username(da->account);
     gchar *secondary = g_strdup_printf(_("Discord account %s"), username);
@@ -121,6 +128,7 @@ qrcode_utf8_output(const QRcode *qrcode)
 	for (x = 0; x < realwidth; x++) {
 		g_string_append(out, full);
 	}
+	g_string_append_c(out, '\n');
 
 	/* data */
 	for(y = 0; y < qrcode->width; y += 2) {
@@ -347,7 +355,7 @@ discord_qrauth_get_pubkey_base64(DiscordAccount *da)
 }
 
 guchar *
-discord_qrauth_generate_proof(DiscordAccount *da, const gchar *encrypted_nonce, gsize *proof_len)
+discord_qrauth_decrypt(DiscordAccount *da, const gchar *encrypted_nonce, gsize *proof_len)
 {
 	SECKEYPublicKey *pubKey = g_dataset_get_data(da, "pubkey");
 	SECKEYPrivateKey *prvKey = g_dataset_get_data(da, "prvkey");
@@ -362,9 +370,21 @@ discord_qrauth_generate_proof(DiscordAccount *da, const gchar *encrypted_nonce, 
 	}
 	
 	nonce = g_base64_decode(encrypted_nonce, &nonce_len);
+
+	CK_RSA_PKCS_OAEP_PARAMS oaep_params;
+	oaep_params.source = CKZ_DATA_SPECIFIED;
+	oaep_params.pSourceData = NULL;
+	oaep_params.ulSourceDataLen = 0;
+	oaep_params.mgf = CKG_MGF1_SHA256;
+	oaep_params.hashAlg = CKM_SHA256;
+	
+	SECItem param;
+	param.type = siBuffer;
+	param.data = (unsigned char*) &oaep_params;
+	param.len = sizeof(oaep_params);
 	
 	out = g_new0(unsigned char, 20480);
-	rv = PK11_PubDecryptRaw(prvKey, out, &outlen, 20480, nonce, nonce_len);
+	rv = PK11_PrivDecrypt(prvKey, CKM_RSA_PKCS_OAEP, &param, out, &outlen, 20480, nonce, nonce_len);
 	if (rv != SECSuccess)
 	{
 		purple_debug_error("discord", "Decrypt with Private Key failed (err %d)\n", rv);

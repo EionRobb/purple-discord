@@ -5122,15 +5122,15 @@ discord_process_qrcode_auth_frame(DiscordAccount *da, const gchar *frame)
 			//sever created a proof, send one back
 			const gchar *encrypted_nonce = json_object_get_string_member(obj, "encrypted_nonce");
 			
-			gsize proof_len = 0;
-			guchar *proof_raw = discord_qrauth_generate_proof(da, encrypted_nonce, &proof_len);
+			gsize decrypted_nonce_len = 0;
+			guchar *decrypted_nonce = discord_qrauth_decrypt(da, encrypted_nonce, &decrypted_nonce_len);
 			
 			// proof = SHA256.new(data=decrypted_nonce).digest()
 			// proof = base64.urlsafe_b64encode(proof)
 			// proof = proof.decode().rstrip('=')
 			
 			// sha256 it
-			const guchar *proof_hash = discord_sha256(proof_raw, proof_len);
+			const guchar *proof_hash = discord_sha256(decrypted_nonce, decrypted_nonce_len);
 			gchar *proof_base64 = g_base64_encode(proof_hash, 32);
 			discord_base64_make_urlsafe(proof_base64);
 			
@@ -5143,7 +5143,7 @@ discord_process_qrcode_auth_frame(DiscordAccount *da, const gchar *frame)
 
 			json_object_unref(obj);
 			g_free(proof_base64);
-			g_free(proof_raw);
+			g_free(decrypted_nonce);
 			
 		} else if (purple_strequal(op, "pending_remote_init")) {
 			// display the QR code to the user now
@@ -5158,7 +5158,7 @@ discord_process_qrcode_auth_frame(DiscordAccount *da, const gchar *frame)
 			qrcode_utf8 = qrcode_utf8_output(qrcode);
 			qrcode_image = qrcode_tga_output(qrcode, &qrcode_image_len);
 			
-			discord_display_qrcode(da->pc, qrcode_url, qrcode_image, qrcode_image_len);
+			discord_display_qrcode(da->pc, qrcode_url, qrcode_utf8, qrcode_image, qrcode_image_len);
 			
 			g_free(qrcode_url);
 			g_free(qrcode_image);
@@ -5171,12 +5171,13 @@ discord_process_qrcode_auth_frame(DiscordAccount *da, const gchar *frame)
 			// the app confirmed, grab the token and LETS DO THIS THING
 			const gchar *encrypted_token = json_object_get_string_member(obj, "encrypted_token");
 			
-			gchar *token = (gchar *) discord_qrauth_generate_proof(da, encrypted_token, NULL);
+			gchar *token = (gchar *) discord_qrauth_decrypt(da, encrypted_token, NULL);
 			purple_account_set_string(da->account, "token", token);
 			
 			discord_qrauth_free_keys(da);
 			
 			da->token = g_strdup(token);
+			purple_request_close_with_handle(da->pc);
 
 			da->running_auth_qrcode = FALSE;
 			da->compress = TRUE;
@@ -5185,6 +5186,8 @@ discord_process_qrcode_auth_frame(DiscordAccount *da, const gchar *frame)
 		} else if (purple_strequal(op, "cancel")) {
 			// they bailed on us!  how rude!
 			purple_debug_info("discord", "User cancelled the auth\n");
+			
+			purple_request_close_with_handle(da->pc);
 			
 			purple_connection_error(da->pc, PURPLE_CONNECTION_ERROR_AUTHENTICATION_FAILED, _("Cancelled QR Code auth"));
 			discord_qrauth_free_keys(da);
