@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2021-05-20 19:31+1200\n"
+"POT-Creation-Date: 2022-01-09 21:03+1300\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -40,6 +40,20 @@ msgid "EDIT: %s"
 msgstr ""
 
 msgid "Unknown user"
+msgstr ""
+
+#, c-format
+msgid "%s started a call"
+msgstr ""
+
+#, c-format
+msgid "%s joined the guild!"
+msgstr ""
+
+msgid "Someone"
+msgstr ""
+
+msgid "A new thread has been started!"
 msgstr ""
 
 msgid "Group DMs"
@@ -76,6 +90,9 @@ msgid "Bad username/password"
 msgstr ""
 
 msgid "Username needs to be an email address"
+msgstr ""
+
+msgid "Cancelled QR Code auth"
 msgstr ""
 
 msgid "Websocket failed to send"
@@ -147,6 +164,18 @@ msgstr ""
 msgid "Do Not Disturb"
 msgstr ""
 
+msgid "Mobile - Online"
+msgstr ""
+
+msgid "Mobile - Idle"
+msgstr ""
+
+msgid "Mobile - Offline"
+msgstr ""
+
+msgid "Mobile - Do Not Disturb"
+msgstr ""
+
 msgid "Status"
 msgstr ""
 
@@ -165,10 +194,31 @@ msgstr ""
 msgid "Invisible"
 msgstr ""
 
+msgid "Mobile"
+msgstr ""
+
 msgid "Unmute"
 msgstr ""
 
 msgid "Mute"
+msgstr ""
+
+msgid "Grab Full History"
+msgstr ""
+
+msgid "Limit Grabbed History"
+msgstr ""
+
+msgid "Default"
+msgstr ""
+
+msgid "Large Channel"
+msgstr ""
+
+msgid "Small Channel"
+msgstr ""
+
+msgid "Force Treat as..."
 msgstr ""
 
 #, c-format
@@ -195,6 +245,9 @@ msgid "Display images in conversations"
 msgstr ""
 
 msgid "Display images in large servers"
+msgstr ""
+
+msgid "Max displayed image width (0 disables)"
 msgstr ""
 
 msgid "Display custom emoji as inline images"

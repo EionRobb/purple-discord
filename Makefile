@@ -30,7 +30,7 @@ CFLAGS ?= -O2 -g -pipe -Wall
 CFLAGS += -std=c99 -DDISCORD_PLUGIN_VERSION='"$(PLUGIN_VERSION)"' -DMARKDOWN_PIDGIN
 
 # Comment out to disable localisation
-CFLAGS += -DENABLE_NLS
+CFLAGS += -DENABLE_NLS 
 
 # Do some nasty OS and purple version detection
 ifeq ($(OS),Windows_NT)
@@ -91,6 +91,16 @@ WIN32_PIDGIN2_CFLAGS = -I$(PIDGIN_TREE_TOP)/libpurple -I$(PIDGIN_TREE_TOP) $(WIN
 WIN32_PIDGIN3_CFLAGS = -I$(PIDGIN3_TREE_TOP)/libpurple -I$(PIDGIN3_TREE_TOP) -I$(WIN32_DEV_TOP)/gplugin-dev/gplugin $(WIN32_CFLAGS)
 WIN32_PIDGIN2_LDFLAGS = -L$(PIDGIN_TREE_TOP)/libpurple $(WIN32_LDFLAGS)
 WIN32_PIDGIN3_LDFLAGS = -L$(PIDGIN3_TREE_TOP)/libpurple -L$(WIN32_DEV_TOP)/gplugin-dev/gplugin $(WIN32_LDFLAGS) -lgplugin
+
+ifeq ($(USE_QRCODE_AUTH), 1)
+	WIN32_CFLAGS += -DUSE_QRCODE_AUTH -I$(WIN32_DEV_TOP)/nss-3.24-nspr-4.12/include -I./qrencode-4.1.1
+	WIN32_LDFLAGS += -L$(WIN32_DEV_TOP)/nss-3.24-nspr-4.12/lib -L. -lnss3 -lqrencode
+	
+	ifneq ($(OS),Windows_NT)
+		CFLAGS += $(shell ${PKG_CONFIG} --cflags nss qrencode)
+		LDFLAGS += $(shell ${PKG_CONFIG} --libs nss qrencode)
+	endif
+endif
 
 CFLAGS += -DLOCALEDIR=\"$(LOCALEDIR)\"
 
