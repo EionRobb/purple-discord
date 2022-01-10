@@ -8761,7 +8761,7 @@ plugin_load(PurplePlugin *plugin, GError **error)
 			"threads", "", PURPLE_CMD_P_PLUGIN,
 			PURPLE_CMD_FLAG_CHAT | PURPLE_CMD_FLAG_PROTOCOL_ONLY | PURPLE_CMD_FLAG_ALLOW_WRONG_ARGS,
 						DISCORD_PLUGIN_ID, discord_cmd_threads,
-						_("threads:  Display threads"), NULL
+						_("threads:  Display active channel threads"), NULL
 	);
 
 #if 0
