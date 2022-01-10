@@ -2164,6 +2164,7 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 	JsonObject *referenced_message = json_object_get_object_member(data, "referenced_message");
 	JsonArray *attachments = json_object_get_array_member(data, "attachments");
 	JsonArray *embeds = json_object_get_array_member(data, "embeds");
+	JsonArray *stickers = json_object_get_array_member(data, "sticker_items");
 	JsonArray *reactions = json_object_get_array_member(data, "reactions");
 	JsonArray *mentions = json_object_get_array_member(data, "mentions");
 	JsonArray *mention_roles = json_object_get_array_member(data, "mention_roles");
@@ -2285,6 +2286,20 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 		tmp = g_strdup_printf(prefix_fmt, escaped_content);
 		g_free(escaped_content);
 		escaped_content = tmp;
+	}
+
+	if (stickers != NULL) {
+		guint stickers_len = json_array_get_length(stickers);
+
+		for (guint n = 0; n < stickers_len; n++) {
+			JsonObject *sticker = json_array_get_object_element(stickers, n);
+			const gchar *sticker_id = json_object_get_string_member(sticker, "id");
+			const gchar *sticker_format = json_object_get_int_member(sticker, "format_type") == 3 ? "json" : "png";
+
+			tmp = g_strdup_printf("%s\nhttps://" DISCORD_CDN_SERVER "/stickers/%s.%s", escaped_content, sticker_id, sticker_format);
+			g_free(escaped_content);
+			escaped_content = tmp;
+		}
 	}
 
 	if (embeds != NULL) {
