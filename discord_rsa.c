@@ -44,6 +44,26 @@ static void
 discord_display_qrcode(PurpleConnection *pc, const gchar *qr_code_raw, const gchar *qrcode_utf8, const guchar *image_data, gsize image_data_len)
 {
     DiscordAccount *da = purple_connection_get_protocol_data(pc);
+	PurpleRequestUiOps *ui_ops = purple_request_get_ui_ops();
+	
+	if (!ui_ops->request_fields) {
+		// The UI hasn't implemented the func we want, just output as a message instead
+		
+		gchar *msg_out;
+		gpointer img_data = g_memdup2(image_data, image_data_len);
+		int img_id = purple_imgstore_add_with_id(img_data, image_data_len, NULL);
+
+		if (img_id >= 0) {
+			msg_out = g_strdup_printf("%s: <img id=\"%u\" src=\"purple-image:%u\" alt=\"%s\"/><br />%s", _("Please scan this QR code with your phone"), img_id, img_id, qr_code_raw, qrcode_utf8);
+		} else {
+			msg_out = g_strdup_printf("%s: %s<br />%s", _("Please scan this QR code with your phone"), qr_code_raw, qrcode_utf8);
+		}
+		
+		purple_serv_got_im(pc, _("Logon QR Code"), msg_out, 0, time(NULL));
+		
+		g_free(msg_out);
+		return;
+	}
 
     PurpleRequestFields *fields = purple_request_fields_new();
     PurpleRequestFieldGroup *group = purple_request_field_group_new(NULL);
