@@ -1534,7 +1534,7 @@ discord_send_auth(DiscordAccount *da)
 
 		json_object_set_int_member(obj, "op", OP_IDENTIFY);
 
-		json_object_set_int_member(data, "capabilities", 125);
+		json_object_set_int_member(data, "capabilities", 253);
 
 		json_object_set_string_member(properties, "os", "Windows");
 		json_object_set_string_member(properties, "browser", "Chrome");
