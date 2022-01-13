@@ -30,7 +30,7 @@ CFLAGS ?= -O2 -g -pipe -Wall
 CFLAGS += -std=c99 -DDISCORD_PLUGIN_VERSION='"$(PLUGIN_VERSION)"' -DMARKDOWN_PIDGIN
 
 # Comment out to disable localisation
-CFLAGS += -DENABLE_NLS 
+CFLAGS += -DENABLE_NLS
 
 # Do some nasty OS and purple version detection
 ifeq ($(OS),Windows_NT)

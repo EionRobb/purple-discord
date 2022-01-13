@@ -31,7 +31,6 @@
 #endif
 
 
-// Some of this is pinched from the gowhatsapp plugin
 // Info from https://gitlab.com/beeper/discord/-/tree/main/remoteauth
 //       and https://luna.gitlab.io/discord-unofficial-docs/desktop_remote_auth.html
 
@@ -43,7 +42,7 @@ discord_null_cb() {
 static void
 discord_display_qrcode(PurpleConnection *pc, const gchar *qr_code_raw, const gchar *qrcode_utf8, const guchar *image_data, gsize image_data_len)
 {
-    DiscordAccount *da = purple_connection_get_protocol_data(pc);
+	DiscordAccount *da = purple_connection_get_protocol_data(pc);
 	PurpleRequestUiOps *ui_ops = purple_request_get_ui_ops();
 	
 	if (!ui_ops->request_fields) {
@@ -65,39 +64,39 @@ discord_display_qrcode(PurpleConnection *pc, const gchar *qr_code_raw, const gch
 		return;
 	}
 
-    PurpleRequestFields *fields = purple_request_fields_new();
-    PurpleRequestFieldGroup *group = purple_request_field_group_new(NULL);
-    purple_request_fields_add_group(fields, group);
+	PurpleRequestFields *fields = purple_request_fields_new();
+	PurpleRequestFieldGroup *group = purple_request_field_group_new(NULL);
+	purple_request_fields_add_group(fields, group);
 
 	PurpleRequestField *field;
-    field = purple_request_field_string_new("qr_string", _("QR Code Data"), qr_code_raw, FALSE);
+	field = purple_request_field_string_new("qr_string", _("QR Code Data"), qr_code_raw, FALSE);
 	purple_request_field_string_set_editable(field, FALSE);
-    purple_request_field_group_add_field(group, field);
-	
-    field = purple_request_field_image_new("qr_image", _("QR Code Image"), (const gchar *)image_data, image_data_len);
+	purple_request_field_group_add_field(group, field);
+
+	field = purple_request_field_image_new("qr_image", _("QR Code Image"), (const gchar *)image_data, image_data_len);
 	purple_request_field_image_set_scale(field, 2, 2);
-    purple_request_field_group_add_field(group, field);
-	
+	purple_request_field_group_add_field(group, field);
+
 	field = purple_request_field_string_new("qr_code", _("QR Code Data"), qrcode_utf8, TRUE);
 	purple_request_field_string_set_editable(field, FALSE);
-    purple_request_field_group_add_field(group, field);
+	purple_request_field_group_add_field(group, field);
 
-    const gchar *username = purple_account_get_username(da->account);
-    gchar *secondary = g_strdup_printf(_("Discord account %s"), username);
+	const gchar *username = purple_account_get_username(da->account);
+	gchar *secondary = g_strdup_printf(_("Discord account %s"), username);
 
-    purple_request_fields(
-        da->pc, /*handle*/
-        _("Logon QR Code"), /*title*/
-        _("Please scan this QR code with your phone"), /*primary*/
-        secondary, /*secondary*/
-        fields, /*fields*/
-        _("OK"), G_CALLBACK(discord_null_cb), /*OK*/
-        _("Dismiss"), G_CALLBACK(discord_null_cb), /*Cancel*/
-        NULL, /*account*/
-        username, /*username*/
-        NULL, /*conversation*/
-        NULL /*data*/
-    );
+	purple_request_fields(
+		da->pc, /*handle*/
+		_("Logon QR Code"), /*title*/
+		_("Please scan this QR code with your phone"), /*primary*/
+		secondary, /*secondary*/
+		fields, /*fields*/
+		_("OK"), G_CALLBACK(discord_null_cb), /*OK*/
+		_("Dismiss"), G_CALLBACK(discord_null_cb), /*Cancel*/
+		NULL, /*account*/
+		username, /*username*/
+		NULL, /*conversation*/
+		NULL /*data*/
+	);
 	
 	g_free(secondary);
 	
@@ -106,10 +105,11 @@ discord_display_qrcode(PurpleConnection *pc, const gchar *qr_code_raw, const gch
 static gchar *
 discord_base64_make_urlsafe(gchar *inout)
 {
-	//basically - and _ replace + and /
+	// Basically - and _ replace + and /
 	purple_util_chrreplace(inout, '+', '-');
 	purple_util_chrreplace(inout, '/', '_');
 	
+	// Trim trailing =
 	int i;
 	for(i = strlen(inout) - 1; i >= 0; i--) {
 		if(inout[i] == '=') {
@@ -361,10 +361,7 @@ discord_qrauth_get_pubkey_base64(DiscordAccount *da)
 
 	SECItem *cert_der = PK11_DEREncodePublicKey(pubKey);
 	
-	// gchar *b64crt = NSSBase64_EncodeItem(NULL, NULL, 0, cert_der);
-	// purple_str_strip_char(b64crt, '\n');
-	// purple_str_strip_char(b64crt, '\r');
-	
+	// Can't use NSSBase64_EncodeItem as we need the base64 without whitespace
 	gchar *b64crt = g_base64_encode(cert_der->data, cert_der->len);
 	
 	SECITEM_FreeItem(cert_der, PR_TRUE);
