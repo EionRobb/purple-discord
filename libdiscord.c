@@ -414,7 +414,7 @@ discord_time_from_snowflake(guint64 id)
 static guint64
 discord_snowflake_from_time(time_t timestamp)
 {
-	return (guint64)(((timestamp*1000) - DISCORD_EPOCH_MS) << 22);
+	return ((((guint64)timestamp)*1000) - DISCORD_EPOCH_MS) << 22;
 }
 
 /** libpurple requires unique chat id's per conversation.
@@ -2105,6 +2105,8 @@ discord_parse_timestring(const gchar *timestring)
 	g_free(verified_timestring);
 
 	if (msg_time == NULL) {
+		g_time_zone_unref(local_time);
+		g_date_time_unref(now);
 		return 0;
 	}
 
@@ -2115,6 +2117,9 @@ discord_parse_timestring(const gchar *timestring)
 		msg_time = temp;
 
 		if (g_date_time_difference(msg_time, now) > 0)
+			g_time_zone_unref(local_time);
+			g_date_time_unref(msg_time);
+			g_date_time_unref(now);
 			return 0;
 	}
 
@@ -2203,6 +2208,7 @@ discord_get_formatted_thread_timestamp(time_t ts) {
 	gchar *time_str = discord_parse_timestamp(ts);
 
 	gchar *timestring = g_strdup_printf("<font color=\"#%s\">%s</font>", color, time_str);
+	g_free(color);
 
 	return timestring;
 }
@@ -2558,6 +2564,7 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 				color,
 				escaped_content
 			);
+			g_free(thread_ts);
 			g_free(escaped_content);
 			escaped_content = tmp;
 			tmp = NULL;
@@ -2969,7 +2976,7 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 			g_free(new_thread_txt);
 
 
-			if (msg_type == MESSAGE_THREAD_STARTER_MESSAGE) {
+			if (msg_type == MESSAGE_THREAD_STARTER_MESSAGE && thread) {
 				// Get array of messages because single-message endpoint is bot-only
 				gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/channels/%" G_GUINT64_FORMAT "/messages?limit=5&after=%" G_GUINT64_FORMAT, channel_id, ref_id-1);
 				discord_fetch_url(da, url, NULL, discord_thread_parent_cb, from_int(thread->id));
@@ -3683,13 +3690,13 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		DiscordGuild *guild = discord_get_guild(da, guild_id);
 		JsonArray *threads = json_object_get_array_member(data, "threads");
 
-		for (int i = 0; i < json_array_get_length(threads); i++) {
+		for (guint i = 0; i < json_array_get_length(threads); i++) {
 			JsonObject *thread = json_array_get_object_element(threads, i);
 			guint64 thread_id = to_int(json_object_get_string_member(thread, "id"));
 			guint64 parent_id = to_int(json_object_get_string_member(thread, "parent_id"));
 			DiscordChannel *parent = discord_get_channel_global_int(da, parent_id);
 
-			if (!g_hash_table_contains_int64(parent->threads, thread_id)) {
+			if (parent && !g_hash_table_contains_int64(parent->threads, thread_id)) {
 				discord_add_thread(da, guild, parent, thread, guild_id);
 			}
 		}
@@ -5920,6 +5927,11 @@ discord_thread_parent_cb(DiscordAccount *da, JsonNode *node, gpointer user_data)
 	}
 	JsonArray *messages = json_node_get_array(node);
 	guint len = json_array_get_length(messages);
+
+	if (len == 0) {
+		return;
+	}
+
 	JsonObject *message = json_array_get_object_element(messages, len-1);
 	gchar *thread_id = (gchar *)user_data;
 
@@ -6120,22 +6132,17 @@ discord_chat_threads(PurpleConnection *pc, int id, const gchar *filter)
 	DiscordGuild *guild = NULL;
 	DiscordChannel *channel = discord_get_channel_global_int_guild(da, room_id, &guild);
 
+	if (channel == NULL) {
+		return;
+	}
+
 	//gchar *url;
 
 	GHashTableIter thread_iter;
 	gpointer key, value;
 	/* TODO: get archived thread data */
-	if (filter && purple_strequal(filter, "guild")) {
-			//g_hash_table_iter_init(&thread_iter, guild->threads);
-			g_hash_table_iter_init(&thread_iter, channel->threads);
-		//url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/guilds/%" G_GUINT64_FORMAT "/threads", guild->id);
-	} else {
-			g_hash_table_iter_init(&thread_iter, channel->threads);
-	}
-	//discord_fetch_url(da, url, NULL, discord_got_threads, chatconv);
-	//g_free(url);
+	g_hash_table_iter_init(&thread_iter, channel->threads);
 
-	//gchar *threads_list = g_strdup(_(" Last Message Time  | Name"));
 	gchar *threads_list = g_strdup(_("Active Threads:\n<pre>Creation Time       | Last Message Time   | Name"));
 
 	while (g_hash_table_iter_next(&thread_iter, &key, &value)) {
@@ -8222,8 +8229,11 @@ discord_get_thread_id_from_timestamp(DiscordAccount *da, PurpleConversation *con
 	}
 	guint64 room_id = *room_id_ptr;
 	DiscordChannel *channel = discord_get_channel_global_int(da, room_id);
+	if (!channel) {
+		return NULL;
+	}
 
-  time_t thread_time = discord_parse_timestring(timestamp);
+	time_t thread_time = discord_parse_timestring(timestamp);
 	if (!thread_time) {
 		return NULL;
 	}
@@ -8295,6 +8305,7 @@ discord_chat_thread_reply(DiscordAccount *da, PurpleConversation *conv, guint64 
 				color,
 				msg_txt
 			);
+			g_free(thread_ts);
 			g_free(msg_txt);
 			msg_txt = tmp;
 		}
@@ -8386,7 +8397,7 @@ discord_chat_reply(DiscordAccount *da, PurpleConversation *conv, guint64 room_id
 
 	time_t msg_time;
 	if (strchr(args[0], ':')) {
-  	msg_time = discord_parse_timestring(args[0]);
+		msg_time = discord_parse_timestring(args[0]);
 	} else {
 		gchar *msg_id = g_strdup(args[0]);
 		msg_time = discord_time_from_snowflake(to_int(msg_id));
@@ -8438,7 +8449,7 @@ discord_chat_react(DiscordAccount *da, PurpleConversation *conv, guint64 id, gch
 
 	/* Get referenced message id */
 	if (strchr(args[0], ':')) {
-  	time_t msg_time = discord_parse_timestring(args[0]);
+		time_t msg_time = discord_parse_timestring(args[0]);
 		guint64 placeholder_id = discord_snowflake_from_time(msg_time);
 		DiscordMsgInteraction *send_react = g_new0(DiscordMsgInteraction, 1);
 		send_react->msg_time = msg_time;
@@ -8468,8 +8479,11 @@ discord_parse_wS_args(gchar **args)
 	gchar **in_progress = g_strsplit(new, " ", 2);
 	gchar **matcher = g_strsplit(args[0], " ", -1);
 
-	if (g_strv_length(matcher) < 2)
+	if (g_strv_length(matcher) < 2) {
+		g_strfreev(matcher);
+		g_strfreev(in_progress);
 		return NULL;
+	}
 
 	gchar *remaining = NULL;
 	for (gchar **iter = matcher + 1; **iter != '\0'; iter++) {
@@ -8494,6 +8508,7 @@ discord_parse_wS_args(gchar **args)
 
 	gchar **parsed_args = g_strsplit(tmp, " ", 2);
 	g_free(tmp);
+	g_strfreev(matcher);
 	g_strfreev(in_progress);
 	return parsed_args;
 
@@ -8531,7 +8546,7 @@ discord_cmd_react(PurpleConversation *conv, const gchar *cmd, gchar **args, gcha
 	DiscordAccount *da = purple_connection_get_protocol_data(pc);
 	guint64 id = *(guint64 *) purple_conversation_get_data(conv, "id");
 
-	if (pc == NULL || id == -1) {
+	if (pc == NULL || (int)id == -1) {
 		return PURPLE_CMD_RET_FAILED;
 	}
 
