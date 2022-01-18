@@ -2116,11 +2116,12 @@ discord_parse_timestring(const gchar *timestring)
 		g_date_time_unref(msg_time);
 		msg_time = temp;
 
-		if (g_date_time_difference(msg_time, now) > 0)
+		if (g_date_time_difference(msg_time, now) > 0) {
 			g_time_zone_unref(local_time);
 			g_date_time_unref(msg_time);
 			g_date_time_unref(now);
 			return 0;
+		}
 	}
 
 	timestamp = g_date_time_to_unix(msg_time);
