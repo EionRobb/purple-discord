@@ -58,7 +58,7 @@ discord_display_qrcode(PurpleConnection *pc, const gchar *qr_code_raw, const gch
 			msg_out = g_strdup_printf("%s: %s<br />%s", _("Please scan this QR code with your phone"), qr_code_raw, qrcode_utf8);
 		}
 		
-		purple_serv_got_im(pc, _("Logon QR Code"), msg_out, PURPLE_MESSAGE_RECV, time(NULL));
+		purple_serv_got_im(pc, _("Logon QR Code"), msg_out, PURPLE_MESSAGE_RECV | PURPLE_MESSAGE_IMAGES, time(NULL));
 		
 		g_free(msg_out);
 		return;
