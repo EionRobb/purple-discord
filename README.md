@@ -43,7 +43,7 @@ Thank you to Penaz for this package.
 
 Compiling
 ---------
-Requires devel headers/libs for libpurple and libjson-glib [libglib2.0-dev, libjson-glib-dev and libpurple-dev], as well as ImageMagick [imagemagick] and [gettext].
+Requires devel headers/libs for libpurple and libjson-glib [libglib2.0-dev, libjson-glib-dev and libpurple-dev], [libnss3-dev and libqrencode-dev] (for QR Code authentication), as well as ImageMagick [imagemagick] (to build icons) and [gettext] (for translations).
 ```bash
 	git clone git://github.com/EionRobb/purple-discord.git
 	cd purple-discord
@@ -133,6 +133,10 @@ you'll need to grab an auth token from your browsers local storage:
 Bitlbee users can then set the token with `acc eionrobb-discord set token ......`.
 
 spectrum2 users will need to edit the accounts.xml file to add the token. `<setting name='token' type='string'>...</setting>`
+
+Alternatively, if you've compiled with QR Code auth support, leaving the
+password field empty will show a QR Code that you can scan from the Discord
+mobile app to login.
 
 Show your appreciation
 ----------------------

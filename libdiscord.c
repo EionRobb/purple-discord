@@ -74,6 +74,12 @@
 #define DISCORD_API_VERSION "v9"
 #define DISCORD_CDN_SERVER "cdn.discordapp.com"
 
+#ifdef USE_QRCODE_AUTH
+#define DISCORD_QRCODE_AUTH_SERVER "remote-auth-gateway.discord.gg"
+#define DISCORD_QRCODE_AUTH_SERVER_PORT 443
+#define DISCORD_QRCODE_AUTH_SERVER_PATH "/?v=1"
+#endif
+
 #define DISCORD_EPOCH_MS 1420070400000
 
 #define DISCORD_MESSAGE_NORMAL (0)
@@ -361,7 +367,16 @@ typedef struct {
 	z_stream *zstream;
 
 	PurpleHttpKeepalivePool *http_keepalive_pool;
+	
+#ifdef USE_QRCODE_AUTH
+	gboolean running_auth_qrcode;
+#endif
+
 } DiscordAccount;
+
+#ifdef USE_QRCODE_AUTH
+#	include "discord_rsa.c"
+#endif
 
 typedef struct {
 	DiscordAccount *account;
@@ -1571,6 +1586,12 @@ discord_send_heartbeat(gpointer userdata)
 {
 	DiscordAccount *da = userdata;
 	JsonObject *obj = json_object_new();
+	
+#ifdef USE_QRCODE_AUTH
+	if (da->running_auth_qrcode)
+		json_object_set_string_member(obj, "op", "heartbeat");
+	else
+#endif
 
 	json_object_set_int_member(obj, "op", OP_HEARTBEAT);
 	json_object_set_int_member(obj, "d", da->seq);
@@ -5322,20 +5343,30 @@ discord_login(PurpleAccount *account)
 
 	da->token = g_strdup(purple_account_get_string(account, "token", NULL));
 
+	const gchar *account_password = purple_connection_get_password(da->pc);
 	if (da->token) {
 		discord_start_socket(da);
-	} else {
+		
+	} else if (account_password && *account_password) {
 		JsonObject *data = json_object_new();
 		gchar *str;
 
 		json_object_set_string_member(data, "email", purple_account_get_username(account));
-		json_object_set_string_member(data, "password", purple_connection_get_password(da->pc));
+		json_object_set_string_member(data, "password", account_password);
 
 		str = json_object_to_string(data);
 		discord_fetch_url(da, "https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/auth/login", str, discord_login_response, NULL);
 
 		g_free(str);
 		json_object_unref(data);
+		
+	} else {
+#ifdef	USE_QRCODE_AUTH
+		//start auth websocket
+		da->running_auth_qrcode = TRUE;
+		da->compress = FALSE;
+		discord_start_socket(da);
+#endif
 	}
 
 	if (!chat_conversation_typing_signal) {
@@ -5417,6 +5448,136 @@ discord_close(PurpleConnection *pc)
 	da->self_username = NULL;
 	g_free(da);
 }
+
+#ifdef USE_QRCODE_AUTH
+
+static gboolean
+discord_process_qrcode_auth_frame(DiscordAccount *da, const gchar *frame)
+{
+	JsonParser *parser = json_parser_new();
+	JsonNode *root;
+	
+	purple_debug_info("discord", "got auth frame data: %s\n", frame);
+
+	if (!json_parser_load_from_data(parser, frame, -1, NULL)) {
+		purple_debug_error("discord", "Error parsing response: %s\n", frame);
+		return FALSE;
+	}
+
+	root = json_parser_get_root(parser);
+
+	if (root != NULL) {
+		JsonObject *obj = json_node_get_object(root);
+		const gchar *op = json_object_get_string_member(obj, "op");
+		
+		if (purple_strequal(op, "hello")) {
+			//Send ping every heartbeat_interval milliseconds
+			gint64 heartbeat_interval = json_object_get_int_member(obj, "heartbeat_interval");
+			
+			if (da->heartbeat_timeout) {
+				g_source_remove(da->heartbeat_timeout);
+			}
+
+			if (heartbeat_interval) {
+				da->heartbeat_timeout = g_timeout_add(heartbeat_interval, discord_send_heartbeat, da);
+			} else {
+				da->heartbeat_timeout = 0;
+			}
+			
+			//connected all ok
+			discord_qrauth_generate_keys(da);
+			gchar *pubkey_base64 = discord_qrauth_get_pubkey_base64(da);
+			//discord_base64_make_urlsafe(pubkey_base64);
+			
+			//send it
+			obj = json_object_new();
+			json_object_set_string_member(obj, "op", "init");
+			json_object_set_string_member(obj, "encoded_public_key", pubkey_base64);
+			
+			discord_socket_write_json(da, obj);
+
+			json_object_unref(obj);
+			g_free(pubkey_base64);
+			
+		} else if (purple_strequal(op, "nonce_proof")) {
+			//sever created a proof, send one back
+			const gchar *encrypted_nonce = json_object_get_string_member(obj, "encrypted_nonce");
+			
+			gsize decrypted_nonce_len = 0;
+			guchar *decrypted_nonce = discord_qrauth_decrypt(da, encrypted_nonce, &decrypted_nonce_len);
+			
+			// sha256 it
+			const guchar *proof_hash = discord_sha256(decrypted_nonce, decrypted_nonce_len);
+			gchar *proof_base64 = g_base64_encode(proof_hash, 32);
+			discord_base64_make_urlsafe(proof_base64);
+			
+			// send it
+			obj = json_object_new();
+			json_object_set_string_member(obj, "op", "nonce_proof");
+			json_object_set_string_member(obj, "proof", proof_base64);
+			
+			discord_socket_write_json(da, obj);
+
+			json_object_unref(obj);
+			g_free(proof_base64);
+			g_free(decrypted_nonce);
+			
+		} else if (purple_strequal(op, "pending_remote_init")) {
+			// display the QR code to the user now
+			const gchar *fingerprint = json_object_get_string_member(obj, "fingerprint");
+			
+			gchar *qrcode_url = g_strconcat("https://" DISCORD_API_SERVER "/ra/", fingerprint, NULL);
+			guchar *qrcode_image = NULL;
+			gsize qrcode_image_len = 0;
+			gchar *qrcode_utf8 = NULL;
+			
+			QRcode *qrcode = QRcode_encodeString(qrcode_url, 0, QR_ECLEVEL_L, QR_MODE_8, 1);
+			qrcode_utf8 = qrcode_utf8_output(qrcode);
+			qrcode_image = qrcode_tga_output(qrcode, &qrcode_image_len);
+			
+			discord_display_qrcode(da->pc, qrcode_url, qrcode_utf8, qrcode_image, qrcode_image_len);
+			
+			g_free(qrcode_url);
+			g_free(qrcode_image);
+			g_free(qrcode_utf8);
+			
+		} else if (purple_strequal(op, "pending_finish")) {
+			// the app scanned, and is just confirming everything is OK
+			
+		} else if (purple_strequal(op, "finish")) {
+			// the app confirmed, grab the token and LETS DO THIS THING
+			const gchar *encrypted_token = json_object_get_string_member(obj, "encrypted_token");
+			
+			gchar *token = (gchar *) discord_qrauth_decrypt(da, encrypted_token, NULL);
+			purple_account_set_string(da->account, "token", token);
+			
+			discord_qrauth_free_keys(da);
+			
+			da->token = g_strdup(token);
+			purple_request_close_with_handle(da->pc);
+
+			da->running_auth_qrcode = FALSE;
+			da->compress = TRUE;
+			discord_start_socket(da);
+			
+		} else if (purple_strequal(op, "cancel")) {
+			// they bailed on us!  how rude!
+			purple_debug_info("discord", "User cancelled the auth\n");
+			
+			purple_request_close_with_handle(da->pc);
+			
+			purple_connection_error(da->pc, PURPLE_CONNECTION_ERROR_AUTHENTICATION_FAILED, _("Cancelled QR Code auth"));
+			discord_qrauth_free_keys(da);
+			
+		} else {
+			purple_debug_info("discord", "Unhandled auth op '%s'\n", op);
+		}
+	}
+	
+	g_object_unref(parser);
+	return TRUE;
+}
+#endif
 
 /* static void discord_start_polling(DiscordAccount *ya); */
 
@@ -5779,13 +5940,20 @@ discord_socket_got_data(gpointer userdata, PurpleSslConnection *conn, PurpleInpu
 		done_some_reads = TRUE;
 
 		if (ya->frame_len_progress == ya->frame_len) {
+			gboolean success;
+			
 			if (ya->compress) {
 				gchar *temp = discord_inflate(ya, ya->frame, ya->frame_len);
 				g_free(ya->frame);
 				ya->frame = temp;
 			}
 
-			gboolean success = discord_process_frame(ya, ya->frame);
+#ifdef USE_QRCODE_AUTH
+			if (ya->running_auth_qrcode) {
+				success = discord_process_qrcode_auth_frame(ya, ya->frame);
+			} else 
+#endif
+			success = discord_process_frame(ya, ya->frame);
 			g_free(ya->frame);
 			ya->frame = NULL;
 			ya->packet_code = 0;
@@ -5834,11 +6002,18 @@ discord_socket_connected(gpointer userdata, PurpleSslConnection *conn, PurpleInp
 		"Pragma: no-cache\r\n"
 		"Cache-Control: no-cache\r\n"
 		"Upgrade: websocket\r\n"
+		"Origin: https://discord.com\r\n"
 		"Sec-WebSocket-Version: 13\r\n"
 		"Sec-WebSocket-Key: %s\r\n"
 		"User-Agent: " DISCORD_USERAGENT "\r\n"
 		"\r\n",
+#ifdef USE_QRCODE_AUTH
+		da->running_auth_qrcode ? DISCORD_QRCODE_AUTH_SERVER_PATH :
+#endif
 		DISCORD_GATEWAY_SERVER_PATH, da->compress ? "&compress=zlib-stream" : "",
+#ifdef USE_QRCODE_AUTH
+		da->running_auth_qrcode ? DISCORD_QRCODE_AUTH_SERVER :
+#endif
 		DISCORD_GATEWAY_SERVER, websocket_key
 	);
 
@@ -5890,6 +6065,11 @@ discord_start_socket(DiscordAccount *da)
 	da->frame_len = 0;
 	da->frames_since_reconnect = 0;
 
+#ifdef USE_QRCODE_AUTH
+	if (da->running_auth_qrcode) {
+		da->websocket = purple_ssl_connect(da->account, DISCORD_QRCODE_AUTH_SERVER, DISCORD_QRCODE_AUTH_SERVER_PORT, discord_socket_connected, discord_socket_failed, da);
+	} else 
+#endif
 	da->websocket = purple_ssl_connect(da->account, DISCORD_GATEWAY_SERVER, DISCORD_GATEWAY_PORT, discord_socket_connected, discord_socket_failed, da);
 }
 
@@ -8876,7 +9056,7 @@ plugin_init(PurplePlugin *plugin)
 /* prpl_info->add_buddy_with_invite = discord_add_buddy_with_invite; */
 #endif
 
-	prpl_info->options = OPT_PROTO_CHAT_TOPIC | OPT_PROTO_SLASH_COMMANDS_NATIVE | OPT_PROTO_UNIQUE_CHATNAME | OPT_PROTO_IM_IMAGE;
+	prpl_info->options = OPT_PROTO_CHAT_TOPIC | OPT_PROTO_SLASH_COMMANDS_NATIVE | OPT_PROTO_UNIQUE_CHATNAME | OPT_PROTO_IM_IMAGE | OPT_PROTO_PASSWORD_OPTIONAL;
 	prpl_info->protocol_options = discord_add_account_options(prpl_info->protocol_options);
 	prpl_info->icon_spec.format = "png,gif,jpeg";
 	prpl_info->icon_spec.min_width = 0;
@@ -8987,7 +9167,7 @@ discord_protocol_init(PurpleProtocol *prpl_info)
 
 	info->id = DISCORD_PLUGIN_ID;
 	info->name = "Discord";
-	info->options = OPT_PROTO_CHAT_TOPIC | OPT_PROTO_SLASH_COMMANDS_NATIVE | OPT_PROTO_UNIQUE_CHATNAME;
+	info->options = OPT_PROTO_CHAT_TOPIC | OPT_PROTO_SLASH_COMMANDS_NATIVE | OPT_PROTO_UNIQUE_CHATNAME | OPT_PROTO_PASSWORD_OPTIONAL;
 	info->account_options = discord_add_account_options(info->account_options);
 }
 
