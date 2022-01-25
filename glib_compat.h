@@ -20,6 +20,10 @@
 #include <glib.h>
 #include <purple.h>
 
+#if !GLIB_CHECK_VERSION(2, 56, 0)
+#include "gdatetime_fromiso.h"
+#endif /* 2.56.0 */
+
 #if !GLIB_CHECK_VERSION(2, 32, 0)
 #define g_hash_table_contains(hash_table, key) g_hash_table_lookup_extended(hash_table, key, NULL, NULL)
 #endif /* 2.32.0 */

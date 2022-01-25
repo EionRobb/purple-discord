@@ -51,6 +51,24 @@ Requires devel headers/libs for libpurple and libjson-glib [libglib2.0-dev, libj
 	sudo make install
 ```
 
+Slash Commands
+--------------
+Purple-discord supports the following slash commands:
+
+| Command | Usage | Description |
+| ------- | ----- | ----------- |
+| nick | `/nick <new nickname>` | Changes nickname on a server. |
+| kick | `/kick <username>` | Remove someone from a server. |
+| ban | `/ban <username>` | Remove someone from a server and prevent them from rejoining. |
+| leave | `/leave` | Leave the channel. |
+| part | `/part`  | Leave the channel. |
+| pinned | `/pinned` | Display pinned messages. |
+| roles | `/roles` | Display server roles. |
+| threads | `/threads` | Display active channel threads. |
+| thread | `/thread <timestamp> <message>` | Sends message to thread. |
+| react | `/react <timestamp> <emoji>` | Reacts to message at timestamp with emoji. |
+| reply | `/reply <timestamp> <message>` | Replies to message at timestamp. |
+
 Advanced Options
 ----------------
 **Use status message as in-game info**: If enabled, the status message set via
@@ -74,9 +92,29 @@ This value is the threshold to define a large channel. By default, if
 there are more than 80 (online) users in the channel, it will be
 considered large.
 
+**Display images in conversations**: Automatically downloads attached images
+and displays them in DMs and small channels.
+
+**Display images in large servers**: Like above, but for large channels. Needs
+<Display images in conversations> to be turned on to work.
+
+**Max displayed image width (0 disables)**: The maximum image width to download
+when <Display images in conversations> is turned on. Plugin will fetch a smaller
+version of the image if it is too large.
+
 **Display custom emoji as inline images**: Automatically downloads custom
 emoji from the server and displays it in Pidgin as an inline image instead
-of as a URL link
+of as a URL link.
+
+**Fetch unread chat messages when account connects**: Experimental. Attempts to
+open and populate server channels at start based on your mention settings.
+
+**Indicate thread replies with this prefix**: Sets the prefix used to indicate a
+thread reply. Thread replies will be formatted as `[user-set prefix][thread
+timestamp]: [message]`.
+
+**Indicate thread parent messages with this prefix**: As above, but for the
+first/parent message of a thread.
 
 Mentions
 --------
