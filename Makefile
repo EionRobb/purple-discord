@@ -97,7 +97,7 @@ ifneq ($(USE_QRCODE_AUTH), 0)
 	WIN32_LDFLAGS += -L$(WIN32_DEV_TOP)/nss-3.24-nspr-4.12/lib -L$(WIN32_DEV_TOP)/qrencode-4.1.1 -lnss3 -lqrencode
 	
 	ifneq ($(OS),Windows_NT)
-		CFLAGS += $(shell ${PKG_CONFIG} --cflags nss libqrencode)
+		CFLAGS += $(shell ${PKG_CONFIG} --cflags nss libqrencode) -DUSE_QRCODE_AUTH
 		LDFLAGS += $(shell ${PKG_CONFIG} --libs nss libqrencode)
 	endif
 endif
