@@ -726,6 +726,8 @@ discord_update_status(DiscordUser *user, JsonObject *json)
 static DiscordChannel *
 discord_add_thread(DiscordAccount *da, DiscordGuild *guild, DiscordChannel *parent_chan, JsonObject *json, guint64 guild_id)
 {
+	g_return_val_if_fail(guild != NULL, NULL);
+	
 	DiscordChannel *thread = discord_new_channel(json);
 	thread->guild_id = guild_id;
 	g_hash_table_replace_int64(guild->threads, thread->id, thread);
@@ -2586,11 +2588,11 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 				color,
 				escaped_content
 			);
-			g_free(thread_ts);
 			g_free(escaped_content);
 			escaped_content = tmp;
 			tmp = NULL;
 		}
+		g_free(thread_ts);
 	}
 
 	if (stickers != NULL) {
@@ -8486,10 +8488,10 @@ discord_chat_thread_reply(DiscordAccount *da, PurpleConversation *conv, guint64 
 				color,
 				msg_txt
 			);
-			g_free(thread_ts);
 			g_free(msg_txt);
 			msg_txt = tmp;
 		}
+		g_free(thread_ts);
 
 		purple_serv_got_chat_in(pc, discord_chat_hash(room_id), name, PURPLE_MESSAGE_SEND, msg_txt, time(NULL));
 		g_free(name);
