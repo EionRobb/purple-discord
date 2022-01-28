@@ -96,7 +96,7 @@ considered large.
 and displays them in DMs and small channels.
 
 **Display images in large servers**: Like above, but for large channels. Needs
-<Display images in conversations> to be turned on to work.
+\<Display images in conversations\> to be turned on to work.
 
 **Max displayed image width (0 disables)**: The maximum image width to download
 when <Display images in conversations> is turned on. Plugin will fetch a smaller
