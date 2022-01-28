@@ -292,6 +292,7 @@ typedef struct {
 	GHashTable *members;	 /* list of member ids */
 	GHashTable *nicknames;	 /* id->nick? */
 	GHashTable *nicknames_rev; /* reverse */
+	guint next_mem_to_sync;
 
 	GHashTable *channels;
 	GHashTable *threads;
@@ -494,6 +495,7 @@ discord_new_guild(JsonObject *json)
 	guild->members = g_hash_table_new_full(g_int64_hash, g_int64_equal, NULL, NULL);
 	guild->nicknames = g_hash_table_new_full(g_int64_hash, g_int64_equal, NULL, g_free);
 	guild->nicknames_rev = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
+	guild->next_mem_to_sync = 0;
 
 	guild->channels = g_hash_table_new_full(g_int64_hash, g_int64_equal, NULL, discord_free_channel);
 	guild->threads = g_hash_table_new_full(g_int64_hash, g_int64_equal, NULL, discord_free_channel);
@@ -1623,7 +1625,7 @@ discord_send_auth(DiscordAccount *da)
 		json_object_set_object_member(data, "presence", presence);
 
 		json_object_set_boolean_member(data, "compress", FALSE);
-		//json_object_set_int_member(data, "large_threshold", 25000);
+		json_object_set_int_member(data, "large_threshold", 250);
 
 		json_object_set_object_member(client_state, "guild_hashes", json_object_new());
 		json_object_set_string_member(client_state, "highest_last_message_id", "0");
@@ -3659,6 +3661,8 @@ discord_handle_guild_member_update(DiscordAccount *da, guint64 guild_id, JsonObj
 	}
 }
 
+static void discord_send_lazy_guild_request(DiscordAccount *da, DiscordGuild *guild);
+
 static void
 discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data)
 {
@@ -4493,6 +4497,15 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 				}
 			}
 		}
+		guint member_count = json_object_get_int_member(data, "member_count");
+		guint online_count = json_object_get_int_member(data, "online_count");
+		guint head_count = member_count > 250 ? online_count : member_count;
+		DiscordGuild *guild = discord_get_guild(da, guild_id);
+		if (guild && head_count > guild->next_mem_to_sync) {
+			discord_send_lazy_guild_request(da, guild);
+		} else if (guild && head_count < guild->next_mem_to_sync - 100) {
+			guild->next_mem_to_sync = floor((gdouble)head_count / 100.0) * 100 + 100;
+		}
 
 	} else if (purple_strequal(type, "MESSAGE_REACTION_ADD")) {
 
@@ -5302,27 +5315,15 @@ discord_populate_guild(DiscordAccount *da, JsonObject *guild)
 }
 
 static void
-discord_guild_get_offline_users(DiscordAccount *da, const gchar *guild_id)
+discord_send_lazy_guild_request(DiscordAccount *da, DiscordGuild *guild)
 {
+
 	JsonObject *obj;
 	JsonObject *d;
 
-	// Try to request all offline users in this guild
-	d = json_object_new();
-	json_object_set_string_member(d, "guild_id", guild_id);
-	json_object_set_string_member(d, "query", "");
-	json_object_set_int_member(d, "limit", 0);
-	json_object_set_boolean_member(d, "presences", TRUE);
+	gchar *guild_id = from_int(guild->id);
+	guint last_synced = guild->next_mem_to_sync;
 
-	obj = json_object_new();
-	json_object_set_int_member(obj, "op", OP_REQUEST_GUILD_MEMBERS);
-	json_object_set_object_member(obj, "d", d);
-
-	discord_socket_write_json(da, obj);
-
-	json_object_unref(obj);
-
-	//Request typing notifications
 	d = json_object_new();
 	json_object_set_string_member(d, "guild_id", guild_id);
 	json_object_set_boolean_member(d, "typing", TRUE);
@@ -5332,10 +5333,6 @@ discord_guild_get_offline_users(DiscordAccount *da, const gchar *guild_id)
 
 
 	JsonObject *channels = json_object_new();
-	DiscordGuild *guild = discord_get_guild(da, to_int(guild_id));
-	if (guild == NULL) {
-		return;
-	}
 	DiscordUser *user = discord_get_user(da, da->self_user_id);
 
 	// We can only request status updates for one channel at a time, try:
@@ -5368,7 +5365,13 @@ discord_guild_get_offline_users(DiscordAccount *da, const gchar *guild_id)
 
 	if (channel && discord_is_channel_visible(da, user, channel)) {
 		JsonArray *user_ranges = json_array_new();
-		for (guint i = 0; i < 100; i += 100) {
+		if (last_synced > 0) {
+			JsonArray *user_range = json_array_new();
+			json_array_add_int_element(user_range, 0);
+			json_array_add_int_element(user_range, 99);
+			json_array_add_array_element(user_ranges, user_range);
+		}
+		for (guint i = last_synced; i < 200 + last_synced; i += 100) {
 			JsonArray *user_range = json_array_new();
 			json_array_add_int_element(user_range, i);
 			json_array_add_int_element(user_range, i + 99);
@@ -5389,6 +5392,38 @@ discord_guild_get_offline_users(DiscordAccount *da, const gchar *guild_id)
 	discord_socket_write_json(da, obj);
 
 	json_object_unref(obj);
+
+	guild->next_mem_to_sync = 200 + last_synced;
+
+	g_free(guild_id);
+}
+
+static void
+discord_guild_get_offline_users(DiscordAccount *da, const gchar *guild_id)
+{
+	JsonObject *obj;
+	JsonObject *d;
+
+	// Try to request all offline users in this guild
+	d = json_object_new();
+	json_object_set_string_member(d, "guild_id", guild_id);
+	json_object_set_string_member(d, "query", "");
+	json_object_set_int_member(d, "limit", 0);
+	json_object_set_boolean_member(d, "presences", TRUE);
+
+	obj = json_object_new();
+	json_object_set_int_member(obj, "op", OP_REQUEST_GUILD_MEMBERS);
+	json_object_set_object_member(obj, "d", d);
+
+	discord_socket_write_json(da, obj);
+
+	json_object_unref(obj);
+
+	DiscordGuild *guild = discord_get_guild(da, to_int(guild_id));
+	if (guild == NULL) {
+		return;
+	}
+	discord_send_lazy_guild_request(da, guild);
 }
 
 static void
