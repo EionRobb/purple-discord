@@ -2,6 +2,7 @@
  *   Discord plugin for libpurple
  *   Copyright (C) 2016-2017  Eion Robb
  *   Copyright (C) 2017 Alyssa Rosenzweig
+ *   Copyright 2019 Christian Hergert <chergert@redhat.com>
  *
  *   This program is free software: you can redistribute it and/or modify
  *   it under the terms of the GNU General Public License as published by
@@ -21,7 +22,29 @@
 #include <purple.h>
 
 #if !GLIB_CHECK_VERSION(2, 56, 0)
-#include "gdatetime_fromiso.h"
+// From https://gitlab.gnome.org/GNOME/sysprof/-/raw/master/src/libsysprof-ui/sysprof-details-page.c
+// Modified to avoid use of g_autoptr, which only works on GCC/clang.
+static GDateTime *
+g_date_time_new_from_iso8601 (const gchar *str,
+                              GTimeZone   *default_tz)
+{
+  GTimeVal tv;
+
+  if (g_time_val_from_iso8601 (str, &tv))
+    {
+      GDateTime *dt = g_date_time_new_from_timeval_utc (&tv);
+
+      if (default_tz) {
+        GDateTime *dt_tz = g_date_time_to_timezone (dt, default_tz);
+        g_date_time_unref(dt);
+        return g_steal_pointer (&dt_tz);
+      } else {
+        return g_steal_pointer (&dt);
+      }
+    }
+
+  return NULL;
+}
 #endif /* 2.56.0 */
 
 #if !GLIB_CHECK_VERSION(2, 32, 0)
