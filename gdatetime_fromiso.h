@@ -12,7 +12,8 @@
 static gboolean
 get_iso8601_int (const gchar *text, gsize length, gint *value)
 {
-  gint i, v = 0;
+  gsize i;
+  gint v = 0;
 
   if (length < 1 || length > 4)
     return FALSE;
@@ -33,7 +34,7 @@ get_iso8601_int (const gchar *text, gsize length, gint *value)
 static gboolean
 get_iso8601_seconds (const gchar *text, gsize length, gdouble *value)
 {
-  gint i;
+  gsize i;
   gdouble divisor = 1, v = 0;
 
   if (length < 2)
@@ -66,6 +67,21 @@ get_iso8601_seconds (const gchar *text, gsize length, gdouble *value)
   return TRUE;
 }
 
+struct _GDateTime
+{
+  /* Microsecond timekeeping within Day */
+  guint64 usec;
+
+  /* TimeZone information */
+  GTimeZone *tz;
+  gint interval;
+
+  /* 1 is 0001-01-01 in Proleptic Gregorian */
+  gint32 days;
+
+  volatile gint ref_count;
+};
+
 static GDateTime *
 g_date_time_new_ordinal (GTimeZone *tz, gint year, gint ordinal_day, gint hour, gint minute, gdouble seconds)
 {
@@ -78,6 +94,56 @@ g_date_time_new_ordinal (GTimeZone *tz, gint year, gint ordinal_day, gint hour, 
   dt->days += ordinal_day - 1;
 
   return dt;
+}
+
+static void
+g_date_time_get_week_number (GDateTime *datetime,
+                             gint      *week_number,
+                             gint      *day_of_week,
+                             gint      *day_of_year)
+{
+  gint a, b, c, d, e, f, g, n, s, month, day, year;
+
+  g_date_time_get_ymd (datetime, &year, &month, &day);
+
+  if (month <= 2)
+    {
+      a = g_date_time_get_year (datetime) - 1;
+      b = (a / 4) - (a / 100) + (a / 400);
+      c = ((a - 1) / 4) - ((a - 1) / 100) + ((a - 1) / 400);
+      s = b - c;
+      e = 0;
+      f = day - 1 + (31 * (month - 1));
+    }
+  else
+    {
+      a = year;
+      b = (a / 4) - (a / 100) + (a / 400);
+      c = ((a - 1) / 4) - ((a - 1) / 100) + ((a - 1) / 400);
+      s = b - c;
+      e = s + 1;
+      f = day + (((153 * (month - 3)) + 2) / 5) + 58 + s;
+    }
+
+  g = (a + b) % 7;
+  d = (f + g - e) % 7;
+  n = f + 3 - d;
+
+  if (week_number)
+    {
+      if (n < 0)
+        *week_number = 53 - ((g - s) / 5);
+      else if (n > 364 + s)
+        *week_number = 1;
+      else
+        *week_number = (n / 7) + 1;
+    }
+
+  if (day_of_week)
+    *day_of_week = d + 1;
+
+  if (day_of_year)
+    *day_of_year = f + 1;
 }
 
 static GDateTime *
