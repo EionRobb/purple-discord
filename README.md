@@ -92,15 +92,15 @@ This value is the threshold to define a large channel. By default, if
 there are more than 80 (online) users in the channel, it will be
 considered large.
 
-**Display images in conversations**: Automatically downloads attached images
-and displays them in DMs and small channels.
+<a name="img">**Display images in conversations**</a>: Automatically
+downloads attached images and displays them in DMs and small channels.
 
 **Display images in large servers**: Like above, but for large channels. Needs
-\<Display images in conversations\> to be turned on to work.
+[Display images in conversations](#img) to be turned on to work.
 
 **Max displayed image width (0 disables)**: The maximum image width to download
-when <Display images in conversations> is turned on. Plugin will fetch a smaller
-version of the image if it is too large.
+when [Display images in conversations](#img) is turned on. Plugin will fetch a
+smaller version of the image if it is too large.
 
 **Display custom emoji as inline images**: Automatically downloads custom
 emoji from the server and displays it in Pidgin as an inline image instead
