@@ -21,6 +21,20 @@
 #include <glib.h>
 #include <purple.h>
 
+#if !GLIB_CHECK_VERSION(2, 44, 0)
+static inline gpointer
+g_steal_pointer (gpointer pp)
+{
+  gpointer *ptr = (gpointer *) pp;
+  gpointer ref;
+
+  ref = *ptr;
+  *ptr = NULL;
+
+  return ref;
+}
+#endif
+
 #if !GLIB_CHECK_VERSION(2, 56, 0)
 // From https://gitlab.gnome.org/GNOME/sysprof/-/raw/master/src/libsysprof-ui/sysprof-details-page.c
 // Modified to avoid use of g_autoptr, which only works on GCC/clang.
