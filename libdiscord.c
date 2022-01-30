@@ -593,6 +593,8 @@ discord_new_guild_role(JsonObject *json)
 static void
 discord_free_guild_role(gpointer data)
 {
+	g_return_if_fail(data != NULL);
+	
 	DiscordGuildRole *guild_role = data;
 	g_free(guild_role->name);
 	g_free(guild_role);
@@ -601,6 +603,8 @@ discord_free_guild_role(gpointer data)
 static void
 discord_free_guild_membership(gpointer data)
 {
+	g_return_if_fail(data != NULL);
+	
 	DiscordGuildMembership *guild_membership = data;
 	g_free(guild_membership->nick);
 	g_free(guild_membership->joined_at);
@@ -612,6 +616,8 @@ discord_free_guild_membership(gpointer data)
 static void
 discord_free_user(gpointer data)
 {
+	g_return_if_fail(data != NULL);
+	
 	DiscordUser *user = data;
 	g_free(user->name);
 	g_free(user->game);
@@ -625,6 +631,8 @@ discord_free_user(gpointer data)
 static void
 discord_free_guild(gpointer data)
 {
+	g_return_if_fail(data != NULL);
+	
 	DiscordGuild *guild = data;
 	g_free(guild->name);
 	g_free(guild->icon);
@@ -641,6 +649,8 @@ discord_free_guild(gpointer data)
 static void
 discord_free_channel(gpointer data)
 {
+	g_return_if_fail(data != NULL);
+	
 	DiscordChannel *channel = data;
 	g_free(channel->name);
 	g_free(channel->topic);
@@ -658,6 +668,8 @@ discord_free_channel(gpointer data)
 static void
 discord_free_image_context(gpointer data)
 {
+	g_return_if_fail(data != NULL);
+	
 	DiscordImgMsgContext *img_context = data;
 	g_free(img_context->from);
 	g_free(img_context->url);
@@ -667,6 +679,8 @@ discord_free_image_context(gpointer data)
 static void
 discord_free_reaction(gpointer data)
 {
+	g_return_if_fail(data != NULL);
+	
 	DiscordReaction *react = data;
 	g_free(react->reactor);
 	g_free(react->reaction);
