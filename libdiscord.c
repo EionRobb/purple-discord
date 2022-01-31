@@ -4796,11 +4796,13 @@ discord_got_presences(DiscordAccount *da, JsonNode *node, gpointer user_data)
 			merged_username = discord_create_fullname(user);
 
 			JsonArray *activities = json_object_get_array_member(presence, "activities");
-			game = json_array_get_object_element(activities, 0);
+			if (json_array_get_length(activities) > 0) {
+				game = json_array_get_object_element(activities, 0);
+			}
 
 		}
-		const gchar *game_id = json_object_get_string_member(game, "id");
-		const gchar *game_name = json_object_get_string_member(game, "name");
+		const gchar *game_id = game ? json_object_get_string_member(game, "id") : "null";
+		const gchar *game_name = game ? json_object_get_string_member(game, "name") : "";
 
 		if (purple_strequal(game_id, "custom")) {
 			game_name = json_object_get_string_member(game, "state");
