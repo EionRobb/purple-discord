@@ -8905,35 +8905,35 @@ plugin_load(PurplePlugin *plugin, GError **error)
 		"reply", "S", PURPLE_CMD_P_PLUGIN,
 		PURPLE_CMD_FLAG_CHAT | PURPLE_CMD_FLAG_PROTOCOL_ONLY | PURPLE_CMD_FLAG_ALLOW_WRONG_ARGS,
 		DISCORD_PLUGIN_ID, discord_cmd_reply,
-		_("reply <msg_id> <message> or reply <timestamp> <message>:  Replies to message"), NULL
+		_("reply &lt;msg_id&gt; &lt;message&gt; or reply &lt;timestamp&gt; &lt;message&gt;:  Replies to the message at &lt;timestamp&gt; with &lt;message&gt;"), NULL
 	);
 
 	purple_cmd_register(
 		"react", "ws", PURPLE_CMD_P_PLUGIN,
 		PURPLE_CMD_FLAG_CHAT | PURPLE_CMD_FLAG_PROTOCOL_ONLY | PURPLE_CMD_FLAG_ALLOW_WRONG_ARGS,
 		DISCORD_PLUGIN_ID, discord_cmd_react,
-		_("react <msg_id> <emoji> or react <timestamp> <emoji>:  Reacts to message with emoji"), NULL
+		_("react &lt;msg_id&gt; &lt;emoji&gt; or react &lt;timestamp&gt; &lt;emoji&gt;:  Reacts to the message at &lt;timestamp&gt; with &lt;emoji&gt;"), NULL
 	);
 
 	purple_cmd_register(
 		"nick", "s", PURPLE_CMD_P_PLUGIN,
 		PURPLE_CMD_FLAG_CHAT | PURPLE_CMD_FLAG_PROTOCOL_ONLY | PURPLE_CMD_FLAG_ALLOW_WRONG_ARGS,
 		DISCORD_PLUGIN_ID, discord_cmd_nick,
-		_("nick <new nickname>:  Changes nickname on a server"), NULL
+		_("nick &lt;new nickname&gt;:  Changes nickname on a server"), NULL
 	);
 
 	purple_cmd_register(
 		"kick", "s", PURPLE_CMD_P_PLUGIN,
 		PURPLE_CMD_FLAG_CHAT | PURPLE_CMD_FLAG_PROTOCOL_ONLY | PURPLE_CMD_FLAG_ALLOW_WRONG_ARGS,
 		DISCORD_PLUGIN_ID, discord_cmd_kick,
-		_("kick <username>:  Remove someone from a server"), NULL
+		_("kick &lt;username&gt;:  Remove someone from a server"), NULL
 	);
 
 	purple_cmd_register(
 		"ban", "s", PURPLE_CMD_P_PLUGIN,
 		PURPLE_CMD_FLAG_CHAT | PURPLE_CMD_FLAG_PROTOCOL_ONLY | PURPLE_CMD_FLAG_ALLOW_WRONG_ARGS,
 		DISCORD_PLUGIN_ID, discord_cmd_ban,
-		_("ban <username>:  Remove someone from a server and prevent them rejoining"), NULL
+		_("ban &lt;username&gt;:  Remove someone from a server and prevent them rejoining"), NULL
 	);
 
 	purple_cmd_register(
@@ -8968,7 +8968,7 @@ plugin_load(PurplePlugin *plugin, GError **error)
 		"thread", "S", PURPLE_CMD_P_PLUGIN,
 		PURPLE_CMD_FLAG_CHAT | PURPLE_CMD_FLAG_PROTOCOL_ONLY | PURPLE_CMD_FLAG_ALLOW_WRONG_ARGS,
 		DISCORD_PLUGIN_ID, discord_cmd_thread,
-		_("thread <timestamp> <message>:  Sends message to thread"), NULL
+		_("thread &lt;timestamp&gt; &lt;message&gt;:  Sends message to thread"), NULL
 	);
 
 	purple_cmd_register(
