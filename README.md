@@ -69,6 +69,15 @@ Purple-discord supports the following slash commands:
 | react | `/react <timestamp> <emoji>` | Reacts to message at timestamp with emoji. |
 | reply | `/reply <timestamp> <message>` | Replies to message at timestamp. |
 
+For commands that take a timestamp argument, the valid timestamp formats are
+`YYYY-MM-DDthh:mm:ss`, `YYYY-MM-DDThh:mm:ss`, and `hh:mm:ss`. For example:
+
+```
+/reply 14:46:38 This is a reply to a message
+/react 2022-02-02t14:46:38 :rwgrimNice:
+/thread 2022-02-02T14:46:38 I am sending a message to a thread
+```
+
 Advanced Options
 ----------------
 **Use status message as in-game info**: If enabled, the status message set via
