@@ -3685,7 +3685,7 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 				} else {
 					const gchar *parent_id = json_object_get_string_member(data, "parent_id");
 					DiscordChannel *parent = discord_get_channel_global_int(da, to_int(parent_id));
-					channel = discord_add_thread(da, guild, parent, data, guild->id);
+					discord_add_thread(da, guild, parent, data, guild->id);
 					return;
 				}
 
