@@ -5148,7 +5148,7 @@ discord_got_read_states(DiscordAccount *da, JsonNode *node, gpointer user_data)
 					g_free(tmp);
 
 				} else if (mentions) {
-					purple_debug_misc("discord", "%d unhandled mentions in channel %s\n", mentions, dchannel->name);
+					purple_debug_misc("discord", "%d unhandled mentions in channel %s\n", mentions, dchannel ? dchannel->name : channel);
 				}
 			}
 		}
