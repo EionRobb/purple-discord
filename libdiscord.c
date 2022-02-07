@@ -2897,7 +2897,7 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 						}
 
 					} else {
-						purple_serv_got_im(da->pc, merged_username, url, flags, timestamp);
+						purple_serv_got_im(da->pc, merged_username, url_log, flags, timestamp);
 					}
 
 				}
