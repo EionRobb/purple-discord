@@ -264,7 +264,6 @@ typedef struct {
 	GHashTable *permission_role_overrides;
 	gboolean suppress_everyone;
 	gboolean muted;
-	gboolean is_thread;
 	DiscordNotificationLevel notification_level;
 
 	/* For guild channels */
@@ -385,8 +384,8 @@ typedef struct {
 
 typedef struct _DiscordImgMsgContext {
 	gint conv_id;
-	gchar* from;
-	gchar* url;
+	gchar *from;
+	gchar *url;
 	PurpleMessageFlags flags;
 	time_t timestamp;
 } DiscordImgMsgContext;
@@ -536,12 +535,10 @@ discord_new_channel(JsonObject *json)
 	channel->parent_id = to_int(json_object_get_string_member(json, "parent_id"));
 	channel->name = g_strdup(json_object_get_string_member(json, "name"));
 	if (channel->type < CHANNEL_GUILD_NEWS_THREAD || channel->type == CHANNEL_GUILD_STAGE_VOICE) {
-		channel->is_thread = FALSE;
 		channel->topic = g_strdup(json_object_get_string_member(json, "topic"));
 		channel->position = json_object_get_int_member(json, "position");
 		channel->threads = g_hash_table_new_full(g_int64_hash, g_int64_equal, NULL, NULL);
 	} else { // thread
-		channel->is_thread = TRUE;
 		JsonObject *metadata = json_object_get_object_member(json, "thread_metadata");
 		channel->archived = json_object_get_boolean_member(metadata, "archived");
 		channel->locked = json_object_get_boolean_member(metadata, "locked");
@@ -2264,7 +2261,7 @@ discord_get_react_text(PurpleConversation *conv, JsonArray *reactions, const gch
 		gchar *tmp;
 
 		for (guint n = 0; n < reactions_len; n++) {
-			JsonObject *reaction = json_array_get_object_element(reactions, 0);
+			JsonObject *reaction = json_array_get_object_element(reactions, n);
 			JsonObject *emoji = json_object_get_object_member(reaction, "emoji");
 			const gchar *emoji_id = json_object_get_string_member(emoji, "id");
 			const gchar *emoji_name = json_object_get_string_member(emoji, "name");
@@ -3624,6 +3621,12 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		}
 
 		DiscordChannel *channel = discord_get_channel_global(da, channel_id);
+		if (channel == NULL) {
+			DiscordChannel *thread = discord_get_thread_global_int_guild(da, to_int(channel_id), NULL);
+			if (thread) {
+				channel = discord_get_channel_global_int(da, thread->parent_id);
+			}
+		}
 
 		if (channel != NULL) {
 			DiscordGuild *guild = discord_get_guild(da, channel->guild_id);
@@ -4189,8 +4192,7 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 			}
 		}
 
-	} else if (purple_strequal(type, "GUILD_MESSAGE_REACTION_ADD") || purple_strequal(type, "DIRECT_MESSAGE_REACTION_ADD") || purple_strequal(type, "MESSAGE_REACTION_ADD")) {
-
+	} else if (purple_strequal(type, "MESSAGE_REACTION_ADD")) {
 
 		const gchar *channel_id_s = json_object_get_string_member(data, "channel_id");
 		guint64 channel_id = to_int(channel_id_s);
