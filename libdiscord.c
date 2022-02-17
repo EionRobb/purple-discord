@@ -86,6 +86,10 @@
 #define DISCORD_MESSAGE_EDITED (1)
 #define DISCORD_MESSAGE_PINNED (2)
 
+#define DISCORD_GUILD_SIZE_DEFAULT (0)
+#define DISCORD_GUILD_SIZE_LARGE (1)
+#define DISCORD_GUILD_SIZE_SMALL (2)
+
 #define IGNORE_PRINTS
 
 static GRegex *channel_mentions_regex = NULL;
@@ -2539,11 +2543,11 @@ discord_treat_room_as_small(DiscordAccount *da, guint64 room_id, DiscordGuild *g
 		return TRUE;
 	}
 	gchar *sizepref_id = g_strdup_printf("%" G_GUINT64_FORMAT "-size", guild->id);
-	gint sizepref = purple_account_get_int(da->account, sizepref_id, 0);
+	gint sizepref = purple_account_get_int(da->account, sizepref_id, DISCORD_GUILD_SIZE_DEFAULT);
 	g_free(sizepref_id);
-	if (sizepref == 1) {
+	if (sizepref == DISCORD_GUILD_SIZE_LARGE) {
 		return FALSE;
-	} else if (sizepref == 2) {
+	} else if (sizepref == DISCORD_GUILD_SIZE_SMALL) {
 		return TRUE;
 	}
 	if (g_hash_table_size(guild->members) < purple_account_get_int(da->account, "large-channel-count", 20))
@@ -4325,13 +4329,11 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 			}
 		}
 
-		purple_request_action(
+		purple_notify_info(
 			da->pc,
 			_("Server Join Request Update"),
 			guild->name,
-			info,
-			0, da->account, NULL, NULL, NULL,
-			1, _("Ok"), NULL
+			info
 		);
 		g_free(info);
 
@@ -8702,8 +8704,10 @@ discord_manage_servers_cb(gpointer user_data, PurpleRequestFields *fields)
 			continue;
 		}
 
-		gchar *guild_id = g_strndup(purple_request_field_get_id(field),18);
+		gchar **guild_id_tokens = g_strsplit(purple_request_field_get_id(field), "-", 2);
+		gchar *guild_id = guild_id_tokens[0];
 		DiscordGuild *guild = discord_get_guild(da, to_int(guild_id));
+		g_strfreev(guild_id_tokens);
 		DiscordAccountGuild *acc_guild = g_new0(DiscordAccountGuild, 1);
 		acc_guild->account = da;
 		acc_guild->guild = guild;
