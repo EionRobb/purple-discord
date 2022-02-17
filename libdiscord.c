@@ -86,6 +86,10 @@
 #define DISCORD_MESSAGE_EDITED (1)
 #define DISCORD_MESSAGE_PINNED (2)
 
+#define DISCORD_GUILD_SIZE_DEFAULT (0)
+#define DISCORD_GUILD_SIZE_LARGE (1)
+#define DISCORD_GUILD_SIZE_SMALL (2)
+
 #define IGNORE_PRINTS
 
 static GRegex *channel_mentions_regex = NULL;
@@ -381,6 +385,12 @@ typedef struct {
 	DiscordAccount *account;
 	DiscordGuild *guild;
 } DiscordAccountGuild;
+
+typedef struct {
+	DiscordAccount *account;
+	DiscordGuild *guild;
+	gpointer user_data;
+} DiscordAccountGuildData;
 
 typedef struct _DiscordImgMsgContext {
 	gint conv_id;
@@ -2520,7 +2530,7 @@ discord_str_to_time(const gchar *str) {
 }
 
 static gboolean
-discord_treat_room_as_small(DiscordAccount *da, guint64 room_id, int head_count)
+discord_treat_room_as_small(DiscordAccount *da, guint64 room_id, DiscordGuild *guild)
 {
 	if (discord_get_room_force_small(da, room_id)) {
 		return TRUE;
@@ -2528,7 +2538,20 @@ discord_treat_room_as_small(DiscordAccount *da, guint64 room_id, int head_count)
 	if (discord_get_room_force_large(da, room_id)) {
 		return FALSE;
 	}
-	if (head_count < purple_account_get_int(da->account, "large-channel-count", 20)) {
+	if (guild == NULL)
+	{
+		return TRUE;
+	}
+	gchar *sizepref_id = g_strdup_printf("%" G_GUINT64_FORMAT "-size", guild->id);
+	gint sizepref = purple_account_get_int(da->account, sizepref_id, DISCORD_GUILD_SIZE_DEFAULT);
+	g_free(sizepref_id);
+	if (sizepref == DISCORD_GUILD_SIZE_LARGE) {
+		return FALSE;
+	} else if (sizepref == DISCORD_GUILD_SIZE_SMALL) {
+		return TRUE;
+	}
+	if (g_hash_table_size(guild->members) < purple_account_get_int(da->account, "large-channel-count", 20))
+	{
 		return TRUE;
 	}
 	return FALSE;
@@ -3081,13 +3104,11 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 
 	} else if (!nonce || !g_hash_table_remove(da->sent_message_ids, nonce)) {
 		/* Open the buffer if it's not already */
-		int head_count = guild ? g_hash_table_size(guild->members) : 0;
-
 		gboolean mentioned = flags & PURPLE_MESSAGE_NICK;
 
 		if (
 			(mentioned && purple_account_get_bool(da->account, "open-chat-on-mention", TRUE)) ||
-			discord_treat_room_as_small(da, channel_id, head_count)
+			discord_treat_room_as_small(da, channel_id, guild)
 		) {
 			//discord_open_chat(da, channel_id, mentioned);
 			gboolean fetched_history = discord_join_chat_by_id(da, channel_id, mentioned);
@@ -3214,8 +3235,7 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 					}
 
 					if (conv != NULL) {
-						int head_count = guild ? g_hash_table_size(guild->members) : 0;
-						if (discord_treat_room_as_small(da, channel_id, head_count) || purple_account_get_bool(da->account, "display-images-large-servers", FALSE) ) {
+						if (discord_treat_room_as_small(da, channel_id, guild) || purple_account_get_bool(da->account, "display-images-large-servers", FALSE) ) {
 							discord_fetch_url(da, img_context->url, NULL, discord_download_image_cb, img_context);
 							GList *l = conv->logs;
 							if (l != NULL) {
@@ -4288,6 +4308,35 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 
 		g_hash_table_remove_int64(user->guild_memberships, guild_id);
 
+	} else if (purple_strequal(type, "GUILD_JOIN_REQUEST_UPDATE")) {
+		gchar *info = NULL;
+		guint64 guild_id = to_int(json_object_get_string_member(data, "guild_id"));
+		DiscordGuild *guild = discord_get_guild(da, guild_id);
+		if (!guild) {
+			return;
+		}
+		const gchar *status = json_object_get_string_member(data, "status");
+		if (purple_strequal(status, "APPROVED")) {
+			info = g_strdup_printf(_("Your request to join the server %s has been approved!"), guild->name);
+		} else {
+			JsonObject *request = json_object_get_object_member(data, "request");
+			const gchar *rejection_reason = json_object_get_string_member(request, "rejection_reason");
+			if (rejection_reason == NULL) {
+				// Probably pending
+				info = g_strdup_printf(_("Your request to join the server %s is currently pending. You will be notified of any updates regarding your request."), guild->name);
+			} else {
+				info = g_strdup_printf(_("Your request to join the server %s was rejected. The reason given was:\n\n%s"), guild->name, rejection_reason);
+			}
+		}
+
+		purple_notify_info(
+			da->pc,
+			_("Server Join Request Update"),
+			guild->name,
+			info
+		);
+		g_free(info);
+
 	} else if (purple_strequal(type, "CHANNEL_RECIPIENT_ADD") || purple_strequal(type, "CHANNEL_RECIPIENT_REMOVE")) {
 		DiscordUser *user = discord_upsert_user(da->new_users, json_object_get_object_member(data, "user"));
 		guint64 room_id = to_int(json_object_get_string_member(data, "channel_id"));
@@ -4971,29 +5020,48 @@ discord_got_presences(DiscordAccount *da, JsonNode *node, gpointer user_data)
 }
 
 static PurpleGroup *
-discord_grab_group(const char *guild_name, const char *category_name)
+discord_grab_group(const char *guild_name, const char *category_name, const gchar *category_id)
 {
 	/* Create the combined name */
 
+	PurpleGroup *group = NULL;
 	gchar *combined_name = NULL;
 	g_return_val_if_fail(guild_name != NULL, NULL);
 
-	if (category_name != NULL)
+	if (category_name)
 		combined_name = g_strdup_printf("%s: %s", guild_name, category_name);
 	else
 		combined_name = g_strdup(guild_name);
 
+	for (PurpleBlistNode *node = purple_blist_get_root(); node != NULL; node = purple_blist_node_get_sibling_next(node)) {
+		if (!PURPLE_BLIST_NODE_IS_GROUP(node)) {
+			continue;
+		}
+
+		const gchar *id = purple_blist_node_get_string(node, "id");
+		if (id == NULL && purple_strequal(combined_name, PURPLE_GROUP(node)->name)) {
+			purple_blist_node_set_string(node, "id", category_id);
+			group = PURPLE_GROUP(node);
+			break;
+		}
+		if (purple_strequal(category_id, id)) {
+			group = PURPLE_GROUP(node);
+			if (!purple_strequal(combined_name, purple_group_get_name(group))) {
+				purple_blist_rename_group(group, combined_name);
+			}
+			break;
+		}
+	}
+
 	/* Make a group */
-	/* TODO: What if this is not unique? */
-
-	PurpleGroup *group = purple_blist_find_group(combined_name);
-
 	if (!group) {
 		group = purple_group_new(combined_name);
+		purple_blist_node_set_string(PURPLE_BLIST_NODE(group), "id", category_id);
 
-		if (!group)
+		if (!group) {
+			g_free(combined_name);
 			return NULL;
-
+		}
 		purple_blist_add_group(group, NULL);
 	}
 
@@ -5024,13 +5092,19 @@ discord_buddy_guild(DiscordAccount *da, DiscordGuild *guild)
 			continue;
 
 		/* Find/make a group */
+		gchar *category_id = from_int(channel->parent_id);
 		gchar *category_name = NULL;
 		DiscordChannel *cat = g_hash_table_lookup_int64(guild->channels, channel->parent_id);
 
 		if (cat)
 			category_name = cat->name;
 
-		PurpleGroup *group = discord_grab_group(guild->name, category_name);
+		gchar *namepref_id = g_strdup_printf("%" G_GUINT64_FORMAT "-abbr", guild->id);
+		const gchar *guild_name = purple_account_get_string(da->account, namepref_id, guild->name);
+		g_free(namepref_id);
+
+		PurpleGroup *group = discord_grab_group(guild_name, category_name, category_id);
+		g_free(category_id);
 
 		if (!group)
 			continue;
@@ -5038,6 +5112,8 @@ discord_buddy_guild(DiscordAccount *da, DiscordGuild *guild)
 		discord_add_channel_to_blist(da, channel, group);
 	}
 }
+
+void discord_guild_member_screening(DiscordAccount *da, JsonNode *node, gpointer user_data);
 
 static void
 discord_populate_guild(DiscordAccount *da, JsonObject *guild)
@@ -5092,6 +5168,15 @@ discord_populate_guild(DiscordAccount *da, JsonObject *guild)
 		for (int k = 0; k < roles_len; k++) {
 			guint64 role = to_int(json_array_get_string_element(roles, k));
 			g_array_append_val(membership->roles, role);
+		}
+
+		if (u->id == da->self_user_id && json_object_has_member(member, "pending")) {
+			gboolean pending = json_object_get_boolean_member(member, "pending");
+			if (pending) {
+				gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/guilds/%" G_GUINT64_FORMAT "/member-verification?with_guild=false", g->id);
+				discord_fetch_url_with_method(da, "GET", url, NULL, discord_guild_member_screening, g);
+				g_free(url);
+			}
 		}
 	}
 
@@ -5283,12 +5368,10 @@ discord_got_read_states(DiscordAccount *da, JsonNode *node, gpointer user_data)
 				if (dchannel)
 					remote_last_id = dchannel->last_message_id;
 
-				int head_count = dguild ? g_hash_table_size(dguild->members) : 0;
-
 				if (
 					last_id < remote_last_id &&
 					(
-						discord_treat_room_as_small(da, to_int(channel), head_count) ||
+						discord_treat_room_as_small(da, to_int(channel), dguild) ||
 						(
 							mentions &&
 							purple_account_get_bool(da->account, "open-chat-on-mention", TRUE)
@@ -8422,6 +8505,104 @@ discord_add_account_options(GList *account_options)
 }
 
 void
+discord_guild_member_screening_cb(gpointer user_data, PurpleRequestFields *fields)
+{
+	DiscordAccountGuildData *data = user_data;
+	DiscordAccount *da = data->account;
+	DiscordGuild *guild = data->guild;
+	JsonObject *json_form = data->user_data;
+
+	if(!purple_request_fields_all_required_filled(fields)) {
+		// TODO: Notify user that we've rejected them
+		return;
+	}
+
+	JsonArray *json_fields = json_object_get_array_member(json_form, "form_fields");
+	gint form_len = json_array_get_length(json_fields);
+	for (gint n = 0; n < form_len; n++) {
+		JsonObject *json_field = json_array_get_object_element(json_fields, n);
+		gchar *id = g_strdup_printf("field-%d", n);
+		PurpleRequestField *field = purple_request_fields_get_field(fields, id);
+		PurpleRequestFieldType type = purple_request_field_get_type(field);
+		switch (type) { // This will get longer whenever Discord updates this stuff
+		case PURPLE_REQUEST_FIELD_BOOLEAN: {
+			gboolean response = purple_request_field_bool_get_value(field);
+			json_object_set_boolean_member(json_field, "response", response);
+			break;
+		}
+		default:
+			break;
+		}
+	}
+	gchar *postdata = json_object_to_string(json_form);
+	gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/guilds/%" G_GUINT64_FORMAT "/requests/@me", guild->id);
+	discord_fetch_url_with_method(da, "PUT", url, postdata, NULL, NULL);
+	g_free(url);
+	g_free(postdata);
+	json_object_unref(json_form);
+}
+
+void
+discord_guild_member_screening(DiscordAccount *da, JsonNode *node, gpointer user_data)
+{
+	DiscordGuild *guild = user_data;
+	JsonObject *form = json_node_get_object(node);
+	const gchar *form_desc = json_object_get_string_member(form, "description");
+	JsonArray *form_fields = json_object_get_array_member(form, "form_fields");
+	gint form_len = json_array_get_length(form_fields);
+	gchar *secondary = NULL;
+
+	PurpleRequestFields *fields = purple_request_fields_new();
+	PurpleRequestFieldGroup *group = purple_request_field_group_new(NULL);
+
+	for (gint n = 0; n < form_len; n++) {
+		JsonObject *form_field = json_array_get_object_element(form_fields, n);
+		const gchar *field_type = json_object_get_string_member(form_field, "field_type");
+		if (!purple_strequal(field_type, "TERMS")) {
+			// Currently Discord only has this one type
+			continue;
+		}
+		gboolean required = json_object_get_boolean_member(form_field, "required");
+		const gchar *label = json_object_get_string_member(form_field, "label");
+		JsonArray *rules = json_object_get_array_member(form_field, "values");
+		gint rules_len = json_array_get_length(rules);
+		gchar *rule_string = g_strdup("");
+		for (gint i = 0; i < rules_len; i++) {
+			const gchar *rule_str = json_array_get_string_element(rules, i);
+			gchar *tmp = g_strdup_printf("%s%d.  %s\n", rule_string, i+1, rule_str);
+			g_free(rule_string);
+			rule_string = tmp;
+		}
+		// Hack that will break if/when discord updates their screening api
+		secondary = g_strdup_printf("%s\n\n%s:\n%s", form_desc, _("Server Rules"), rule_string);
+		gchar *id = g_strdup_printf("field-%d", n);
+		PurpleRequestField *field = purple_request_field_bool_new(id, label, FALSE);
+		purple_request_field_set_required(field, required);
+		purple_request_field_group_add_field(group, field);
+		g_free(id);
+	}
+	purple_request_fields_add_group(fields, group);
+	gchar *title = g_strdup_printf(_("%s Member Screening"), guild->name);
+
+	DiscordAccountGuildData *data = g_new0(DiscordAccountGuildData, 1);
+	data->account = da;
+	data->guild = guild;
+	data->user_data = json_object_ref(form);
+
+	purple_request_fields(
+		da->pc,
+		title,
+		title,
+		secondary, //form_desc,
+		fields,
+		_("_OK"), G_CALLBACK(discord_guild_member_screening_cb),
+		_("_Cancel"), NULL,
+		purple_request_cpar_from_connection(da->pc),
+		data
+	);
+}
+
+void
 discord_join_server_text(gpointer user_data, const gchar *text)
 {
 	DiscordAccount *da = user_data;
@@ -8462,6 +8643,150 @@ discord_join_server(PurpleProtocolAction *action)
 	);
 }
 
+void
+discord_leaving_guild(gpointer user_data, int action)
+{
+	DiscordAccountGuild *acc_guild = user_data;
+	DiscordAccount *da = acc_guild->account;
+	DiscordGuild *guild = acc_guild->guild;
+
+	purple_debug_info("discord", "Leaving guild %s\n", guild->name);
+	gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/users/@me/guilds/%" G_GUINT64_FORMAT, guild->id);
+	discord_fetch_url_with_method(da, "DELETE", url, "{}", NULL, NULL);
+	g_free(url);
+	// TODO: free guild?
+}
+
+void
+discord_manage_servers_cb(gpointer user_data, PurpleRequestFields *fields)
+{
+	DiscordAccount *da = user_data;
+
+
+	const GList *cur;
+	for (cur = purple_request_fields_get_groups(fields); cur != NULL; cur = g_list_next(cur)) {
+		const GList *prefs;
+		for (prefs = purple_request_field_group_get_fields(cur->data); g_list_next(prefs) != NULL; prefs = g_list_next(prefs)) {
+			PurpleRequestField *field = prefs->data;
+			gchar *id = field->id;
+			PurpleRequestFieldType type = purple_request_field_get_type(field);
+			switch (type) {
+			case PURPLE_REQUEST_FIELD_STRING: {
+				const gchar *value = purple_request_field_string_get_value(field);
+				purple_account_set_string(da->account, id, value);
+				break;
+			}
+			case PURPLE_REQUEST_FIELD_INTEGER: {
+				gint value = purple_request_field_int_get_value(field);
+				purple_account_set_int(da->account, id, value);
+				break;
+			}
+			case PURPLE_REQUEST_FIELD_CHOICE: {
+				gint value = purple_request_field_choice_get_value(field);
+				purple_account_set_int(da->account, id, value);
+				break;
+			}
+			case PURPLE_REQUEST_FIELD_BOOLEAN: {
+				gboolean value = purple_request_field_bool_get_value(field);
+				purple_account_set_bool(da->account, id, value);
+				break;
+			}
+			default:
+				break;
+			}
+		}
+
+		/* Handle leaving guild bool */
+		PurpleRequestField *field = prefs->data;
+		gboolean value = purple_request_field_bool_get_value(field);
+
+		if (value == 0) {
+			continue;
+		}
+
+		gchar **guild_id_tokens = g_strsplit(purple_request_field_get_id(field), "-", 2);
+		gchar *guild_id = guild_id_tokens[0];
+		DiscordGuild *guild = discord_get_guild(da, to_int(guild_id));
+		g_strfreev(guild_id_tokens);
+		DiscordAccountGuild *acc_guild = g_new0(DiscordAccountGuild, 1);
+		acc_guild->account = da;
+		acc_guild->guild = guild;
+		gchar *question = g_strdup_printf(_("Are you sure you want to leave the server %s?"), guild->name);
+
+		purple_request_yes_no(
+			da->pc,
+			_("Leaving Server!"),
+			_("Leaving Server!"),
+			question,
+			1, da->account, NULL, NULL,
+			acc_guild,
+			G_CALLBACK(discord_leaving_guild),
+			NULL
+		);
+		g_free(question);
+	}
+}
+
+void
+discord_manage_servers(PurpleProtocolAction *action)
+{
+	PurpleConnection *pc = purple_protocol_action_get_connection(action);
+	DiscordAccount *da = purple_connection_get_protocol_data(pc);
+	PurpleRequestFields *fields = purple_request_fields_new();
+
+	GHashTableIter iter;
+	gpointer key, value;
+
+	g_hash_table_iter_init(&iter, da->new_guilds);
+
+	while (g_hash_table_iter_next(&iter, &key, &value)) {
+		DiscordGuild *guild = value;
+
+		if (!guild) {
+			continue;
+		}
+
+		PurpleRequestFieldGroup *group = purple_request_field_group_new(guild->name);
+
+		/* Guild Abbreviation for Blist Groups */
+		gchar *id = g_strdup_printf("%" G_GUINT64_FORMAT "-abbr", guild->id);
+		const gchar *default_text = purple_account_get_string(da->account, id, guild->name);
+		PurpleRequestField *field = purple_request_field_string_new(id, _("Buddy List Abbreviation"), default_text, FALSE);
+		purple_request_field_group_add_field(group, field);
+		g_free(id);
+
+		/* Whether Guild is Considered Large or Small */
+		id = g_strdup_printf("%" G_GUINT64_FORMAT "-size", guild->id);
+		gint default_choice = purple_account_get_int(da->account, id, 0);
+		field = purple_request_field_choice_new(id, _("Effective Guild Size"), default_choice);
+		purple_request_field_choice_add(field, _("Default"));
+		purple_request_field_choice_add(field, _("Large"));
+		purple_request_field_choice_add(field, _("Small"));
+		purple_request_field_group_add_field(group, field);
+		g_free(id);
+
+		/* LEAVE SERVER */
+		id = g_strdup_printf("%" G_GUINT64_FORMAT "-leave", guild->id);
+		field = purple_request_field_bool_new(id, _("Leave this server"), FALSE);
+		purple_request_field_group_add_field(group, field);
+		g_free(id);
+
+		purple_request_fields_add_group(fields, group);
+	}
+
+	purple_request_fields(
+		pc,
+		_("Manage discord servers"),
+		_("Manage discord servers"),
+		_("Edit per-server settings"),
+		fields,
+		_("_OK"), G_CALLBACK(discord_manage_servers_cb),
+		_("_Cancel"), NULL,
+		purple_request_cpar_from_connection(pc),
+		da
+	);
+}
+
 static GList *
 discord_actions(
 #if !PURPLE_VERSION_CHECK(3, 0, 0)
@@ -8475,6 +8800,8 @@ discord_actions(
 	PurpleProtocolAction *act;
 
 	act = purple_protocol_action_new(_("Join a server..."), discord_join_server);
+	m = g_list_append(m, act);
+	act = purple_protocol_action_new(_("Manage servers..."), discord_manage_servers);
 	m = g_list_append(m, act);
 
 	return m;
