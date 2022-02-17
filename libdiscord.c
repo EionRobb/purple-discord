@@ -4666,6 +4666,7 @@ discord_set_status(PurpleAccount *account, PurpleStatus *status)
 
 	JsonObject *obj = json_object_new();
 	JsonObject *data = json_object_new();
+	JsonArray *activities = json_array_new();
 
 	if (g_str_has_prefix(status_id, "set-")) {
 		status_id = &status_id[4];
@@ -4681,18 +4682,18 @@ discord_set_status(PurpleAccount *account, PurpleStatus *status)
 		if (purple_account_get_bool(account, "use-status-as-game", FALSE)) {
 			json_object_set_int_member(game, "type", GAME_TYPE_PLAYING);
 			json_object_set_string_member(game, "name", message);
-		} else if (purple_account_get_bool(account, "use-status-as-custom-status", TRUE)) {
+		} else {
 			json_object_set_int_member(game, "type", GAME_TYPE_CUSTOM_STATUS);
 			json_object_set_string_member(game, "name", "Custom Status");
 			json_object_set_string_member(game, "state", message);
 		}
 
-		json_object_set_object_member(data, "game", game);
-	} else {
-		json_object_set_null_member(data, "game");
+		json_array_add_object_element(activities, game);
 	}
 
+	json_object_set_array_member(data, "activities", activities);
 	json_object_set_boolean_member(data, "afk", FALSE);
+	json_object_set_string_member(data, "status", status_id);
 	json_object_set_object_member(obj, "d", data);
 
 	discord_socket_write_json(ya, obj);
@@ -4700,15 +4701,13 @@ discord_set_status(PurpleAccount *account, PurpleStatus *status)
 	data = json_object_new();
 	json_object_set_string_member(data, "status", status_id);
 
-	if (purple_account_get_bool(account, "use-status-as-custom-status", TRUE)) {
-		if (message && *message) {
-			JsonObject *custom_status = json_object_new();
-			json_object_set_string_member(custom_status, "text", message);
-			json_object_set_object_member(data, "custom_status", custom_status);
+	if (message && *message) {
+		JsonObject *custom_status = json_object_new();
+		json_object_set_string_member(custom_status, "text", message);
+		json_object_set_object_member(data, "custom_status", custom_status);
 
-		} else {
-			json_object_set_null_member(data, "custom_status");
-		}
+	} else {
+		json_object_set_null_member(data, "custom_status");
 	}
 
 	postdata = json_object_to_string(data);
@@ -8579,7 +8578,7 @@ discord_guild_member_screening(DiscordAccount *da, JsonNode *node, gpointer user
 			g_free(secondary);
 		}
 		secondary = g_strdup_printf("%s\n\n%s:\n%s", form_desc, _("Server Rules"), rule_string);
-		
+
 		gchar *id = g_strdup_printf("field-%d", n);
 		PurpleRequestField *field = purple_request_field_bool_new(id, label, FALSE);
 		purple_request_field_set_required(field, required);
