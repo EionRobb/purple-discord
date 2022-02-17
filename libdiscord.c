@@ -2550,7 +2550,8 @@ discord_treat_room_as_small(DiscordAccount *da, guint64 room_id, DiscordGuild *g
 	} else if (sizepref == DISCORD_GUILD_SIZE_SMALL) {
 		return TRUE;
 	}
-	if (g_hash_table_size(guild->members) < purple_account_get_int(da->account, "large-channel-count", 20))
+	gint member_count = g_hash_table_size(guild->members);
+	if (member_count < purple_account_get_int(da->account, "large-channel-count", 20))
 	{
 		return TRUE;
 	}
@@ -8574,7 +8575,11 @@ discord_guild_member_screening(DiscordAccount *da, JsonNode *node, gpointer user
 			rule_string = tmp;
 		}
 		// Hack that will break if/when discord updates their screening api
+		if (secondary != NULL) {
+			g_free(secondary);
+		}
 		secondary = g_strdup_printf("%s\n\n%s:\n%s", form_desc, _("Server Rules"), rule_string);
+		
 		gchar *id = g_strdup_printf("field-%d", n);
 		PurpleRequestField *field = purple_request_field_bool_new(id, label, FALSE);
 		purple_request_field_set_required(field, required);
