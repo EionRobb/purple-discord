@@ -2476,7 +2476,6 @@ discord_reactor_cb(DiscordAccount *da, JsonNode *node, gpointer user_data)
 
 static void
 discord_download_image_cb(DiscordAccount *da, JsonNode *node, gpointer user_data) {
-	//The returned size can be changed by appending a querystring of ?size=desired_size to the URL. Image size can be any power of two between 16 and 4096.
 	DiscordImgMsgContext *img_context = user_data;
 
 	if (node != NULL) {
@@ -5098,6 +5097,10 @@ discord_buddy_guild(DiscordAccount *da, DiscordGuild *guild)
 
 		if (cat)
 			category_name = cat->name;
+		if (purple_strequal(category_id, "0")) {
+			g_free(category_id);
+			category_id = from_int(guild->id);
+		}
 
 		gchar *namepref_id = g_strdup_printf("%" G_GUINT64_FORMAT "-abbr", guild->id);
 		const gchar *guild_name = purple_account_get_string(da->account, namepref_id, guild->name);
