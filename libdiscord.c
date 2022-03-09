@@ -3782,6 +3782,66 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		discord_set_group_typing(&ctx);
 
 		g_free(n);
+	} else if (purple_strequal(type, "MESSAGE_DELETE") || purple_strequal(type, "MESSAGE_DELETE_BULK")) {
+
+		const gchar *channel_id = json_object_get_string_member(data, "channel_id");
+
+		if (!channel_id) {
+			return;
+		}
+
+		gchar *msg_times;
+		if (purple_strequal(type, "MESSAGE_DELETE_BULK")) {
+			JsonArray *ids = json_object_get_array_member(data, "ids");
+			guint num_msgs = json_array_get_length(ids);
+			guint printed_msgs = 2;
+			if (num_msgs > 10) {
+				msg_times = g_strdup_printf(_("%u messages between "), num_msgs);
+			} else {
+				printed_msgs = num_msgs;
+				msg_times = g_strdup_printf(_("%u messages at "), num_msgs);
+			}
+			const gchar *comma = printed_msgs > 2 ? ", " : " ";
+
+			for (guint n = 0; n < printed_msgs-1; n++) {
+				const gchar *id = json_array_get_string_element(ids, n);
+				gchar *timestring = discord_parse_timestamp(discord_time_from_snowflake(to_int(id)));
+				gchar *tmp = g_strdup_printf("%s%s%s", msg_times, timestring, comma);
+				g_free(timestring);
+				g_free(msg_times);
+				msg_times = tmp;
+			}
+			const gchar *id = json_array_get_string_element(ids, num_msgs-1);
+			gchar *timestring = discord_parse_timestamp(discord_time_from_snowflake(to_int(id)));
+			gchar *tmp = g_strdup_printf(_("%sand %s were deleted"), msg_times, timestring);
+			g_free(timestring);
+			g_free(msg_times);
+			msg_times = tmp;
+		} else {
+			const gchar *id = json_object_get_string_member(data, "id");
+			gchar *timestring = discord_parse_timestamp(discord_time_from_snowflake(to_int(id)));
+			msg_times = g_strdup_printf(_("Message at %s was deleted"), timestring);
+			g_free(timestring);
+		}
+
+		PurpleConversation *conv;
+		if (g_hash_table_contains(da->one_to_ones, channel_id)) {
+			gchar *username = g_hash_table_lookup(da->one_to_ones, channel_id);
+			PurpleIMConversation *imconv = purple_conversations_find_im_with_account(username, da->account);
+			conv = PURPLE_CONVERSATION(imconv);
+
+		} else {
+			PurpleChatConversation *chatconv = purple_conversations_find_chat(da->pc, discord_chat_hash(to_int(channel_id)));
+			conv = PURPLE_CONVERSATION(chatconv);
+		}
+		if (conv == NULL) {
+			g_free(msg_times);
+			return;
+		}
+
+		purple_conversation_write_system_message(conv, msg_times, PURPLE_MESSAGE_SYSTEM);
+		g_free(msg_times);
+
 	} else if (purple_strequal(type, "TYPING_START")) {
 		const gchar *channel_id = json_object_get_string_member(data, "channel_id");
 		guint64 user_id = to_int(json_object_get_string_member(data, "user_id"));
