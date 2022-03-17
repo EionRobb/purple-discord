@@ -408,6 +408,7 @@ typedef struct {
 	gchar *reaction;
 	time_t msg_time;
 	gchar *msg_txt;
+	gboolean is_unreact;
 } DiscordReaction;
 
 typedef struct {
@@ -2352,7 +2353,12 @@ discord_get_react_text(DiscordAccount *da, const gchar *author_nick, const gchar
 		g_free(author_nick_pos);
 	}
 
-	gchar *react_text = g_strdup_printf(_("%s reacted with \"%s\"%s"), reactors_text, emoji_name, prev_text);
+	gchar *react_text;
+	if (react->is_unreact) {
+		react_text = g_strdup_printf(_("%s removed the reaction \"%s\"%s"), reactors_text, emoji_name, prev_text);
+	} else {
+		react_text = g_strdup_printf(_("%s reacted with \"%s\"%s"), reactors_text, emoji_name, prev_text);
+	}
 	g_free(prev_text);
 
 	/* Replace <:emoji:id> with emojis */
@@ -3047,6 +3053,7 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 				reaction_data->is_me = is_me;
 				reaction_data->count = count;
 				reaction_data->reaction = (emoji_id != NULL) ? g_strdup_printf("&lt;:%s:%s&gt;", emoji_name, emoji_id) : g_strdup(emoji_name);
+				reaction_data->is_unreact = FALSE;
 
 				if (purple_account_get_bool(da->account, "fetch-react-backlog", FALSE)) {
 					gchar *emoji_str = (emoji_id != NULL) ? g_strdup_printf("%s:%s", emoji_name, emoji_id) : g_strdup(emoji_name);
@@ -3242,6 +3249,7 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 						reaction_data->is_me = is_me;
 						reaction_data->count = count;
 						reaction_data->reaction = (emoji_id != NULL) ? g_strdup_printf("&lt;:%s:%s&gt;", emoji_name, emoji_id) : g_strdup(emoji_name);
+						reaction_data->is_unreact = FALSE;
 
 						if (purple_account_get_bool(da->account, "fetch-react-backlog", FALSE)) {
 							gchar *emoji_str = (emoji_id != NULL) ? g_strdup_printf("%s:%s", emoji_name, emoji_id) : g_strdup(emoji_name);
@@ -4491,6 +4499,50 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		reaction->is_me = user_id == da->self_user_id ? TRUE : FALSE;
 		reaction->count = 1;
 		reaction->reaction = (emoji_id != NULL) ? g_strdup_printf("&lt;:%s:%s&gt;", emoji_name, emoji_id) : g_strdup(emoji_name);
+		reaction->is_unreact = FALSE;
+
+		// Get array of messages because single-message endpoint is bot-only
+		gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/channels/%" G_GUINT64_FORMAT "/messages?limit=5&after=%" G_GUINT64_FORMAT, channel_id, message_id-1);
+		discord_fetch_url(da, url, NULL, discord_react_cb, reaction);
+		g_free(url);
+
+
+	} else if (purple_strequal(type, "MESSAGE_REACTION_REMOVE")) {
+
+		const gchar *channel_id_s = json_object_get_string_member(data, "channel_id");
+		guint64 channel_id = to_int(channel_id_s);
+		guint64 message_id = to_int(json_object_get_string_member(data, "message_id"));
+		guint64 user_id = to_int(json_object_get_string_member(data, "user_id"));
+		JsonObject *emoji = json_object_get_object_member(data, "emoji");
+		const gchar *emoji_name = json_object_get_string_member(emoji, "name");
+		const gchar *emoji_id = json_object_get_string_member(emoji, "id");
+		if (emoji_name == NULL) {
+			emoji_name = "?";
+		}
+
+		PurpleConversation *conv;
+
+		if (channel_id_s && g_hash_table_contains(da->one_to_ones, channel_id_s)) {
+			PurpleIMConversation *imconv;
+
+			gchar *username = g_hash_table_lookup(da->one_to_ones, channel_id_s);
+			imconv = purple_conversations_find_im_with_account(username, da->account);
+			conv = PURPLE_CONVERSATION(imconv);
+		} else {
+			PurpleChatConversation *chatconv = purple_conversations_find_chat(da->pc, discord_chat_hash(channel_id));
+			conv = PURPLE_CONVERSATION(chatconv);
+		}
+
+		DiscordReaction *reaction;
+		reaction = g_new0(DiscordReaction, 1);
+		reaction->conv = conv;
+		reaction->user_id = user_id;
+		reaction->msg_time = discord_time_from_snowflake(message_id);
+		reaction->msg_txt = NULL;
+		reaction->is_me = user_id == da->self_user_id ? TRUE : FALSE;
+		reaction->count = 1;
+		reaction->reaction = (emoji_id != NULL) ? g_strdup_printf("&lt;:%s:%s&gt;", emoji_name, emoji_id) : g_strdup(emoji_name);
+		reaction->is_unreact = TRUE;
 
 		// Get array of messages because single-message endpoint is bot-only
 		gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/channels/%" G_GUINT64_FORMAT "/messages?limit=5&after=%" G_GUINT64_FORMAT, channel_id, message_id-1);
@@ -6425,23 +6477,21 @@ discord_send_react_cb(DiscordAccount *da, JsonNode *node, gpointer user_data)
 	const gchar *msg_id = json_object_get_string_member(message, "id");
 	time_t msg_time = discord_time_from_snowflake(to_int(msg_id));
 
-	DiscordMsgInteraction *action  = (DiscordMsgInteraction *)user_data;
-	gchar *emoji = action->data;
-	time_t intended_time = action->msg_time;
-	g_free(action);
+	DiscordReaction *react  = (DiscordReaction *)user_data;
+	gchar *emoji = react->reaction;
+	time_t intended_time = react->msg_time;
+	const gchar *method = react->is_unreact ? "DELETE" : "PUT";
 
 	if (msg_time != intended_time) {
-		g_free(emoji);
+		discord_free_reaction(react);
 		return;
 	}
 
 
 	gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/channels/%s/messages/%s/reactions/%s/%%40me", channel_id, msg_id, purple_url_encode(emoji));
-	discord_fetch_url_with_method(da, "PUT", url, "{}", NULL, NULL);
+	discord_fetch_url_with_method(da, method, url, "{}", NULL, NULL);
 	g_free(url);
-	// No special free function for DiscordMsgInteraction because data may not
-	// need freeing
-	g_free(emoji);
+	discord_free_reaction(react);
 }
 
 static void
@@ -9104,7 +9154,7 @@ discord_chat_reply(DiscordAccount *da, PurpleConversation *conv, guint64 room_id
 }
 
 static gboolean
-discord_chat_react(DiscordAccount *da, PurpleConversation *conv, guint64 id, gchar **args)
+discord_chat_react(DiscordAccount *da, PurpleConversation *conv, guint64 id, gboolean is_unreact, gchar **args)
 {
 	const gchar *raw_emoji = args[1];
 	gchar *emoji = NULL;
@@ -9138,9 +9188,12 @@ discord_chat_react(DiscordAccount *da, PurpleConversation *conv, guint64 id, gch
 	if (strchr(args[0], ':')) {
 		time_t msg_time = discord_parse_timestring(args[0]);
 		guint64 placeholder_id = discord_snowflake_from_time(msg_time);
-		DiscordMsgInteraction *send_react = g_new0(DiscordMsgInteraction, 1);
+		DiscordReaction *send_react = g_new0(DiscordReaction, 1);
+		send_react->conv = conv;
 		send_react->msg_time = msg_time;
-		send_react->data = (gpointer) emoji;
+		send_react->reaction = (gpointer) emoji;
+		send_react->is_unreact = is_unreact;
+		send_react->msg_txt = g_strdup("");
 
 		gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/channels/%" G_GUINT64_FORMAT "/messages?limit=5&after=%" G_GUINT64_FORMAT, id, placeholder_id);
 		discord_fetch_url(da, url, NULL, discord_send_react_cb, send_react);
@@ -9238,7 +9291,27 @@ discord_cmd_react(PurpleConversation *conv, const gchar *cmd, gchar **args, gcha
 	}
 
 
-	gboolean is_okay = discord_chat_react(da, conv, id, args);
+	gboolean is_okay = discord_chat_react(da, conv, id, FALSE, args);
+
+	if (is_okay)
+		return PURPLE_CMD_RET_OK;
+	else
+		return PURPLE_CMD_RET_FAILED;
+}
+
+static PurpleCmdRet
+discord_cmd_unreact(PurpleConversation *conv, const gchar *cmd, gchar **args, gchar **error, gpointer data)
+{
+	PurpleConnection *pc = purple_conversation_get_connection(conv);
+	DiscordAccount *da = purple_connection_get_protocol_data(pc);
+	guint64 id = *(guint64 *) purple_conversation_get_data(conv, "id");
+
+	if (pc == NULL || (int)id == -1) {
+		return PURPLE_CMD_RET_FAILED;
+	}
+
+
+	gboolean is_okay = discord_chat_react(da, conv, id, TRUE, args);
 
 	if (is_okay)
 		return PURPLE_CMD_RET_OK;
@@ -9401,6 +9474,13 @@ plugin_load(PurplePlugin *plugin, GError **error)
 		PURPLE_CMD_FLAG_CHAT | PURPLE_CMD_FLAG_PROTOCOL_ONLY | PURPLE_CMD_FLAG_ALLOW_WRONG_ARGS,
 		DISCORD_PLUGIN_ID, discord_cmd_react,
 		_("react &lt;timestamp&gt; &lt;emoji&gt;:  Reacts to the message at &lt;timestamp&gt; with &lt;emoji&gt;<br />Accepted timestamp formats: YYYY-MM-DDthh:mm:ss, YYYY-MM-DDThh:mm:ss, hh:mm:ss"), NULL
+	);
+
+	purple_cmd_register(
+		"unreact", "ws", PURPLE_CMD_P_PLUGIN,
+		PURPLE_CMD_FLAG_CHAT | PURPLE_CMD_FLAG_PROTOCOL_ONLY | PURPLE_CMD_FLAG_ALLOW_WRONG_ARGS,
+		DISCORD_PLUGIN_ID, discord_cmd_unreact,
+		_("unreact &lt;timestamp&gt; &lt;emoji&gt;:  Removes the reaction &lt;emoji&gt; from the message at &lt;timestamp&gt;<br />Accepted timestamp formats: YYYY-MM-DDthh:mm:ss, YYYY-MM-DDThh:mm:ss, hh:mm:ss"), NULL
 	);
 
 	purple_cmd_register(
