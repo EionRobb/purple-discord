@@ -418,10 +418,6 @@ typedef struct {
 	PurpleConversation *conv;
 } DiscordReply;
 
-typedef struct {
-	time_t msg_time;
-	gpointer data;
-} DiscordMsgInteraction;
 
 static guint64
 to_int(const gchar *id)
@@ -2706,9 +2702,10 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 	/* Handle thread formatting */
 	if (thread) {
 		time_t ts = discord_time_from_snowflake(thread->id);
+		time_t msg_ts = discord_time_from_snowflake(msg_id);
 		const gchar *color = "#606060";
 		const gchar *indicator;
-		if (thread->last_message_id == 0 || msg_id == thread->id) {
+		if (thread->last_message_id == 0 || msg_ts == ts) {
 			indicator = purple_account_get_string(da->account, "parent-indicator", "◈ ");
 		} else {
 			indicator = purple_account_get_string(da->account, "thread-indicator", "⤷ ");
@@ -3098,17 +3095,18 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 			name = discord_create_nickname(author, guild, channel);
 		}
 
-		if (referenced_message != NULL) {
+		if (referenced_message != NULL && msg_type != MESSAGE_THREAD_STARTER_MESSAGE) {
 			JsonObject *reply_author = json_object_get_object_member(referenced_message, "author");
 			const gchar *msg_txt = json_object_get_string_member(referenced_message, "content");
 			DiscordUser *reply_user = discord_upsert_user(da->new_users, reply_author);
-			const gchar *reply_username = discord_create_nickname(reply_user, guild, channel);
+			gchar *reply_username = discord_create_nickname(reply_user, guild, channel);
 
 			gchar *prev_text = discord_truncate_message(msg_txt, 32);
 
 			// Formatting could be better. I went with something similar to Discord's
 			// format to make it familiar to the user
 			gchar *reply_txt = g_strdup_printf("<font size=1>┌──@%s: %s</font>", reply_username ? reply_username : _("Unknown user"), prev_text);
+			g_free(reply_username);
 			g_free(prev_text);
 
 			if (conv == NULL) {
@@ -3156,7 +3154,12 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 			time_t ref_timestamp = discord_time_from_snowflake(ref_id);
 			gchar *timestring = discord_parse_timestamp(ref_timestamp);
 			const gchar *thread_name = thread ? thread->name : escaped_content; // MESSAGE_THREAD_CREATED msgs have thread name as their content
-			gchar *new_thread_txt = g_strdup_printf(_("%s started thread \"%s\" from message at %s"), name, thread_name, timestring);
+			gchar *new_thread_txt;
+			if (ref_timestamp > DISCORD_EPOCH_MS/1000) {
+				new_thread_txt = g_strdup_printf(_("%s started thread \"%s\" from message at %s"), name, thread_name, timestring);
+			} else {
+				new_thread_txt = g_strdup_printf(_("%s started thread \"%s\""), name, thread_name);
+			}
 			g_free(timestring);
 			if (conv != NULL) {
 				purple_conversation_write(conv, NULL, new_thread_txt, PURPLE_MESSAGE_SYSTEM, timestamp);
@@ -3165,11 +3168,38 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 
 
 			if (msg_type == MESSAGE_THREAD_STARTER_MESSAGE && thread) {
-				// Get array of messages because single-message endpoint is bot-only
-				gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/channels/%" G_GUINT64_FORMAT "/messages?limit=5&after=%" G_GUINT64_FORMAT, channel_id, ref_id-1);
-				discord_fetch_url(da, url, NULL, discord_thread_parent_cb, from_int(thread->id));
-				g_free(url);
-				//thread->last_message_id = thread->id;
+				if (referenced_message) {
+					const gchar *msg_txt = json_object_get_string_member(referenced_message, "content");
+					JsonObject *tstart_author = json_object_get_object_member(referenced_message, "author");
+					guint64 tstart_author_id = to_int(json_object_get_string_member(tstart_author, "id"));
+
+					PurpleMessageFlags tstart_flags;
+					if (tstart_author_id == da->self_user_id) {
+						tstart_flags = PURPLE_MESSAGE_SEND | PURPLE_MESSAGE_REMOTE_SEND | PURPLE_MESSAGE_DELAYED;
+					} else {
+						tstart_flags = PURPLE_MESSAGE_RECV;
+					}
+					DiscordUser *tstart_user = discord_upsert_user(da->new_users, tstart_author);
+					gchar *tstart_username = discord_get_display_name_or_unk(da, guild, channel, tstart_user, tstart_author);
+					time_t ts = discord_time_from_snowflake(thread->id);
+						const gchar *color = "#606060";
+						const gchar *indicator = purple_account_get_string(da->account, "parent-indicator", "◈ ");
+						gchar *thread_ts = discord_get_formatted_thread_timestamp(ts);
+
+						if (msg_txt && *msg_txt) {
+							tmp = g_strdup_printf("%s%s: <font color=\"%s\">%s</font>", indicator, thread_ts, color, msg_txt);
+						}
+					purple_serv_got_chat_in(da->pc, discord_chat_hash(channel->id), tstart_username, tstart_flags, tmp, ref_timestamp);
+					if (tmp)
+						g_free(tmp);
+					g_free(tstart_username);
+				} else {
+					// Get array of messages because single-message endpoint is bot-only
+					gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/channels/%" G_GUINT64_FORMAT "/messages?limit=5&after=%" G_GUINT64_FORMAT, channel_id, ref_id-1);
+					discord_fetch_url(da, url, NULL, discord_thread_parent_cb, from_int(thread->id));
+					g_free(url);
+					//thread->last_message_id = thread->id;
+				}
 			}
 		}
 
@@ -8994,6 +9024,28 @@ discord_get_thread_id_from_timestamp(DiscordAccount *da, PurpleConversation *con
 }
 
 static gboolean
+discord_chat_thread_history(DiscordAccount *da, PurpleConversation *conv, guint64 room_id, gchar **args)
+{
+	/* Get referenced thread id */
+	gchar *thread_id = discord_get_thread_id_from_timestamp(da, conv, args[0]);
+	if (thread_id == NULL) {
+		return FALSE;
+	}
+	DiscordChannel *thread = discord_get_thread_global_int_guild(da, to_int(thread_id), NULL);
+	if (thread == NULL) {
+		g_free(thread_id);
+		return FALSE;
+	}
+
+	gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/channels/%s/messages?limit=100&after=1", thread_id);
+	discord_fetch_url(da, url, NULL, discord_got_history_of_room, thread);
+	g_free(url);
+	g_free(thread_id);
+
+	return TRUE;
+}
+
+static gboolean
 discord_chat_thread_reply(DiscordAccount *da, PurpleConversation *conv, guint64 room_id, gchar **args)
 {
 
@@ -9104,6 +9156,23 @@ discord_chat_thread_new(DiscordAccount *da, PurpleConversation *conv, guint64 ro
 
 	return TRUE;
 }*/
+
+static gboolean
+discord_chat_get_history(DiscordAccount *da, PurpleConversation *conv, guint64 room_id, gchar **args)
+{
+	DiscordChannel *channel = discord_get_channel_global_int_guild(da, room_id, NULL);
+	if (channel == NULL) {
+		return FALSE;
+	}
+
+	gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/channels/%" G_GUINT64_FORMAT "/messages?limit=100&after=1", room_id);
+	discord_fetch_url(da, url, NULL, discord_got_history_of_room, channel);
+	g_free(url);
+
+	return TRUE;
+}
+
+
 
 static gboolean
 discord_chat_reply(DiscordAccount *da, PurpleConversation *conv, guint64 room_id, gchar **args)
@@ -9443,10 +9512,48 @@ discord_cmd_thread(PurpleConversation *conv, const gchar *cmd, gchar **args, gch
 
 	g_strfreev(parsed_args);
 
-	if (is_okay)
+	if (is_okay) {
 		return PURPLE_CMD_RET_OK;
-	else
+	}
+	return PURPLE_CMD_RET_FAILED;
+}
+
+static PurpleCmdRet
+discord_cmd_thread_history(PurpleConversation *conv, const gchar *cmd, gchar **args, gchar **error, gpointer data)
+{
+	PurpleConnection *pc = purple_conversation_get_connection(conv);
+	DiscordAccount *da = purple_connection_get_protocol_data(pc);
+	guint64 room_id = *(guint64 *) purple_conversation_get_data(conv, "id");
+
+	if (pc == NULL || (int)room_id == -1) {
 		return PURPLE_CMD_RET_FAILED;
+	}
+
+	gboolean is_okay = discord_chat_thread_history(da, conv, room_id, args);
+
+	if (is_okay) {
+		return PURPLE_CMD_RET_OK;
+	}
+	return PURPLE_CMD_RET_FAILED;
+}
+
+static PurpleCmdRet
+discord_cmd_get_history(PurpleConversation *conv, const gchar *cmd, gchar **args, gchar **error, gpointer data)
+{
+	PurpleConnection *pc = purple_conversation_get_connection(conv);
+	DiscordAccount *da = purple_connection_get_protocol_data(pc);
+	guint64 room_id = *(guint64 *) purple_conversation_get_data(conv, "id");
+
+	if (pc == NULL || (int)room_id == -1) {
+		return PURPLE_CMD_RET_FAILED;
+	}
+
+	gboolean is_okay = discord_chat_get_history(da, conv, room_id, args);
+
+	if (is_okay) {
+		return PURPLE_CMD_RET_OK;
+	}
+	return PURPLE_CMD_RET_FAILED;
 }
 
 static gboolean
@@ -9544,6 +9651,34 @@ plugin_load(PurplePlugin *plugin, GError **error)
 			PURPLE_CMD_FLAG_CHAT | PURPLE_CMD_FLAG_PROTOCOL_ONLY | PURPLE_CMD_FLAG_ALLOW_WRONG_ARGS,
 						DISCORD_PLUGIN_ID, discord_cmd_threads,
 						_("threads:  Display active channel threads"), NULL
+	);
+
+	purple_cmd_register(
+			"threadhistory", "w", PURPLE_CMD_P_PLUGIN,
+			PURPLE_CMD_FLAG_CHAT | PURPLE_CMD_FLAG_PROTOCOL_ONLY | PURPLE_CMD_FLAG_ALLOW_WRONG_ARGS,
+						DISCORD_PLUGIN_ID, discord_cmd_thread_history,
+						_("threadhistory &lt;timestamp&gt;:  Retrieves full history of thread"), NULL
+	);
+
+	purple_cmd_register(
+			"thist", "w", PURPLE_CMD_P_PLUGIN,
+			PURPLE_CMD_FLAG_CHAT | PURPLE_CMD_FLAG_PROTOCOL_ONLY | PURPLE_CMD_FLAG_ALLOW_WRONG_ARGS,
+						DISCORD_PLUGIN_ID, discord_cmd_thread_history,
+						_("thist &lt;timestamp&gt;:  Retrieves full history of thread.<br />Alias of threadhistory"), NULL
+	);
+
+	purple_cmd_register(
+			"grabhistory", "", PURPLE_CMD_P_PLUGIN,
+			PURPLE_CMD_FLAG_CHAT | PURPLE_CMD_FLAG_PROTOCOL_ONLY | PURPLE_CMD_FLAG_ALLOW_WRONG_ARGS,
+						DISCORD_PLUGIN_ID, discord_cmd_get_history,
+						_("grabhistory:  Retrieves full history of channel. Intended for rules channels and the like. Using this on old, highly active channels is not recommended"), NULL
+	);
+
+	purple_cmd_register(
+			"hist", "", PURPLE_CMD_P_PLUGIN,
+			PURPLE_CMD_FLAG_CHAT | PURPLE_CMD_FLAG_PROTOCOL_ONLY,
+						DISCORD_PLUGIN_ID, discord_cmd_get_history,
+						_("hist:  Retrieves full history of channel. Intended for rules channels and the like. Using this on old, highly active channels is not recommended.<br />Alias of grabhistory"), NULL
 	);
 
 #if 0

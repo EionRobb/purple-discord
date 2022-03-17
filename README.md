@@ -67,7 +67,12 @@ Purple-discord supports the following slash commands:
 | threads | `/threads` | Display active channel threads. |
 | thread | `/thread <timestamp> <message>` | Sends message to thread. |
 | react | `/react <timestamp> <emoji>` | Reacts to message at timestamp with emoji. |
+| unreact | `/unreact <timestamp> <emoji>` | Removes the reaction emoji from the message at timestamp. |
 | reply | `/reply <timestamp> <message>` | Replies to message at timestamp. |
+| threadhistory | `/threadhistory <timestamp>` | Retrieves full history of thread. |
+| thist | `/thist <timestamp>` | Alias of threadhistory. |
+| grabhistory | `/grabhistory` | Retrieves full history of channel. Intended for rules channels and the like. Using this on old, highly active channels is not recommended. |
+| hist | `/hist` | Alias of grabhistory. |
 
 For commands that take a timestamp argument, the valid timestamp formats are
 `YYYY-MM-DDthh:mm:ss`, `YYYY-MM-DDThh:mm:ss`, and `hh:mm:ss`. For example:
