@@ -9157,19 +9157,24 @@ discord_chat_thread_new(DiscordAccount *da, PurpleConversation *conv, guint64 ro
 	return TRUE;
 }*/
 
-static gboolean
-discord_chat_get_history(DiscordAccount *da, PurpleConversation *conv, guint64 room_id, gchar **args)
+static void
+discord_chat_get_history(gpointer user_data, int action)
 {
+	PurpleConversation *conv = user_data;
+	PurpleConnection *pc = purple_conversation_get_connection(conv);
+	DiscordAccount *da = purple_connection_get_protocol_data(pc);
+	guint64 room_id = *(guint64 *) purple_conversation_get_data(conv, "id");
+
 	DiscordChannel *channel = discord_get_channel_global_int_guild(da, room_id, NULL);
 	if (channel == NULL) {
-		return FALSE;
+		return;
 	}
 
 	gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/channels/%" G_GUINT64_FORMAT "/messages?limit=100&after=1", room_id);
 	discord_fetch_url(da, url, NULL, discord_got_history_of_room, channel);
 	g_free(url);
 
-	return TRUE;
+	return;
 }
 
 
@@ -9548,12 +9553,18 @@ discord_cmd_get_history(PurpleConversation *conv, const gchar *cmd, gchar **args
 		return PURPLE_CMD_RET_FAILED;
 	}
 
-	gboolean is_okay = discord_chat_get_history(da, conv, room_id, args);
+	purple_request_yes_no(
+		da->pc,
+		_("Warning"),
+		_("Warning"),
+		_("Fetching a channel's entire history can take a lot of memory and time to complete. Are you sure you want to continue?"),
+		1, da->account, NULL, NULL,
+		conv,
+		G_CALLBACK(discord_chat_get_history),
+		NULL
+	);
 
-	if (is_okay) {
-		return PURPLE_CMD_RET_OK;
-	}
-	return PURPLE_CMD_RET_FAILED;
+	return PURPLE_CMD_RET_OK;
 }
 
 static gboolean
