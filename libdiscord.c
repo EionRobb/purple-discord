@@ -82,6 +82,8 @@
 
 #define DISCORD_EPOCH_MS 1420070400000
 
+#define DISCORD_MAX_LARGE_THRESHOLD 250
+
 #define DISCORD_MESSAGE_NORMAL (0)
 #define DISCORD_MESSAGE_EDITED (1)
 #define DISCORD_MESSAGE_PINNED (2)
@@ -1625,7 +1627,7 @@ discord_send_auth(DiscordAccount *da)
 		json_object_set_object_member(data, "presence", presence);
 
 		json_object_set_boolean_member(data, "compress", FALSE);
-		json_object_set_int_member(data, "large_threshold", 250);
+		json_object_set_int_member(data, "large_threshold", DISCORD_MAX_LARGE_THRESHOLD);
 
 		json_object_set_object_member(client_state, "guild_hashes", json_object_new());
 		json_object_set_string_member(client_state, "highest_last_message_id", "0");
@@ -4499,7 +4501,8 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		}
 		guint member_count = json_object_get_int_member(data, "member_count");
 		guint online_count = json_object_get_int_member(data, "online_count");
-		guint head_count = member_count > 250 ? online_count : member_count;
+		guint max_count = (guint) (purple_account_get_int(da->account, "max-guild-presences", 200) - 1); // turns into MAX_UINT when max-guild-presences=0
+		guint head_count = member_count > DISCORD_MAX_LARGE_THRESHOLD ? MIN(max_count, online_count) : MIN(max_count, member_count);
 		DiscordGuild *guild = discord_get_guild(da, guild_id);
 		if (guild && head_count > guild->next_mem_to_sync) {
 			discord_send_lazy_guild_request(da, guild);
@@ -8619,6 +8622,9 @@ discord_add_account_options(GList *account_options)
 	account_options = g_list_append(account_options, option);
 
 	option = purple_account_option_bool_new(_("Display custom emoji as inline images"), "show-custom-emojis", TRUE);
+	account_options = g_list_append(account_options, option);
+
+	option = purple_account_option_int_new(_("Approximate max number of guild members to keep track of (0 disables)"), "max-guild-presences", 200);
 	account_options = g_list_append(account_options, option);
 
 	option = purple_account_option_bool_new(_("Fetch names for reactors to backlogged messages (can be spammy)"), "fetch-react-backlog", FALSE);
