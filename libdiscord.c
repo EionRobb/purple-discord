@@ -3034,7 +3034,7 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 
 			guint reactions_len = json_array_get_length(reactions);
 			for (guint n = 0; n < reactions_len; n++) {
-				JsonObject *reaction = json_array_get_object_element(reactions, 0);
+				JsonObject *reaction = json_array_get_object_element(reactions, n);
 				JsonObject *emoji = json_object_get_object_member(reaction, "emoji");
 				const gchar *emoji_id = json_object_get_string_member(emoji, "id");
 				const gchar *emoji_name = json_object_get_string_member(emoji, "name");
@@ -3263,7 +3263,7 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 			if (conv != NULL) {
 					guint reactions_len = json_array_get_length(reactions);
 					for (guint n = 0; n < reactions_len; n++) {
-						JsonObject *reaction = json_array_get_object_element(reactions, 0);
+						JsonObject *reaction = json_array_get_object_element(reactions, n);
 						JsonObject *emoji = json_object_get_object_member(reaction, "emoji");
 						const gchar *emoji_id = json_object_get_string_member(emoji, "id");
 						const gchar *emoji_name = json_object_get_string_member(emoji, "name");
