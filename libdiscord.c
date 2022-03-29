@@ -4501,7 +4501,9 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		}
 		guint member_count = json_object_get_int_member(data, "member_count");
 		guint online_count = json_object_get_int_member(data, "online_count");
-		guint max_count = (guint) (purple_account_get_int(da->account, "max-guild-presences", 200) - 1); // turns into MAX_UINT when max-guild-presences=0
+		guint max_count = purple_account_get_int(da->account, "max-guild-presences", 200) > 0 ?
+			(guint)(purple_account_get_int(da->account, "max-guild-presences", 200)-1) :
+			G_MAXUINT;
 		guint head_count = member_count > DISCORD_MAX_LARGE_THRESHOLD ? MIN(max_count, online_count) : MIN(max_count, member_count);
 		DiscordGuild *guild = discord_get_guild(da, guild_id);
 		if (guild && head_count > guild->next_mem_to_sync) {
@@ -8624,7 +8626,7 @@ discord_add_account_options(GList *account_options)
 	option = purple_account_option_bool_new(_("Display custom emoji as inline images"), "show-custom-emojis", TRUE);
 	account_options = g_list_append(account_options, option);
 
-	option = purple_account_option_int_new(_("Approximate max number of guild members to keep track of (0 disables)"), "max-guild-presences", 200);
+	option = purple_account_option_int_new(_("Approximate max number of users to keep track of, per server (0 disables)"), "max-guild-presences", 200);
 	account_options = g_list_append(account_options, option);
 
 	option = purple_account_option_bool_new(_("Fetch names for reactors to backlogged messages (can be spammy)"), "fetch-react-backlog", FALSE);

@@ -120,8 +120,8 @@ smaller version of the image if it is too large.
 emoji from the server and displays it in Pidgin as an inline image instead
 of as a URL link.
 
-**Approximate max number of guild members to keep track of (0 disables)**: The
-approximate maximum number of users to store presence information on per guild,
+**Approximate max number of users to keep track of, per server (0 disables)**: The
+approximate maximum number of users to store presence information on per server,
 to keep memory use down. Works best in multiples of 100. Minimum is 200.
 
 **Fetch unread chat messages when account connects**: Experimental. Attempts to
