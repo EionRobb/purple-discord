@@ -3781,6 +3781,50 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		}
 
 		g_free(username);
+	} else if (purple_strequal(type, "GUILD_MEMBER_LIST_UPDATE")) {
+
+		guint64 guild_id = to_int(json_object_get_string_member(data, "guild_id"));
+		JsonArray *ops = json_object_get_array_member(data, "ops");
+		int ops_len = json_array_get_length(ops);
+		for (int i = 0; i < ops_len; i++) {
+			JsonObject *op = json_array_get_object_element(ops, i);
+			const gchar *optype = json_object_get_string_member(op, "op");
+
+			if (purple_strequal(optype, "UPDATE") || purple_strequal(optype, "INSERT")) {
+				JsonObject *item = json_object_get_object_member(op, "item");
+				JsonObject *member = json_object_get_object_member(item, "member");
+
+				if (member != NULL) {
+					discord_handle_guild_member_update(da, guild_id, member);
+				}
+
+			} else if (purple_strequal(optype, "SYNC")) {
+				JsonArray *items = json_object_get_array_member(op, "items");
+				int items_len = json_array_get_length(items);
+				for (int j = 0; j < items_len; j++) {
+					JsonObject *item = json_array_get_object_element(items, j);
+					JsonObject *member = json_object_get_object_member(item, "member");
+
+					if (member != NULL) {
+						discord_handle_guild_member_update(da, guild_id, member);
+					}
+				}
+			}
+		}
+		guint member_count = json_object_get_int_member(data, "member_count");
+		guint online_count = json_object_get_int_member(data, "online_count");
+		guint max_count = purple_account_get_int(da->account, "max-guild-presences", 200) > 0 ?
+			(guint)(purple_account_get_int(da->account, "max-guild-presences", 200)-1) :
+			G_MAXUINT;
+		guint head_count = member_count > DISCORD_MAX_LARGE_THRESHOLD ? MIN(max_count, online_count) : MIN(max_count, member_count);
+		DiscordGuild *guild = discord_get_guild(da, guild_id);
+		if (guild && head_count > guild->next_mem_to_sync) {
+			discord_send_lazy_guild_request(da, guild);
+		} else if (guild && head_count < guild->next_mem_to_sync - 100) {
+			guild->next_mem_to_sync = floor((gdouble)head_count / 100.0) * 100 + 100;
+		}
+
+
 	} else if (purple_strequal(type, "MESSAGE_CREATE") || purple_strequal(type, "MESSAGE_UPDATE")) { /* TODO */
 		unsigned msgtype = DISCORD_MESSAGE_NORMAL;
 
@@ -4467,49 +4511,6 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 				gchar *name = g_strdup(json_object_get_string_member(emoji, "name"));
 				g_hash_table_replace(guild->emojis, name, id);
 			}
-		}
-
-	} else if (purple_strequal(type, "GUILD_MEMBER_LIST_UPDATE")) {
-
-		guint64 guild_id = to_int(json_object_get_string_member(data, "guild_id"));
-		JsonArray *ops = json_object_get_array_member(data, "ops");
-		int ops_len = json_array_get_length(ops);
-		for (int i = 0; i < ops_len; i++) {
-			JsonObject *op = json_array_get_object_element(ops, i);
-			const gchar *optype = json_object_get_string_member(op, "op");
-
-			if (purple_strequal(optype, "UPDATE") || purple_strequal(optype, "INSERT")) {
-				JsonObject *item = json_object_get_object_member(op, "item");
-				JsonObject *member = json_object_get_object_member(item, "member");
-
-				if (member != NULL) {
-					discord_handle_guild_member_update(da, guild_id, member);
-				}
-
-			} else if (purple_strequal(optype, "SYNC")) {
-				JsonArray *items = json_object_get_array_member(op, "items");
-				int items_len = json_array_get_length(items);
-				for (int j = 0; j < items_len; j++) {
-					JsonObject *item = json_array_get_object_element(items, j);
-					JsonObject *member = json_object_get_object_member(item, "member");
-
-					if (member != NULL) {
-						discord_handle_guild_member_update(da, guild_id, member);
-					}
-				}
-			}
-		}
-		guint member_count = json_object_get_int_member(data, "member_count");
-		guint online_count = json_object_get_int_member(data, "online_count");
-		guint max_count = purple_account_get_int(da->account, "max-guild-presences", 200) > 0 ?
-			(guint)(purple_account_get_int(da->account, "max-guild-presences", 200)-1) :
-			G_MAXUINT;
-		guint head_count = member_count > DISCORD_MAX_LARGE_THRESHOLD ? MIN(max_count, online_count) : MIN(max_count, member_count);
-		DiscordGuild *guild = discord_get_guild(da, guild_id);
-		if (guild && head_count > guild->next_mem_to_sync) {
-			discord_send_lazy_guild_request(da, guild);
-		} else if (guild && head_count < guild->next_mem_to_sync - 100) {
-			guild->next_mem_to_sync = floor((gdouble)head_count / 100.0) * 100 + 100;
 		}
 
 	} else if (purple_strequal(type, "MESSAGE_REACTION_ADD")) {
