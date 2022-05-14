@@ -2410,7 +2410,7 @@ discord_reactor_cb(DiscordAccount *da, JsonNode *node, gpointer user_data)
 	if (count > users_len) {
 		guint remainder = count - users_len;
 		const gchar *ppl = remainder == 1 ? _("person") : _("people");
-		reactors[m] = g_strdup_printf(_("%d %s%s"), remainder, m ? _("other ") : _(""), ppl);
+		reactors[m] = g_strdup_printf(_("%d %s%s"), remainder, m ? _("other ") : "", ppl);
 		m++;
 	}
 	if (m > 1) {
