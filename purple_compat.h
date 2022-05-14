@@ -224,6 +224,19 @@ purple_smiley_new_from_data(const gchar *shortcut, const guchar *data, gsize siz
 	return purple_smiley_new(stored_img, shortcut);
 }
 
+static inline void
+purple_notify_user_info_add_pair_plaintext_compat(gpointer user_info, const char *label, const char *value)
+{
+	gchar *escaped;
+
+	escaped = g_markup_escape_text(value, -1);
+	
+	purple_notify_user_info_add_pair(user_info, label, escaped);
+	
+	g_free(escaped);
+}
+#define purple_notify_user_info_add_pair_plaintext(u,l,v) purple_notify_user_info_add_pair_plaintext_compat((u),(l),(v))
+
 // Kinda gross, since we can technically use the glib mainloop from purple2
 #define g_timeout_add_seconds  purple_timeout_add_seconds
 #define g_timeout_add          purple_timeout_add
