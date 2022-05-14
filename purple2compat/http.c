@@ -1343,6 +1343,8 @@ static void _purple_http_send(gpointer _hc, gint fd, PurpleInputCondition cond)
 	int written, write_len;
 	const gchar *write_from;
 	gboolean writing_headers;
+	
+	g_return_if_fail(hc->socket);
 
 	/* Waiting for data. This could be written more efficiently, by removing
 	 * (and later, adding) hs->inpa. */
@@ -2501,6 +2503,11 @@ static void purple_http_request_free(PurpleHttpRequest *request)
 	purple_http_headers_free(request->headers);
 	purple_http_cookie_jar_unref(request->cookie_jar);
 	purple_http_keepalive_pool_unref(request->keepalive_pool);
+	
+	request->headers = NULL;
+	request->cookie_jar = NULL;
+	request->keepalive_pool = NULL;
+	
 	g_free(request->method);
 	g_free(request->contents);
 	g_free(request->url);
