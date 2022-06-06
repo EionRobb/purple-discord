@@ -250,6 +250,13 @@ typedef enum {
 } DiscordPermissionFlags;
 
 typedef struct {
+	guint num_tokens;
+	guint max_tokens;
+	guint time_interval;
+	time_t prev_time;
+} DiscordTokenBucket;
+
+typedef struct {
 	guint64 id;
 	gchar *name;
 	int color;
@@ -372,6 +379,7 @@ typedef struct {
 
 	gint frames_since_reconnect;
 	GSList *pending_writes;
+	DiscordTokenBucket *gateway_bucket;
 	gint roomlist_guild_count;
 
 	gboolean compress;
@@ -1648,7 +1656,7 @@ discord_send_auth(DiscordAccount *da)
 
 		json_object_set_int_member(obj, "op", OP_IDENTIFY);
 
-		json_object_set_int_member(data, "capabilities", 253);
+		json_object_set_int_member(data, "capabilities", 509);
 
 		json_object_set_string_member(properties, "os", "Windows");
 		json_object_set_string_member(properties, "browser", "Chrome");
@@ -3679,6 +3687,18 @@ discord_handle_guild_member_update(DiscordAccount *da, guint64 guild_id, JsonObj
 
 static void discord_send_lazy_guild_request(DiscordAccount *da, DiscordGuild *guild);
 
+static gboolean discord_send_lazy_guild_request_delay(gpointer user_data)
+{
+	DiscordAccountGuild *data = user_data;
+	DiscordAccount *da = data->account;
+	DiscordGuild *guild = data->guild;
+
+	discord_send_lazy_guild_request(da, guild);
+	g_free(data);
+
+	return FALSE;
+}
+
 static void
 discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data)
 {
@@ -3832,9 +3852,13 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 			G_MAXUINT;
 		guint head_count = member_count > DISCORD_MAX_LARGE_THRESHOLD ? MIN(max_count, online_count) : MIN(max_count, member_count);
 		DiscordGuild *guild = discord_get_guild(da, guild_id);
-		if (guild && head_count > guild->next_mem_to_sync) {
+		if (guild && (head_count > guild->next_mem_to_sync)) {
+			//DiscordAccountGuild *data = g_new0(DiscordAccountGuild, 1);
+			//data->account = da;
+			//data->guild = guild;
+			//purple_timeout_add((guint) 3005, discord_send_lazy_guild_request_delay, data);
 			discord_send_lazy_guild_request(da, guild);
-		} else if (guild && head_count < guild->next_mem_to_sync - 100) {
+		} else if (guild && (head_count > guild->next_mem_to_sync - 100)) {
 			guild->next_mem_to_sync = floor((gdouble)head_count / 100.0) * 100 + 100;
 		}
 
@@ -5430,7 +5454,7 @@ discord_guild_get_offline_users(DiscordAccount *da, const gchar *guild_id)
 	JsonObject *d;
 
 	// Try to request all offline users in this guild
-	d = json_object_new();
+	/*d = json_object_new();
 	json_object_set_string_member(d, "guild_id", guild_id);
 	json_object_set_string_member(d, "query", "");
 	json_object_set_int_member(d, "limit", 0);
@@ -5442,13 +5466,17 @@ discord_guild_get_offline_users(DiscordAccount *da, const gchar *guild_id)
 
 	discord_socket_write_json(da, obj);
 
-	json_object_unref(obj);
+	json_object_unref(obj);*/
 
 	DiscordGuild *guild = discord_get_guild(da, to_int(guild_id));
 	if (guild == NULL) {
 		return;
 	}
-	discord_send_lazy_guild_request(da, guild);
+
+	DiscordAccountGuild *data = g_new0(DiscordAccountGuild, 1);
+	data->account = da;
+	data->guild = guild;
+	purple_timeout_add(3000, discord_send_lazy_guild_request_delay, data);
 }
 
 static void
@@ -5457,7 +5485,7 @@ discord_got_guilds(DiscordAccount *da, JsonNode *node, gpointer user_data)
 	JsonArray *guilds = json_node_get_array(node);
 	guint len = json_array_get_length(guilds);
 	JsonArray *guild_ids = json_array_new();
-	JsonObject *obj;
+	//JsonObject *obj;
 
 	for (int i = len - 1; i >= 0; i--) {
 		JsonObject *guild = json_array_get_object_element(guilds, i);
@@ -5475,13 +5503,13 @@ discord_got_guilds(DiscordAccount *da, JsonNode *node, gpointer user_data)
 
 	/* Request more info about guilds (online/offline buddy status) */
 	//XXX disable for now as it causes the websocket to disconnect with error 4001
-	obj = json_object_new();
+	/*obj = json_object_new();
 	json_object_set_int_member(obj, "op", OP_GUILD_SYNC);
 	json_object_set_array_member(obj, "d", guild_ids);
 
 	discord_socket_write_json(da, obj);
 
-	json_object_unref(obj);
+	json_object_unref(obj);*/
 }
 
 /* If count is explicitly specified, use a static request (DMs).
@@ -5755,6 +5783,12 @@ discord_login(PurpleAccount *account)
 		da->last_load_last_message_id = (da->last_load_last_message_id << 32) | ((guint64) purple_account_get_int(account, "last_message_id_low", 0) & 0xFFFFFFFF);
 	}
 
+	da->gateway_bucket = g_new0(DiscordTokenBucket, 1);
+	da->gateway_bucket->num_tokens = 120;
+	da->gateway_bucket->max_tokens = 120;
+	da->gateway_bucket->time_interval = 60; //seconds
+	da->gateway_bucket->prev_time = time(NULL);
+
 	da->compress = !purple_account_get_bool(account, "disable-compress", FALSE);
 
 	da->one_to_ones = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
@@ -5867,6 +5901,8 @@ discord_close(PurpleConnection *pc)
 		json_object_unref(da->pending_writes->data);
 		da->pending_writes = g_slist_delete_link(da->pending_writes, da->pending_writes);
 	}
+
+	g_free(da->gateway_bucket);
 
 	g_hash_table_destroy(da->cookie_table);
 	da->cookie_table = NULL;
@@ -6092,6 +6128,21 @@ discord_process_frame(DiscordAccount *da, const gchar *frame)
 	return TRUE;
 }
 
+static gboolean
+discord_take_token_from_bucket(DiscordTokenBucket *bucket) {
+	time_t current = time(NULL);
+	guint interval = (guint) (current - bucket->prev_time);
+	guint tokens = MIN(120, bucket->num_tokens + interval*(bucket->max_tokens/bucket->time_interval));
+
+	bucket->prev_time = current;
+
+	if (tokens > 0) {
+		bucket->num_tokens -= 1;
+		return TRUE;
+	}
+	return FALSE;
+}
+
 static guchar *
 discord_websocket_mask(const guchar key[4], const guchar *pload, guint64 psize)
 {
@@ -6105,9 +6156,46 @@ discord_websocket_mask(const guchar key[4], const guchar *pload, guint64 psize)
 	return ret;
 }
 
+static void discord_socket_write_data(DiscordAccount *ya, guchar *data, gsize data_len, guchar type);
+
+typedef struct {
+	DiscordAccount *ya;
+	guchar *data;
+	gsize data_len;
+	guchar type;
+} DiscordSocketInfo;
+
+static gboolean
+discord_socket_write_data_delay_cb(gpointer user_data)
+{
+	DiscordSocketInfo *info = user_data;
+
+	discord_socket_write_data(info->ya, info->data, info->data_len, info->type);
+	g_free(info);
+
+	return FALSE;
+}
+
+static void
+discord_socket_delay_write_data(DiscordAccount *ya, guchar *data, gsize data_len, guchar type)
+{
+	DiscordSocketInfo *info = g_new0(DiscordSocketInfo, 1);
+	info->ya = ya;
+	info->data = data;
+	info->data_len = data_len;
+	info->type = type;
+
+	purple_timeout_add(1000, discord_socket_write_data_delay_cb, info);
+}
+
 static void
 discord_socket_write_data(DiscordAccount *ya, guchar *data, gsize data_len, guchar type)
 {
+	if (!discord_take_token_from_bucket(ya->gateway_bucket)) {
+		discord_socket_delay_write_data(ya, data, data_len, type);
+		return;
+	}
+
 	guchar *full_data;
 	guint len_size = 1;
 	guchar mkey[4] = { 0x12, 0x34, 0x56, 0x78 };
