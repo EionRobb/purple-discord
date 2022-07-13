@@ -1296,23 +1296,28 @@ static gchar *
 discord_get_display_name(DiscordAccount *da, DiscordGuild *guild, DiscordChannel *channel, DiscordUser *user, JsonObject *user_json)
 {
 	gchar *ret = NULL;
+	gchar *tmp = NULL;
 
 	if (user == NULL) {
 		if (user_json) {
 			const gchar *username = json_object_get_string_member(user_json, "username");
 			const gchar *discriminator = json_object_get_string_member(user_json, "discriminator");
-			ret = discord_combine_username(username, discriminator);
+			tmp = discord_combine_username(username, discriminator);
 		}
 	} else if (channel == NULL) {
 		// Probably a DM
-		ret = discord_create_fullname(user);
+		tmp = discord_create_fullname(user);
 		PurpleBuddy *buddy = purple_blist_find_buddy(da->account, ret);
 		if (buddy != NULL)
-			ret = g_strdup(purple_buddy_get_alias(buddy));
+			tmp = g_strdup(purple_buddy_get_alias(buddy));
 
 	} else {
-		ret = discord_create_nickname(user, guild, channel);
+		tmp = discord_create_nickname(user, guild, channel);
 	}
+
+	ret = purple_markup_escape_text(tmp, -1);
+	g_free(tmp);
+
 	return ret;
 }
 
@@ -1326,6 +1331,44 @@ discord_get_display_name_or_unk(DiscordAccount *da, DiscordGuild *guild, Discord
 		}
 	}
 	return g_strdup(_("Unknown user"));
+}
+
+static gchar * discord_truncate_message(const gchar *msg_txt, guint count);
+static gchar * discord_parse_timestamp(time_t timestamp);
+
+static gchar *
+discord_get_reply_text(DiscordAccount *da, DiscordGuild *guild, DiscordChannel *channel, JsonObject *referenced_message)
+{
+	JsonObject *reply_author = json_object_get_object_member(referenced_message, "author");
+	DiscordUser *reply_user = discord_upsert_user(da->new_users, reply_author);
+
+	gchar *reply_name = discord_get_display_name_or_unk(da, guild, channel, reply_user, reply_author);
+
+
+	gchar *prev_text = NULL;
+	const gchar *msg_txt = json_object_get_string_member(referenced_message, "content");
+	if (msg_txt && *msg_txt) {
+		prev_text = discord_truncate_message(msg_txt, 32);
+	} else {
+		const gchar *msg_id = json_object_get_string_member(referenced_message, "id");
+		time_t msg_timestamp = discord_time_from_snowflake(to_int(msg_id));
+		gchar *msg_time = discord_parse_timestamp(msg_timestamp);
+
+		prev_text = g_strdup_printf(_("&lt;message at %s&gt;"), msg_time);
+		g_free(msg_time);
+	}
+
+	// Formatting could be better. I went with something similar to Discord's
+	// format to make it familiar to the user
+	gchar *reply_txt = g_strdup_printf("<font size=1>┌──@%s: %s</font>", reply_name, prev_text);
+	g_free(reply_name);
+	g_free(prev_text);
+
+	/* Convert markdown in Discord quirks mode */
+	gchar *ret = markdown_convert_markdown(reply_txt, FALSE, TRUE);
+	g_free(reply_txt);
+
+	return ret;
 }
 
 static void
@@ -2324,10 +2367,12 @@ discord_truncate_message(const gchar *msg_text, guint trunc_len)
 		// (tmp - msg_text) is # bytes (char*) of first trunc_len characters
 		guint num_bytes = tmp - msg_text;
 		tmp = g_strndup(msg_text, num_bytes);
-		trunc_text = g_strdup_printf("%s...", tmp);
+		gchar *tmp2 = purple_markup_escape_text(tmp, -1);
 		g_free(tmp);
+		trunc_text = g_strdup_printf("%s...", tmp2);
+		g_free(tmp2);
 	} else {
-		trunc_text = g_strdup(msg_text);
+		trunc_text = purple_markup_escape_text(msg_text, -1);
 	}
 	return trunc_text;
 }
@@ -2366,8 +2411,8 @@ discord_get_react_text(DiscordAccount *da, const gchar *author_nick, const gchar
 	}
 	g_free(prev_text);
 
-	/* Replace <:emoji:id> with emojis */
 	if (react_text != NULL) {
+		/* Replace <:emoji:id> with emojis */
 		ret = g_regex_replace_eval(emoji_regex, react_text, -1, 0, 0, discord_replace_emoji, conv, NULL);
 		g_free(react_text);
 	}
@@ -2941,32 +2986,8 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 			gchar *merged_username = discord_create_fullname(author);
 
 			if (referenced_message != NULL) {
-				JsonObject *reply_author = json_object_get_object_member(referenced_message, "author");
-				const gchar *msg_txt = json_object_get_string_member(referenced_message, "content");
-				DiscordUser *reply_user = discord_upsert_user(da->new_users, reply_author);
-				gchar *reply_username = discord_create_fullname(reply_user);
-				PurpleBuddy *reply_buddy = purple_blist_find_buddy(da->account, reply_username);
-				const gchar *reply_name;
-				if (reply_buddy != NULL)
-					reply_name = purple_buddy_get_alias(reply_buddy);
-				else
-					reply_name = reply_username;
 
-				gchar *prev_text = discord_truncate_message(msg_txt, 32);
-
-				gchar *reply_txt = g_strdup_printf("<font size=1>┌──@%s: %s</font>", reply_name ? reply_name : _("Unknown user"), prev_text);
-				g_free(reply_username);
-				g_free(prev_text);
-
-				if (conv == NULL) {
-					PurpleIMConversation *imconv;
-					imconv = purple_conversations_find_im_with_account(merged_username, da->account);
-					if (imconv == NULL) {
-						imconv = purple_im_conversation_new(da->account, merged_username);
-					}
-
-					conv = PURPLE_CONVERSATION(imconv);
-				}
+				gchar *reply_txt = discord_get_reply_text(da, guild, channel, referenced_message);
 
 				purple_conversation_write(conv, NULL, reply_txt, PURPLE_MESSAGE_SYSTEM, time(NULL));
 				g_free(reply_txt);
@@ -3105,19 +3126,7 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 		}
 
 		if (referenced_message != NULL && msg_type != MESSAGE_THREAD_STARTER_MESSAGE) {
-			JsonObject *reply_author = json_object_get_object_member(referenced_message, "author");
-			const gchar *msg_txt = json_object_get_string_member(referenced_message, "content");
-			DiscordUser *reply_user = discord_upsert_user(da->new_users, reply_author);
-			gchar *reply_username = discord_create_nickname(reply_user, guild, channel);
-
-			gchar *prev_text = discord_truncate_message(msg_txt, 32);
-
-			// Formatting could be better. I went with something similar to Discord's
-			// format to make it familiar to the user
-			gchar *reply_txt = g_strdup_printf("<font size=1>┌──@%s: %s</font>", reply_username ? reply_username : _("Unknown user"), prev_text);
-			g_free(reply_username);
-			g_free(prev_text);
-
+			gchar *reply_txt = discord_get_reply_text(da, guild, channel, referenced_message);
 			if (conv == NULL) {
 				PurpleChatConversation *chatconv = purple_conversations_find_chat(da->pc, discord_chat_hash(channel_id));
 				conv = PURPLE_CONVERSATION(chatconv);
@@ -3862,6 +3871,11 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		}
 
 		JsonObject *json = json_object_get_object_member(data, "author");
+
+		if (!json) {
+			return;
+		}
+
 		gchar *n = discord_create_nickname_from_id(da, guild, channel, to_int(json_object_get_string_member(json, "id")));
 
 		struct discord_group_typing_data ctx = {
@@ -8997,26 +9011,10 @@ discord_reply_cb(DiscordAccount *da, JsonNode *node, gpointer user_data)
 		return;
 	}
 
+	gchar *reply_txt = discord_get_reply_text(da, guild, channel, referenced_message);
 
-	JsonObject *reply_author = json_object_get_object_member(referenced_message, "author");
-	const gchar *reply_txt = json_object_get_string_member(referenced_message, "content");
-	DiscordUser *reply_user = discord_upsert_user(da->new_users, reply_author);
-	const gchar *reply_username = discord_create_fullname(reply_user);
-	PurpleBuddy *reply_buddy = purple_blist_find_buddy(da->account, reply_username);
-	const gchar *reply_name;
-	if (reply_buddy != NULL) {
-		reply_name = purple_buddy_get_alias(reply_buddy);
-	} else {
-		reply_name = reply_username;
-	}
-
-	gchar *prev_text = discord_truncate_message(reply_txt, 32);
-
-	gchar *reply_msg = g_strdup_printf("<font size=1>┌──@%s: %s</font>", reply_name, prev_text);
-	g_free(prev_text);
-
-	purple_conversation_write(conv, NULL, reply_msg, PURPLE_MESSAGE_SYSTEM, time(NULL));
-	g_free(reply_msg);
+	purple_conversation_write(conv, NULL, reply_txt, PURPLE_MESSAGE_SYSTEM, time(NULL));
+	g_free(reply_txt);
 
 	gchar *tmp = g_regex_replace_eval(emoji_regex, msg_txt, -1, 0, 0, discord_replace_emoji, conv, NULL);
 
