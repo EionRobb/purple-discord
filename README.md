@@ -9,6 +9,12 @@ Windows nightly builds from [here](https://eion.robbmob.com/libdiscord.dll)
 
 The plugin requires libjson-glib which can be downloaded [from github](https://github.com/EionRobb/skype4pidgin/raw/master/skypeweb/libjson-glib-1.0.dll) and copied to the Program Files\Pidgin folder (not the plugins subfolder).
 
+Debian
+------
+
+purple-discord is available in [official Debian repositories](https://packages.debian.org/bullseye/purple-discord).
+
+
 Fedora/CentOS/RHEL
 ---------
 On Fedora you can install [package](https://apps.fedoraproject.org/packages/purple-discord) from Fedora's main repository:
