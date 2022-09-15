@@ -6125,7 +6125,7 @@ static gboolean
 discord_take_token_from_bucket(DiscordTokenBucket *bucket) {
 	time_t current = time(NULL);
 	guint interval = (guint) (current - bucket->prev_time);
-	guint tokens = MIN(120, bucket->num_tokens + interval*(bucket->max_tokens/bucket->time_interval));
+	guint tokens = MIN(bucket->max_tokens, bucket->num_tokens + interval*(bucket->max_tokens/bucket->time_interval));
 
 	bucket->prev_time = current;
 
@@ -6178,6 +6178,7 @@ discord_socket_delay_write_data(DiscordAccount *ya, guchar *data, gsize data_len
 	info->data_len = data_len;
 	info->type = type;
 
+	// Set timer for when to check the bucket again. Could probably make this more intelligent.
 	purple_timeout_add(1000, discord_socket_write_data_delay_cb, info);
 }
 
