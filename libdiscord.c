@@ -3820,6 +3820,8 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		guint64 guild_id = to_int(json_object_get_string_member(data, "guild_id"));
 		JsonArray *ops = json_object_get_array_member(data, "ops");
 		int ops_len = json_array_get_length(ops);
+		int max_synced = 0;
+
 		for (int i = 0; i < ops_len; i++) {
 			JsonObject *op = json_array_get_object_element(ops, i);
 			const gchar *optype = json_object_get_string_member(op, "op");
@@ -3833,6 +3835,13 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 				}
 
 			} else if (purple_strequal(optype, "SYNC")) {
+				JsonArray  *range = json_object_get_array_member(op, "range");
+				int synced_range_max = json_array_get_int_element(range, 1) + 1;
+
+				if (synced_range_max > max_synced) {
+					max_synced = synced_range_max;
+				}
+
 				JsonArray *items = json_object_get_array_member(op, "items");
 				int items_len = json_array_get_length(items);
 				for (int j = 0; j < items_len; j++) {
@@ -3845,21 +3854,20 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 				}
 			}
 		}
-		guint member_count = json_object_get_int_member(data, "member_count");
-		guint online_count = json_object_get_int_member(data, "online_count");
-		guint max_count = purple_account_get_int(da->account, "max-guild-presences", 200) > 0 ?
-			(guint)(purple_account_get_int(da->account, "max-guild-presences", 200)-1) :
-			G_MAXUINT;
-		guint head_count = member_count > DISCORD_MAX_LARGE_THRESHOLD ? MIN(max_count, online_count) : MIN(max_count, member_count);
+
 		DiscordGuild *guild = discord_get_guild(da, guild_id);
-		if (guild && (head_count > guild->next_mem_to_sync)) {
-			//DiscordAccountGuild *data = g_new0(DiscordAccountGuild, 1);
-			//data->account = da;
-			//data->guild = guild;
-			//purple_timeout_add((guint) 3005, discord_send_lazy_guild_request_delay, data);
-			discord_send_lazy_guild_request(da, guild);
-		} else if (guild && (head_count > guild->next_mem_to_sync - 100)) {
-			guild->next_mem_to_sync = floor((gdouble)head_count / 100.0) * 100 + 100;
+		if (max_synced >= guild->next_mem_to_sync) { // Should always be true for max_synced != 0, but just in case
+			guint member_count = json_object_get_int_member(data, "member_count");
+			guint online_count = json_object_get_int_member(data, "online_count");
+			guint max_count = purple_account_get_int(da->account, "max-guild-presences", 200) > 0 ?
+				(guint)(purple_account_get_int(da->account, "max-guild-presences", 200)-1) :
+				G_MAXUINT;
+			guint head_count = member_count > DISCORD_MAX_LARGE_THRESHOLD ? MIN(max_count, online_count) : MIN(max_count, member_count);
+			if (guild && (head_count > guild->next_mem_to_sync)) {
+				discord_send_lazy_guild_request(da, guild);
+			} else if (guild && (head_count > guild->next_mem_to_sync - 100)) {
+				guild->next_mem_to_sync = floor((gdouble)head_count / 100.0) * 100 + 100;
+			}
 		}
 
 
