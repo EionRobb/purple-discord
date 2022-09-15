@@ -3687,18 +3687,6 @@ discord_handle_guild_member_update(DiscordAccount *da, guint64 guild_id, JsonObj
 
 static void discord_send_lazy_guild_request(DiscordAccount *da, DiscordGuild *guild);
 
-static gboolean discord_send_lazy_guild_request_delay(gpointer user_data)
-{
-	DiscordAccountGuild *data = user_data;
-	DiscordAccount *da = data->account;
-	DiscordGuild *guild = data->guild;
-
-	discord_send_lazy_guild_request(da, guild);
-	g_free(data);
-
-	return FALSE;
-}
-
 static void
 discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data)
 {
@@ -5481,10 +5469,7 @@ discord_guild_get_offline_users(DiscordAccount *da, const gchar *guild_id)
 		return;
 	}
 
-	DiscordAccountGuild *data = g_new0(DiscordAccountGuild, 1);
-	data->account = da;
-	data->guild = guild;
-	purple_timeout_add(3000, discord_send_lazy_guild_request_delay, data);
+	discord_send_lazy_guild_request(da, guild);
 }
 
 static void
