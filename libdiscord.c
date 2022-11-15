@@ -77,7 +77,7 @@
 #ifdef USE_QRCODE_AUTH
 #define DISCORD_QRCODE_AUTH_SERVER "remote-auth-gateway.discord.gg"
 #define DISCORD_QRCODE_AUTH_SERVER_PORT 443
-#define DISCORD_QRCODE_AUTH_SERVER_PATH "/?v=1"
+#define DISCORD_QRCODE_AUTH_SERVER_PATH "/?v=2"
 #endif
 
 #define DISCORD_EPOCH_MS 1420070400000
@@ -5912,6 +5912,35 @@ discord_close(PurpleConnection *pc)
 
 #ifdef USE_QRCODE_AUTH
 
+static void
+discord_fetch_token_and_start_socket(DiscordAccount *da, JsonNode *node,
+                                     G_GNUC_UNUSED gpointer user_data)
+{
+	if (node == NULL) {
+		purple_debug_error("discord", "no json node\n");
+		return;
+	}
+
+	JsonObject *response = json_node_get_object(node);
+	const gchar *encrypted_token = json_object_get_string_member(response,
+	                                                             "encrypted_token");
+	if (strlen(encrypted_token) == 0) {
+		purple_debug_error("discord", "Got empty token\n");
+		return;
+	}
+
+	gchar *token = (gchar *) discord_qrauth_decrypt(da, encrypted_token, NULL);
+	purple_account_set_string(da->account, "token", token);
+	discord_qrauth_free_keys(da);
+
+	da->token = g_strdup(token);
+	purple_request_close_with_handle(da->pc);
+
+	da->running_auth_qrcode = FALSE;
+	da->compress = TRUE;
+	discord_start_socket(da);
+}
+
 static gboolean
 discord_process_qrcode_auth_frame(DiscordAccount *da, const gchar *frame)
 {
@@ -6002,25 +6031,22 @@ discord_process_qrcode_auth_frame(DiscordAccount *da, const gchar *frame)
 			g_free(qrcode_image);
 			g_free(qrcode_utf8);
 
-		} else if (purple_strequal(op, "pending_finish")) {
+		} else if (purple_strequal(op, "pending_ticket")) {
 			// the app scanned, and is just confirming everything is OK
 
-		} else if (purple_strequal(op, "finish")) {
+		} else if (purple_strequal(op, "pending_login")) {
 			// the app confirmed, grab the token and LETS DO THIS THING
-			const gchar *encrypted_token = json_object_get_string_member(obj, "encrypted_token");
+			const gchar *ticket = json_object_get_string_member(obj, "ticket");
+			JsonObject *data = json_object_new();
+			json_object_set_string_member(data, "ticket", ticket);
+			gchar *postdata = json_object_to_string(data);
 
-			gchar *token = (gchar *) discord_qrauth_decrypt(da, encrypted_token, NULL);
-			purple_account_set_string(da->account, "token", token);
-
-			discord_qrauth_free_keys(da);
-
-			da->token = g_strdup(token);
-			purple_request_close_with_handle(da->pc);
-
-			da->running_auth_qrcode = FALSE;
-			da->compress = TRUE;
-			discord_start_socket(da);
-
+			discord_fetch_url(da,
+			                  "https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/users/@me/remote-auth/login",
+			                  postdata, discord_fetch_token_and_start_socket,
+			                  NULL);
+			g_free(postdata);
+			json_object_unref(data);
 		} else if (purple_strequal(op, "cancel")) {
 			// they bailed on us!  how rude!
 			purple_debug_info("discord", "User cancelled the auth\n");
