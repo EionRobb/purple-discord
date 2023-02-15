@@ -311,7 +311,7 @@ typedef struct {
 	GHashTable *channels;
 	GHashTable *threads;
 	int afk_timeout;
-	const gchar *afk_voice_channel;
+	gchar *afk_voice_channel;
 
 	GHashTable *emojis;
 	guint64 system_channel_id; // the primary/general channel
@@ -662,12 +662,14 @@ discord_free_guild(gpointer data)
 	DiscordGuild *guild = data;
 	g_free(guild->name);
 	g_free(guild->icon);
+	g_free(guild->afk_voice_channel);
 
 	g_hash_table_unref(guild->roles);
 	g_hash_table_unref(guild->members);
 	g_hash_table_unref(guild->nicknames);
 	g_hash_table_unref(guild->nicknames_rev);
 	g_hash_table_unref(guild->channels);
+	g_hash_table_unref(guild->threads);
 	g_hash_table_unref(guild->emojis);
 	g_free(guild);
 }
@@ -3422,6 +3424,7 @@ discord_got_nick_change(DiscordAccount *da, DiscordUser *user, DiscordGuild *gui
 		}
 	}
 
+	g_free(old_safe);
 	g_free(nick);
 }
 
@@ -5503,6 +5506,9 @@ discord_got_guilds(DiscordAccount *da, JsonNode *node, gpointer user_data)
 	discord_socket_write_json(da, obj);
 
 	json_object_unref(obj);*/
+
+	/* XXX remove this in case above json_object_set_array_member is enabled again */
+	json_array_unref(guild_ids);
 }
 
 /* If count is explicitly specified, use a static request (DMs).
@@ -5884,6 +5890,8 @@ discord_close(PurpleConnection *pc)
 	da->new_users = NULL;
 	g_hash_table_unref(da->new_guilds);
 	da->new_guilds = NULL;
+	g_hash_table_unref(da->group_dms);
+	da->group_dms = NULL;
 	g_queue_free(da->received_message_queue);
 	da->received_message_queue = NULL;
 
