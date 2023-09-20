@@ -8560,6 +8560,93 @@ discord_toggle_mute(PurpleBlistNode *node, gpointer userdata)
 	}
 }
 
+static void 
+discord_send_file_ok_cb(gpointer userdata, const char *fullpath)
+{
+	gchar *filename;
+	gchar *url;
+	gchar *nonce;
+	gchar *contents;
+	GFile *file; 
+	GFileInfo *fileinfo;
+	GString *postdata;
+
+	PurpleBlistNode *node = (PurpleBlistNode *) userdata;
+	PurpleChat *chat = PURPLE_CHAT(node);
+	PurpleAccount *acct = purple_chat_get_account(chat);
+	PurpleConnection *pc = purple_account_get_connection(acct);
+	DiscordAccount *da = purple_connection_get_protocol_data(pc);
+	GHashTable *components = purple_chat_get_components(chat);
+	const gchar *room_id_str = g_hash_table_lookup(components, "id");
+	guint64 room_id = g_ascii_strtoull(room_id_str, NULL, 10);
+
+	GError *load_error = NULL;;
+
+	file = g_file_new_for_path(fullpath);
+	gsize file_len;
+	if (!g_file_load_contents(file, NULL, &contents, &file_len, NULL, &load_error)) {
+		purple_debug_error("discord", "Couldn't load file to send: %s", load_error->message);
+		purple_notify_message(da, PURPLE_NOTIFY_MSG_INFO, _("Could Mot Load File"), _("Check debug messages for more info"), NULL, NULL, NULL);
+		g_free(file);
+		g_free(contents);
+		g_free(load_error);
+		return;
+	}
+	g_free(load_error);
+
+	if (file_len > 25000000) {
+		purple_notify_message(da, PURPLE_NOTIFY_MSG_INFO, _("File Too Large"), _("Maximum file size is 25MB"), NULL, NULL, NULL);
+		g_free(file);
+		g_free(contents);
+		return;
+	}
+
+	filename = g_path_get_basename(fullpath);
+	fileinfo = g_file_query_info(file, "standard::*", 0, NULL, NULL);
+	const gchar *mimetype = g_file_info_get_content_type(fileinfo);
+
+	// We don't insert this into sent messages because that will prevent it
+	// from appearing in our client
+	nonce = g_strdup_printf("%" G_GUINT32_FORMAT, g_random_int());
+
+	postdata = g_string_new(NULL);
+	g_string_append_printf(postdata, "------PurpleBoundary\r\nContent-Disposition: form-data; name=\"file\"; filename=\"%s\"\r\nContent-Type: %s\r\n\r\n", purple_url_encode(filename), mimetype);
+	g_string_append_len(postdata, contents, file_len);
+	g_string_append_printf(postdata, "\r\n------PurpleBoundary\r\nContent-Disposition: form-data; name=\"payload_json\"\r\n\r\n{\"content\":\"\",\"nonce\":\"%s\",\"tts\":false}\r\n", nonce);
+	g_string_append(postdata, "------PurpleBoundary--\r\n");
+
+	url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/channels/%" G_GUINT64_FORMAT "/messages", room_id);
+
+	discord_fetch_url_with_method_len(da, "POST", url, postdata->str, postdata->len, NULL, NULL);
+
+	g_free(filename);
+	g_free(url);
+	g_free(nonce);
+	g_free(contents);
+	g_free(file);
+	g_free(fileinfo);
+	g_string_free(postdata, TRUE);
+}
+
+static void 
+discord_send_file(PurpleBlistNode *node, gpointer userdata)
+{
+	DiscordAccount *da = (DiscordAccount *) userdata;
+	PurpleChat *chat = PURPLE_CHAT(node);
+	PurpleAccount *acct = purple_chat_get_account(chat);
+	PurpleConnection *pc = purple_account_get_connection(acct);
+	GHashTable *components = purple_chat_get_components(chat);
+	const gchar *id_str = g_hash_table_lookup(components, "id");
+	guint64 id64 = g_ascii_strtoull(id_str, NULL, 10);
+	gint id = discord_chat_hash(id64);
+	const PurpleChatConversation *chatconv = purple_conversations_find_chat(pc, id);
+	PurpleConversation *conv = purple_conv_chat_get_conversation(chatconv);
+
+	const char *title = "Select File To Send";
+
+	purple_request_file(da, title, NULL, FALSE, PURPLE_CALLBACK(discord_send_file_ok_cb), NULL, da->account, NULL, conv, node);
+}
+
 static GList *
 discord_blist_node_menu(PurpleBlistNode *node)
 {
@@ -8604,6 +8691,10 @@ discord_blist_node_menu(PurpleBlistNode *node)
 
 		const char *size_handle_toggles = _("Force Treat as...");
 		act = purple_menu_action_new(size_handle_toggles, NULL, da, m_size);
+		m = g_list_append(m, act);
+
+		const char *send_arbitrary_file = _("Upload File");
+		act = purple_menu_action_new(send_arbitrary_file, PURPLE_CALLBACK(discord_send_file), da, NULL);
 		m = g_list_append(m, act);
 	}
 
