@@ -9730,8 +9730,21 @@ discord_cmd_get_history(PurpleConversation *conv, const gchar *cmd, gchar **args
 	return PURPLE_CMD_RET_OK;
 }
 
+// TODO positioning
+
+// This function may seem pointless now but if we ever decide to add proper
+// progress indication in the future it may be useful
 static void
-discord_upload_ok_cb(gpointer data, const gchar *fullpath)
+discord_xfer_finish(PurpleXfer *xfer) {
+	g_free(xfer->data);
+	purple_xfer_unref(xfer);
+}
+
+// TODO we could do a bunch of other stuff like setting the file size &
+// thumbnail, though that is of questionable utility for an http upload
+
+static void
+discord_xfer_send_init(PurpleXfer *xfer)
 {
 	gchar *filename;
 	gchar *url;
@@ -9741,35 +9754,17 @@ discord_upload_ok_cb(gpointer data, const gchar *fullpath)
 	GFileInfo *fileinfo;
 	GString *postdata;
 
-	PurpleConversation *conv = (PurpleConversation *) data;
-	PurpleAccount *acct = purple_conversation_get_account(conv);
+	purple_xfer_ref(xfer);
+
+	PurpleAccount *acct = purple_xfer_get_account(xfer);
 	PurpleConnection *pc = purple_account_get_connection(acct);
 	DiscordAccount *da = purple_connection_get_protocol_data(pc);
-	guint64 room_id;
-	if (conv->type == PURPLE_CONV_TYPE_IM) {
-		gchar *room_id_str = g_hash_table_lookup(da->one_to_ones_rev, conv->name);
-		// Ideally we'd handle the dm not already existing by creating
-		// it, but since pidgin 3.0 will allow attachments of any type
-		// there is no point in adding more code to delete later
-		if (room_id_str == NULL) {
-			// The following advice doesn't seem to work, but
-			// that's because creating DM's is buggy even without
-			// this code, so there's nothing to fix here
-			purple_notify_error(da, _("DM does not exist"), _("DM does not exist"), _("Try to create this DM with a regular message instead"), 
-				purple_request_cpar_from_connection(pc));
-			return;
-		}
-		room_id = g_ascii_strtoull(room_id_str, NULL, 10);
-	} else {
-		guint64 *room_id_ptr = purple_conversation_get_data(conv, "id");
-		if (room_id_ptr == NULL) {
-			purple_debug_error("discord", "Coudln't find room id of chat: %s\n", conv->name);
-			purple_notify_error(da, conv->name, _("Couldn't find room id"), _("Check debug messages for more info"), 
-				purple_request_cpar_from_connection(pc));
-			return;
-		}
-		room_id = *room_id_ptr;
-	}
+	guint64 *room_id_ptr = xfer->data;
+
+	const gchar* fullpath = purple_xfer_get_local_filename(xfer);
+	filename = g_path_get_basename(fullpath);
+
+	purple_xfer_set_filename(xfer, filename);
 
 	GError *load_error = NULL;
 
@@ -9777,8 +9772,10 @@ discord_upload_ok_cb(gpointer data, const gchar *fullpath)
 	gsize file_len;
 	if (!g_file_load_contents(file, NULL, &contents, &file_len, NULL, &load_error)) {
 		purple_debug_error("discord", "Couldn't load file to send: %s\n", load_error->message);
-		purple_notify_error(da, fullpath, _("Couldn't Load File"), _("Check debug messages for more info"), 
-			purple_request_cpar_from_connection(pc));
+		purple_xfer_error(PURPLE_XFER_SEND, acct, purple_xfer_get_remote_user(xfer), _("Couldn't load file"));
+		// TODO afaik there's no way to get pidgin to close after a
+		// non-complete xfer :(
+		purple_xfer_cancel_local(xfer);
 		g_free(file);
 		g_free(contents);
 		g_free(load_error);
@@ -9787,13 +9784,15 @@ discord_upload_ok_cb(gpointer data, const gchar *fullpath)
 	g_free(load_error);
 
 	if (file_len > 25000000) {
-		purple_notify_error(da, _("File Too Large"), _("File Too Large"), _("Maximum file size is 25MB"), purple_request_cpar_from_connection(pc));
+		purple_xfer_start(xfer, 0, NULL, 0);
+		purple_xfer_error(PURPLE_XFER_SEND, acct, purple_xfer_get_remote_user(xfer), _("Maximum file size is 25MB"));
+		// "just for show"
+		purple_xfer_cancel_local(xfer);
 		g_free(file);
 		g_free(contents);
 		return;
 	}
 
-	filename = g_path_get_basename(fullpath);
 	fileinfo = g_file_query_info(file, "standard::*", 0, NULL, NULL);
 	const gchar *mimetype = g_file_info_get_content_type(fileinfo);
 
@@ -9807,9 +9806,18 @@ discord_upload_ok_cb(gpointer data, const gchar *fullpath)
 	g_string_append_printf(postdata, "\r\n------PurpleBoundary\r\nContent-Disposition: form-data; name=\"payload_json\"\r\n\r\n{\"content\":\"\",\"nonce\":\"%s\",\"tts\":false}\r\n", nonce);
 	g_string_append(postdata, "------PurpleBoundary--\r\n");
 
-	url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/channels/%" G_GUINT64_FORMAT "/messages", room_id);
+	url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/channels/%" G_GUINT64_FORMAT "/messages", *room_id_ptr);
 
+	// This and a lot of status updates are "just for show" here, they only
+	// help other programs guess at what we're doing
+	purple_xfer_start(xfer, 0, url, 443);
+
+	// TODO we could edit/fork this function to give us progress/completion
+	// notifications, etc
 	discord_fetch_url_with_method_len(da, "POST", url, postdata->str, postdata->len, NULL, NULL);
+
+	purple_xfer_unref(xfer);
+	purple_xfer_set_completed(xfer, TRUE);
 
 	g_free(filename);
 	g_free(url);
@@ -9820,20 +9828,94 @@ discord_upload_ok_cb(gpointer data, const gchar *fullpath)
 	g_string_free(postdata, TRUE);
 }
 
-static PurpleCmdRet
-discord_cmd_upload(PurpleConversation *conv, const gchar *cmd, gchar **args, gchar **error, void *data)
+// This is not hooked into 'new_xfer' like you may see in other prpl's
+static PurpleXfer *
+discord_create_xfer(PurpleConnection *pc, guint64 room_id, const gchar *receiver) 
 {
-	PurpleAccount *acct = purple_conversation_get_account(conv);
-	PurpleConnection *pc = purple_account_get_connection(acct);
 	DiscordAccount *da = purple_connection_get_protocol_data(pc);
+	PurpleXfer *xfer;
 
-	gchar *who = NULL;
-	if  (conv->type == PURPLE_CONV_TYPE_IM) who = conv->name;
+	xfer = purple_xfer_new(da->account, PURPLE_XFER_SEND, receiver);
 
-	// TODO is da the right handle for this or should we use pc?
-	purple_request_file(da, _("Select File To Send"), NULL, FALSE, PURPLE_CALLBACK(discord_upload_ok_cb), NULL, acct, who, conv, conv);
+	// This may be weird; ideally we'd pass an existing pointer instead of
+	// creating a new one that we have to free later, but we can't do that
+	// since the DM channel id's are stored as strings
+	guint64 *room_id_ptr = g_new(guint64, 1);
+	*room_id_ptr = room_id;
+	xfer->data = room_id_ptr;
 
-	return PURPLE_CMD_RET_OK;
+	purple_xfer_set_init_fnc(xfer, discord_xfer_send_init);
+	// TODO check if we need the other functions
+	purple_xfer_set_end_fnc(xfer, discord_xfer_finish);
+	// TODO manually cancelling will NOT stop the xfer
+	purple_xfer_set_cancel_send_fnc(xfer, discord_xfer_finish);
+
+	return xfer;
+}
+
+static void
+discord_send_file(PurpleConnection *pc, const gchar *who, const gchar *filename) 
+{
+	DiscordAccount *da = purple_connection_get_protocol_data(pc);
+	gchar *room_id_str = g_hash_table_lookup(da->one_to_ones_rev, who);
+	if (room_id_str == NULL) {
+		// TODO afaik creating new DM's seems to be broken in general,
+		// so this will do for now. However, we should come back to
+		// this once it's fixed to improve this
+		purple_notify_error(da, _("DM Does Not Exist"), _("DM does not exist"), NULL, purple_request_cpar_from_connection(pc));
+		return;
+	}
+	guint64 room_id = g_ascii_strtoull(room_id_str, NULL, 10);
+
+	PurpleXfer *xfer = discord_create_xfer(pc, room_id, who);
+
+	// TODO do we really need to check for a null byte the way we are
+	// implementing this? I'd assume so, but the jabber prpl doesn't do
+	// this so I better double check
+	if (filename && *filename)
+		purple_xfer_request_accepted(xfer, filename);
+	else
+		purple_xfer_request(xfer);
+}
+
+// TODO should we use the discord hash function for any of this?
+
+static void
+discord_chat_send_file(PurpleConnection *pc, int id, const gchar *filename) {
+	DiscordAccount *da = purple_connection_get_protocol_data(pc);
+	PurpleConvChat *chatconv = purple_conversations_find_chat(pc, id);
+	PurpleConversation *conv = PURPLE_CONVERSATION(chatconv);
+	guint64 *room_id_ptr = purple_conversation_get_data(conv, "id");
+
+	if (room_id_ptr == NULL) {
+			purple_debug_error("discord", "Couldn't find room id of chat: %s\n", conv->name);
+			purple_notify_error(da, conv->name, _("Couldn't find room id"), _("Check debug messages for more info"), 
+				purple_request_cpar_from_connection(pc));
+			return;
+	}
+
+	PurpleXfer *xfer = discord_create_xfer(pc, *room_id_ptr, conv->name);
+
+	if (filename && *filename)
+		purple_xfer_request_accepted(xfer, filename);
+	else
+		purple_xfer_request(xfer);
+}
+
+static gboolean
+discord_can_receive_file(PurpleConnection *pc, const gchar *who) 
+{
+	if (!who || g_str_equal(who, purple_account_get_username(purple_connection_get_account(pc))))
+		return FALSE;
+
+	return TRUE;
+}
+
+static gboolean
+discord_chat_can_receive_file(PurpleConnection *pc, int id) {
+	// TODO i don't believe there are any checks we can perform here that
+	// aren't better performed later on
+	return TRUE;
 }
 
 static gboolean
@@ -9959,13 +10041,6 @@ plugin_load(PurplePlugin *plugin, GError **error)
 			PURPLE_CMD_FLAG_CHAT | PURPLE_CMD_FLAG_PROTOCOL_ONLY,
 						DISCORD_PLUGIN_ID, discord_cmd_get_history,
 						_("hist:  Retrieves full history of channel. Intended for rules channels and the like. Using this on old, highly active channels is not recommended.<br />Alias of grabhistory"), NULL
-	);
-
-	purple_cmd_register(
-		"upload", "", PURPLE_CMD_P_PLUGIN,
-		PURPLE_CMD_FLAG_CHAT | PURPLE_CMD_FLAG_IM | PURPLE_CMD_FLAG_PROTOCOL_ONLY | PURPLE_CMD_FLAG_ALLOW_WRONG_ARGS,
-			DISCORD_PLUGIN_ID, discord_cmd_upload,
-			_("upload: Prompts user for a file to upload to a channel"), NULL
 	);
 
 #if 0
@@ -10103,6 +10178,13 @@ plugin_init(PurplePlugin *plugin)
 	prpl_info->get_info = discord_get_info;
 	prpl_info->add_deny = discord_block_user;
 	prpl_info->rem_deny = discord_unblock_user;
+
+	prpl_info->send_file = discord_send_file;
+	prpl_info->chat_send_file = discord_chat_send_file;
+	prpl_info->chat_can_receive_file = discord_chat_can_receive_file;
+	prpl_info->can_receive_file = discord_can_receive_file;
+	// TODO ????
+	// prpl_info->new_xfer = discord_new_xfer;
 
 	prpl_info->roomlist_get_list = discord_roomlist_get_list;
 	prpl_info->roomlist_room_serialize = discord_roomlist_serialize;
