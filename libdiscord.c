@@ -9730,16 +9730,40 @@ discord_cmd_get_history(PurpleConversation *conv, const gchar *cmd, gchar **args
 	return PURPLE_CMD_RET_OK;
 }
 
-// This function may seem pointless now but it might be useful later if we
-// decide to implement other features
 static void
 discord_xfer_free(PurpleXfer *xfer) {
 	// we only need to free the user data
 	g_free(xfer->data);
 }
 
-// TODO we could do a bunch of other stuff like setting the file size &
-// thumbnail, though that is of questionable utility for an http upload
+static void
+purple_xfer_update_cb(DiscordAccount *da, JsonNode *node, gpointer userdata) {
+	PurpleXfer *xfer = (PurpleXfer *) userdata;
+	purple_xfer_ref(xfer);
+
+	if (node == NULL) {
+		purple_xfer_error(PURPLE_XFER_SEND, purple_xfer_get_account(xfer), purple_xfer_get_remote_user(xfer), _("Connection Error"));
+		purple_xfer_unref(xfer);
+		purple_xfer_end(xfer);
+	} else {
+		gchar *json_str;
+		JsonGenerator *jg;
+
+		jg = json_generator_new();
+		json_generator_set_root(jg, node);
+		json_str = json_generator_to_data(jg, NULL);
+		purple_debug_info("discord", "xfer/http upload returned:\n %s\n", json_str);
+
+		g_free(json_str);
+		g_object_unref(jg);
+
+		purple_xfer_unref(xfer);
+		purple_xfer_set_completed(xfer, TRUE);
+		purple_xfer_end(xfer);
+	}
+}
+
+// TODO could add thumbnails, progress
 static void
 discord_xfer_send_init(PurpleXfer *xfer)
 {
@@ -9767,7 +9791,7 @@ discord_xfer_send_init(PurpleXfer *xfer)
 		purple_xfer_error(PURPLE_XFER_SEND, acct, purple_xfer_get_remote_user(xfer), _("Couldn't load file"));
 		// TODO afaik there's no way to get pidgin to close after a
 		// non-complete xfer :(
-		purple_xfer_cancel_local(xfer);
+		purple_xfer_end(xfer);
 		g_mapped_file_unref(file);
 		g_free(load_error);
 		return;
@@ -9779,15 +9803,15 @@ discord_xfer_send_init(PurpleXfer *xfer)
 		purple_xfer_start(xfer, 0, NULL, 0);
 		purple_xfer_error(PURPLE_XFER_SEND, acct, purple_xfer_get_remote_user(xfer), _("Maximum file size is 25MB"));
 		// "just for show"
-		purple_xfer_cancel_local(xfer);
+		purple_xfer_end(xfer);
 		g_mapped_file_unref(file);
 		return;
 	}
+	purple_xfer_set_size(xfer, file_len);
 
 	// though the gtk glib docs say otherwise, it appears that the contents
 	// are NOT the responsibility of the caller
 	gchar *contents = g_mapped_file_get_contents(file);
-	printf("we got to this point\n");
 
 	gboolean guessing;
 	mimetype = g_content_type_guess(fullpath, contents, file_len, &guessing);
@@ -9810,17 +9834,12 @@ discord_xfer_send_init(PurpleXfer *xfer)
 	url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/channels/%" G_GUINT64_FORMAT "/messages", *room_id_ptr);
 
 	// This and a lot of status updates are "just for show" here, they only
-	// help other programs guess at what we're doing
+	// help other programs/the user guess at what we're doing
 	purple_xfer_start(xfer, 0, url, 443);
 
-	// TODO we could edit this function or add our own code for stuff like
-	// progress, completion, the ability to actually cancel the transfer,
-	// etc.
-	discord_fetch_url_with_method_len(da, "POST", url, postdata->str, postdata->len, NULL, NULL);
+	// TODO abusing the proxy callback method argument?
+	discord_fetch_url_with_method_len(da, "POST", url, postdata->str, postdata->len, purple_xfer_update_cb, xfer);
 
-	// TODO We could also wait until we receive the url on our client before
-	// ending our xfer
-	purple_xfer_set_completed(xfer, TRUE);
 	purple_xfer_unref(xfer);
 
 	g_free(filename);
@@ -9849,8 +9868,7 @@ discord_create_xfer(PurpleConnection *pc, guint64 room_id, const gchar *receiver
 
 	purple_xfer_set_init_fnc(xfer, discord_xfer_send_init);
 	purple_xfer_set_end_fnc(xfer, discord_xfer_free);
-	// manually canceling the transfer will not actually stop it
-	purple_xfer_set_cancel_send_fnc(xfer, discord_xfer_free);
+	// TODO prevent segfault from manual cancelation after send
 
 	return xfer;
 }
@@ -9864,7 +9882,11 @@ discord_send_file(PurpleConnection *pc, const gchar *who, const gchar *filename)
 		// TODO afaik creating new DM's seems to be broken in general,
 		// so this will do for now. However, we should come back to
 		// this once it's fixed to improve this
-		purple_notify_error(da, _("DM Does Not Exist"), _("DM does not exist"), NULL, purple_request_cpar_from_connection(pc));
+		// TODO if a DM already exists but for some reason doesn't have
+		// an id_str, the following can work, so we should try to
+		// automate the following process
+		purple_notify_error(da, _("DM Does Not Exist"), _("DM does not exist"), _("Try Sending A Regular Message First"), 
+			purple_request_cpar_from_connection(pc));
 		return;
 	}
 	guint64 room_id = g_ascii_strtoull(room_id_str, NULL, 10);
