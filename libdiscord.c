@@ -9746,9 +9746,8 @@ discord_xfer_send_init(PurpleXfer *xfer)
 	gchar *filename;
 	gchar *url;
 	gchar *nonce;
-	gchar *contents;
-	GFile *file;
-	GFileInfo *fileinfo;
+	gchar *mimetype;
+	GMappedFile *file;
 	GString *postdata;
 
 	purple_xfer_ref(xfer);
@@ -9759,39 +9758,44 @@ discord_xfer_send_init(PurpleXfer *xfer)
 	guint64 *room_id_ptr = xfer->data;
 
 	const gchar* fullpath = purple_xfer_get_local_filename(xfer);
-	filename = g_path_get_basename(fullpath);
-
-	purple_xfer_set_filename(xfer, filename);
 
 	GError *load_error = NULL;
 
-	file = g_file_new_for_path(fullpath);
-	gsize file_len;
-	if (!g_file_load_contents(file, NULL, &contents, &file_len, NULL, &load_error)) {
+	file = g_mapped_file_new(fullpath, FALSE, &load_error);
+	if (load_error != NULL) {
 		purple_debug_error("discord", "Couldn't load file to send: %s\n", load_error->message);
 		purple_xfer_error(PURPLE_XFER_SEND, acct, purple_xfer_get_remote_user(xfer), _("Couldn't load file"));
 		// TODO afaik there's no way to get pidgin to close after a
 		// non-complete xfer :(
 		purple_xfer_cancel_local(xfer);
-		g_free(file);
-		g_free(contents);
+		g_mapped_file_unref(file);
 		g_free(load_error);
 		return;
 	}
 	g_free(load_error);
 
+	goffset file_len = g_mapped_file_get_length(file);
 	if (file_len > 25000000) {
 		purple_xfer_start(xfer, 0, NULL, 0);
 		purple_xfer_error(PURPLE_XFER_SEND, acct, purple_xfer_get_remote_user(xfer), _("Maximum file size is 25MB"));
 		// "just for show"
 		purple_xfer_cancel_local(xfer);
-		g_free(file);
-		g_free(contents);
+		g_mapped_file_unref(file);
 		return;
 	}
 
-	fileinfo = g_file_query_info(file, "standard::*", 0, NULL, NULL);
-	const gchar *mimetype = g_file_info_get_content_type(fileinfo);
+	// though the gtk glib docs say otherwise, it appears that the contents
+	// are NOT the responsibility of the caller
+	gchar *contents = g_mapped_file_get_contents(file);
+	printf("we got to this point\n");
+
+	gboolean guessing;
+	mimetype = g_content_type_guess(fullpath, contents, file_len, &guessing);
+	if (guessing)
+		purple_notify_info(da, fullpath, _("Guessing file type is:"), mimetype);
+
+	filename = g_path_get_basename(fullpath);
+	purple_xfer_set_filename(xfer, filename);
 
 	// We don't insert this into sent messages because that will prevent it
 	// from appearing in our client
@@ -9822,9 +9826,8 @@ discord_xfer_send_init(PurpleXfer *xfer)
 	g_free(filename);
 	g_free(url);
 	g_free(nonce);
-	g_free(contents);
-	g_free(file);
-	g_free(fileinfo);
+	g_free(mimetype);
+	g_mapped_file_unref(file);
 	g_string_free(postdata, TRUE);
 }
 
