@@ -9730,10 +9730,7 @@ discord_cmd_get_history(PurpleConversation *conv, const gchar *cmd, gchar **args
 	return PURPLE_CMD_RET_OK;
 }
 
-// TODO positioning
-
-// This function may seem pointless now but if we ever decide to add proper
-// progress indication in the future it may be useful
+// This function may seem pointless now but it might be useful 
 static void
 discord_xfer_finish(PurpleXfer *xfer) {
 	g_free(xfer->data);
@@ -9742,7 +9739,6 @@ discord_xfer_finish(PurpleXfer *xfer) {
 
 // TODO we could do a bunch of other stuff like setting the file size &
 // thumbnail, though that is of questionable utility for an http upload
-
 static void
 discord_xfer_send_init(PurpleXfer *xfer)
 {
@@ -9812,12 +9808,15 @@ discord_xfer_send_init(PurpleXfer *xfer)
 	// help other programs guess at what we're doing
 	purple_xfer_start(xfer, 0, url, 443);
 
-	// TODO we could edit/fork this function to give us progress/completion
-	// notifications, etc
+	// TODO we could edit this function or add our own code for stuff like
+	// progress, completion, the ability to actually cancel the transfer,
+	// etc.
 	discord_fetch_url_with_method_len(da, "POST", url, postdata->str, postdata->len, NULL, NULL);
 
-	purple_xfer_unref(xfer);
+	// TODO We could also wait until we receive the url on our client before
+	// ending our xfer
 	purple_xfer_set_completed(xfer, TRUE);
+	purple_xfer_unref(xfer);
 
 	g_free(filename);
 	g_free(url);
@@ -9845,9 +9844,8 @@ discord_create_xfer(PurpleConnection *pc, guint64 room_id, const gchar *receiver
 	xfer->data = room_id_ptr;
 
 	purple_xfer_set_init_fnc(xfer, discord_xfer_send_init);
-	// TODO check if we need the other functions
 	purple_xfer_set_end_fnc(xfer, discord_xfer_finish);
-	// TODO manually cancelling will NOT stop the xfer
+	// manually canceling the transfer will not actually stop it
 	purple_xfer_set_cancel_send_fnc(xfer, discord_xfer_finish);
 
 	return xfer;
@@ -9869,16 +9867,11 @@ discord_send_file(PurpleConnection *pc, const gchar *who, const gchar *filename)
 
 	PurpleXfer *xfer = discord_create_xfer(pc, room_id, who);
 
-	// TODO do we really need to check for a null byte the way we are
-	// implementing this? I'd assume so, but the jabber prpl doesn't do
-	// this so I better double check
 	if (filename && *filename)
 		purple_xfer_request_accepted(xfer, filename);
 	else
 		purple_xfer_request(xfer);
 }
-
-// TODO should we use the discord hash function for any of this?
 
 static void
 discord_chat_send_file(PurpleConnection *pc, int id, const gchar *filename) {
@@ -9913,8 +9906,9 @@ discord_can_receive_file(PurpleConnection *pc, const gchar *who)
 
 static gboolean
 discord_chat_can_receive_file(PurpleConnection *pc, int id) {
-	// TODO i don't believe there are any checks we can perform here that
-	// aren't better performed later on
+	// As of now, I don't forsee any conditions under which we'd like to
+	// prematurely disable the save function, but I'll leave this here just
+	// in case
 	return TRUE;
 }
 
@@ -10183,8 +10177,6 @@ plugin_init(PurplePlugin *plugin)
 	prpl_info->chat_send_file = discord_chat_send_file;
 	prpl_info->chat_can_receive_file = discord_chat_can_receive_file;
 	prpl_info->can_receive_file = discord_can_receive_file;
-	// TODO ????
-	// prpl_info->new_xfer = discord_new_xfer;
 
 	prpl_info->roomlist_get_list = discord_roomlist_get_list;
 	prpl_info->roomlist_room_serialize = discord_roomlist_serialize;
