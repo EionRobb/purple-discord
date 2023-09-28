@@ -9730,11 +9730,12 @@ discord_cmd_get_history(PurpleConversation *conv, const gchar *cmd, gchar **args
 	return PURPLE_CMD_RET_OK;
 }
 
-// This function may seem pointless now but it might be useful 
+// This function may seem pointless now but it might be useful later if we
+// decide to implement other features
 static void
-discord_xfer_finish(PurpleXfer *xfer) {
+discord_xfer_free(PurpleXfer *xfer) {
+	// we only need to free the user data
 	g_free(xfer->data);
-	purple_xfer_unref(xfer);
 }
 
 // TODO we could do a bunch of other stuff like setting the file size &
@@ -9844,9 +9845,9 @@ discord_create_xfer(PurpleConnection *pc, guint64 room_id, const gchar *receiver
 	xfer->data = room_id_ptr;
 
 	purple_xfer_set_init_fnc(xfer, discord_xfer_send_init);
-	purple_xfer_set_end_fnc(xfer, discord_xfer_finish);
+	purple_xfer_set_end_fnc(xfer, discord_xfer_free);
 	// manually canceling the transfer will not actually stop it
-	purple_xfer_set_cancel_send_fnc(xfer, discord_xfer_finish);
+	purple_xfer_set_cancel_send_fnc(xfer, discord_xfer_free);
 
 	return xfer;
 }
