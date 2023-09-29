@@ -9739,7 +9739,6 @@ static void
 discord_xfer_free(PurpleXfer *xfer) {
 	// we only need to free the user data
 	g_free(purple_xfer_get_protocol_data(xfer));
-	printf("ref count %d\n", xfer->ref);
 	purple_debug_info("discord", "ref count %d\n", xfer->ref);
 }
 
@@ -9747,7 +9746,7 @@ static void
 discord_xfer_cancel_send(PurpleXfer *xfer) {
 	DiscordTransfer *dt = purple_xfer_get_protocol_data(xfer);
 	if (dt->xfer_started) {
-		// TODO check for mem leak
+		// prevents segfault from freeing an xfer that is in use
 		purple_xfer_ref(xfer);
 		PurpleConnection *pc = purple_account_get_connection(purple_xfer_get_account(xfer));
 		purple_notify_error(pc, _("Can't Cancel Upload"), _("Cannot Cancel Discord Upload After Start"), NULL, purple_get_cpar_from_connection(pc));
@@ -9760,12 +9759,23 @@ static void
 purple_xfer_update_cb(DiscordAccount *da, JsonNode *node, gpointer userdata) {
 	PurpleXfer *xfer = (PurpleXfer *) userdata;
 	purple_xfer_ref(xfer);
+	DiscordTransfer *dt = purple_xfer_get_protocol_data(xfer);
 
+	PurpleAccount *acct = purple_xfer_get_account(xfer);
+	const gchar *who = purple_xfer_get_remote_user(xfer);
+
+	// a lot of the following error notification methods might tell you the
+	// transfer has failed when it hasn't, but they still give pretty good
+	// context to what's going on (and it's pretty easy to see if the
+	// transfer actually worked or not)
 	if (node == NULL) {
-		purple_xfer_error(PURPLE_XFER_SEND, purple_xfer_get_account(xfer), purple_xfer_get_remote_user(xfer), _("Connection Error"));
+		purple_xfer_error(PURPLE_XFER_SEND, acct, who, _("Connection Error"));
+
 		purple_xfer_unref(xfer);
 		purple_xfer_cancel_remote(xfer);
 	} else {
+		JsonObject *result = json_node_get_object(node);
+
 		gchar *json_str;
 		JsonGenerator *jg;
 
@@ -9777,13 +9787,33 @@ purple_xfer_update_cb(DiscordAccount *da, JsonNode *node, gpointer userdata) {
 		g_free(json_str);
 		g_object_unref(jg);
 
+		const gchar *body = json_object_get_string_member(result, "body");
+		if (body != NULL) {
+			purple_xfer_error(PURPLE_XFER_SEND, acct, who, _("Malformed response, see debug logs for more info"));
+			purple_xfer_unref(xfer);
+			purple_xfer_cancel_remote(xfer);
+			return;
+		}
+
+		// TODO try and handle the codes we can work around
+		JsonNode *code_node = json_object_get_member(result, "code");
+		if (code_node != NULL) {
+			gint64 result_code = json_node_get_int(code_node);
+			const gchar *result_msg = json_object_get_string_member(result, "message");
+			purple_debug_error("discord", "xfer/http upload returned code: %ld and message:\n%s\n", result_code, result_msg);
+			purple_xfer_error(PURPLE_XFER_SEND, acct, who, _("Upload error, see debug logs for more info"));
+			purple_xfer_unref(xfer);
+			purple_xfer_cancel_remote(xfer);
+			return;
+		}
+
 		purple_xfer_unref(xfer);
 		purple_xfer_set_completed(xfer, TRUE);
 		purple_xfer_end(xfer);
 	}
 }
 
-// TODO could add thumbnails, progress, true cancel
+// TODO progress, true cancel
 static void
 discord_xfer_send_init(PurpleXfer *xfer)
 {
@@ -9855,10 +9885,10 @@ discord_xfer_send_init(PurpleXfer *xfer)
 
 	// This and a lot of status updates are "just for show" here, they only
 	// help other programs/the user guess at what we're doing
-	purple_xfer_start(xfer, 0, url, 443);
+	// TODO on pidgin this does not actually make the transfer say it's started
+	purple_xfer_start(xfer, -1, url, 443);
 
 	dt->xfer_started = TRUE;
-	// TODO abusing the proxy callback method argument?
 	discord_fetch_url_with_method_len(da, "POST", url, postdata->str, postdata->len, purple_xfer_update_cb, xfer);
 
 	purple_xfer_unref(xfer);
@@ -9880,9 +9910,6 @@ discord_create_xfer(PurpleConnection *pc, guint64 room_id, const gchar *receiver
 
 	xfer = purple_xfer_new(da->account, PURPLE_XFER_SEND, receiver);
 
-	// This may be weird; ideally we'd pass an existing pointer instead of
-	// creating a new one that we have to free later, but we can't do that
-	// since the DM channel id's are stored as strings
 	DiscordTransfer *dt = g_new(DiscordTransfer, 1);
 	dt->room_id = room_id;
 	dt->xfer_started = FALSE;
@@ -9891,7 +9918,6 @@ discord_create_xfer(PurpleConnection *pc, guint64 room_id, const gchar *receiver
 	purple_xfer_set_init_fnc(xfer, discord_xfer_send_init);
 	purple_xfer_set_end_fnc(xfer, discord_xfer_free);
 	purple_xfer_set_cancel_recv_fnc(xfer, discord_xfer_free);
-	// TODO prevent segfault from manual cancelation after send
 	purple_xfer_set_cancel_send_fnc(xfer, discord_xfer_cancel_send);
 
 	return xfer;
@@ -9903,12 +9929,9 @@ discord_send_file(PurpleConnection *pc, const gchar *who, const gchar *filename)
 	DiscordAccount *da = purple_connection_get_protocol_data(pc);
 	gchar *room_id_str = g_hash_table_lookup(da->one_to_ones_rev, who);
 	if (room_id_str == NULL) {
-		// TODO afaik creating new DM's seems to be broken in general,
-		// so this will do for now. However, we should come back to
-		// this once it's fixed to improve this
-		// TODO if a DM already exists but for some reason doesn't have
-		// an id_str, the following can work, so we should try to
-		// automate the following process
+		// AFAIK creating new DM's seems to be somewhat broken, so
+		// sending a regular message might not work, but that issue
+		// isn't really in the scope of adding a file upload option
 		purple_notify_error(da, _("DM Does Not Exist"), _("DM does not exist"), _("Try Sending A Regular Message First"), 
 			purple_request_cpar_from_connection(pc));
 		return;

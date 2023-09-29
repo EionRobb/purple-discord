@@ -36,6 +36,8 @@
 #include "purple2compat/image.h"
 #include "purple2compat/image-store.h"
 
+#define purple_xfer_get_protocol_data(xfer) ((xfer)->data)
+#define purple_xfer_set_protocol_data(xfer, proto_data) ((xfer)->data = (proto_data))
 #define purple_buddy_get_local_alias  purple_buddy_get_local_buddy_alias
 #define purple_buddy_set_local_alias  purple_blist_alias_buddy
 #define purple_connection_error purple_connection_error_reason
