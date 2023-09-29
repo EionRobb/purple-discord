@@ -9759,20 +9759,24 @@ static void
 purple_xfer_update_cb(DiscordAccount *da, JsonNode *node, gpointer userdata) {
 	PurpleXfer *xfer = (PurpleXfer *) userdata;
 	purple_xfer_ref(xfer);
+	
 	DiscordTransfer *dt = purple_xfer_get_protocol_data(xfer);
-
 	PurpleAccount *acct = purple_xfer_get_account(xfer);
+	PurpleConnection *pc = purple_account_get_connection(acct);
 	const gchar *who = purple_xfer_get_remote_user(xfer);
 
-	// a lot of the following error notification methods might tell you the
-	// transfer has failed when it hasn't, but they still give pretty good
-	// context to what's going on (and it's pretty easy to see if the
-	// transfer actually worked or not)
+	// couldn't find a libpurple/glib standard buf size, this should be fine
+	gchar xfer_info[1024];
+	g_snprintf(xfer_info, 1024, "Upload From: %s\n To: %s", purple_account_get_name_for_display(acct), who);
+
+	// The following may say the xfer is canceled when it isn't, but it's
+	// the best we can do
 	if (node == NULL) {
-		purple_xfer_error(PURPLE_XFER_SEND, acct, who, _("Connection Error"));
+		purple_notify_error(pc, _("Connection Error"), NULL, xfer_info, purple_get_cpar_from_connection(pc));
 
 		purple_xfer_unref(xfer);
 		purple_xfer_cancel_remote(xfer);
+		return;
 	} else {
 		JsonObject *result = json_node_get_object(node);
 
@@ -9789,24 +9793,33 @@ purple_xfer_update_cb(DiscordAccount *da, JsonNode *node, gpointer userdata) {
 
 		const gchar *body = json_object_get_string_member(result, "body");
 		if (body != NULL) {
-			purple_xfer_error(PURPLE_XFER_SEND, acct, who, _("Malformed response, see debug logs for more info"));
+			purple_notify_error(pc, _("Malformed Response"), _("Check Debug Logs For More Info") , xfer_info, purple_get_cpar_from_connection(pc));
 			purple_xfer_unref(xfer);
 			purple_xfer_cancel_remote(xfer);
 			return;
 		}
 
-		// TODO try and handle the codes we can work around
+		// if there any error codes that are worth it to work around we
+		// can put them here
 		JsonNode *code_node = json_object_get_member(result, "code");
 		if (code_node != NULL) {
 			gint64 result_code = json_node_get_int(code_node);
+			gchar code_str[1024];
+			g_snprintf(code_str, 1024, "%ld", result_code);
 			const gchar *result_msg = json_object_get_string_member(result, "message");
 			purple_debug_error("discord", "xfer/http upload returned code: %ld and message:\n%s\n", result_code, result_msg);
-			purple_xfer_error(PURPLE_XFER_SEND, acct, who, _("Upload error, see debug logs for more info"));
+			purple_notify_error(pc, code_str, result_msg, xfer_info, purple_get_cpar_from_connection(pc));
 			purple_xfer_unref(xfer);
 			purple_xfer_cancel_remote(xfer);
 			return;
 		}
 
+		// we could also update the bytes sent with the last two
+		// exceptions, but it isn't necessarily true or helpful
+		purple_xfer_set_bytes_sent(xfer, purple_xfer_get_size(xfer));
+		// updating the progress after setting the bytes sent is not
+		// necessary for pidgin, but it may be for other clients
+		purple_xfer_update_progress(xfer);
 		purple_xfer_unref(xfer);
 		purple_xfer_set_completed(xfer, TRUE);
 		purple_xfer_end(xfer);
@@ -9850,7 +9863,6 @@ discord_xfer_send_init(PurpleXfer *xfer)
 
 	goffset file_len = g_mapped_file_get_length(file);
 	if (file_len > 25000000) {
-		purple_xfer_start(xfer, 0, NULL, 0);
 		purple_xfer_error(PURPLE_XFER_SEND, acct, purple_xfer_get_remote_user(xfer), _("Maximum file size is 25MB"));
 		// "just for show"
 		purple_xfer_cancel_local(xfer);
@@ -9885,8 +9897,9 @@ discord_xfer_send_init(PurpleXfer *xfer)
 
 	// This and a lot of status updates are "just for show" here, they only
 	// help other programs/the user guess at what we're doing
-	// TODO on pidgin this does not actually make the transfer say it's started
-	purple_xfer_start(xfer, -1, url, 443);
+	purple_xfer_start(xfer, -1, NULL, -1);
+	purple_xfer_ui_ready(xfer);
+	purple_xfer_update_progress(xfer);
 
 	dt->xfer_started = TRUE;
 	discord_fetch_url_with_method_len(da, "POST", url, postdata->str, postdata->len, purple_xfer_update_cb, xfer);
@@ -9940,10 +9953,7 @@ discord_send_file(PurpleConnection *pc, const gchar *who, const gchar *filename)
 
 	PurpleXfer *xfer = discord_create_xfer(pc, room_id, who);
 
-	if (filename && *filename)
-		purple_xfer_request_accepted(xfer, filename);
-	else
-		purple_xfer_request(xfer);
+	purple_xfer_request(xfer);
 }
 
 static void
@@ -9962,10 +9972,7 @@ discord_chat_send_file(PurpleConnection *pc, int id, const gchar *filename) {
 
 	PurpleXfer *xfer = discord_create_xfer(pc, *room_id_ptr, conv->name);
 
-	if (filename && *filename)
-		purple_xfer_request_accepted(xfer, filename);
-	else
-		purple_xfer_request(xfer);
+	purple_xfer_request(xfer);
 }
 
 static gboolean
