@@ -434,6 +434,11 @@ typedef struct {
 	PurpleConversation *conv;
 } DiscordReply;
 
+typedef struct {
+	guint64 room_id;
+	gboolean xfer_started;
+} DiscordTransfer;
+
 
 static guint64
 to_int(const gchar *id)
@@ -9733,7 +9738,22 @@ discord_cmd_get_history(PurpleConversation *conv, const gchar *cmd, gchar **args
 static void
 discord_xfer_free(PurpleXfer *xfer) {
 	// we only need to free the user data
-	g_free(xfer->data);
+	g_free(purple_xfer_get_protocol_data(xfer));
+	printf("ref count %d\n", xfer->ref);
+	purple_debug_info("discord", "ref count %d\n", xfer->ref);
+}
+
+static void
+discord_xfer_cancel_send(PurpleXfer *xfer) {
+	DiscordTransfer *dt = purple_xfer_get_protocol_data(xfer);
+	if (dt->xfer_started) {
+		// TODO check for mem leak
+		purple_xfer_ref(xfer);
+		PurpleConnection *pc = purple_account_get_connection(purple_xfer_get_account(xfer));
+		purple_notify_error(pc, _("Can't Cancel Upload"), _("Cannot Cancel Discord Upload After Start"), NULL, purple_get_cpar_from_connection(pc));
+	} else {
+		discord_xfer_free(xfer);
+	}
 }
 
 static void
@@ -9744,7 +9764,7 @@ purple_xfer_update_cb(DiscordAccount *da, JsonNode *node, gpointer userdata) {
 	if (node == NULL) {
 		purple_xfer_error(PURPLE_XFER_SEND, purple_xfer_get_account(xfer), purple_xfer_get_remote_user(xfer), _("Connection Error"));
 		purple_xfer_unref(xfer);
-		purple_xfer_end(xfer);
+		purple_xfer_cancel_remote(xfer);
 	} else {
 		gchar *json_str;
 		JsonGenerator *jg;
@@ -9763,7 +9783,7 @@ purple_xfer_update_cb(DiscordAccount *da, JsonNode *node, gpointer userdata) {
 	}
 }
 
-// TODO could add thumbnails, progress
+// TODO could add thumbnails, progress, true cancel
 static void
 discord_xfer_send_init(PurpleXfer *xfer)
 {
@@ -9779,7 +9799,7 @@ discord_xfer_send_init(PurpleXfer *xfer)
 	PurpleAccount *acct = purple_xfer_get_account(xfer);
 	PurpleConnection *pc = purple_account_get_connection(acct);
 	DiscordAccount *da = purple_connection_get_protocol_data(pc);
-	guint64 *room_id_ptr = xfer->data;
+	DiscordTransfer *dt = purple_xfer_get_protocol_data(xfer);
 
 	const gchar* fullpath = purple_xfer_get_local_filename(xfer);
 
@@ -9791,7 +9811,7 @@ discord_xfer_send_init(PurpleXfer *xfer)
 		purple_xfer_error(PURPLE_XFER_SEND, acct, purple_xfer_get_remote_user(xfer), _("Couldn't load file"));
 		// TODO afaik there's no way to get pidgin to close after a
 		// non-complete xfer :(
-		purple_xfer_end(xfer);
+		purple_xfer_cancel_local(xfer);
 		g_mapped_file_unref(file);
 		g_free(load_error);
 		return;
@@ -9803,7 +9823,7 @@ discord_xfer_send_init(PurpleXfer *xfer)
 		purple_xfer_start(xfer, 0, NULL, 0);
 		purple_xfer_error(PURPLE_XFER_SEND, acct, purple_xfer_get_remote_user(xfer), _("Maximum file size is 25MB"));
 		// "just for show"
-		purple_xfer_end(xfer);
+		purple_xfer_cancel_local(xfer);
 		g_mapped_file_unref(file);
 		return;
 	}
@@ -9831,12 +9851,13 @@ discord_xfer_send_init(PurpleXfer *xfer)
 	g_string_append_printf(postdata, "\r\n------PurpleBoundary\r\nContent-Disposition: form-data; name=\"payload_json\"\r\n\r\n{\"content\":\"\",\"nonce\":\"%s\",\"tts\":false}\r\n", nonce);
 	g_string_append(postdata, "------PurpleBoundary--\r\n");
 
-	url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/channels/%" G_GUINT64_FORMAT "/messages", *room_id_ptr);
+	url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/channels/%" G_GUINT64_FORMAT "/messages", dt->room_id);
 
 	// This and a lot of status updates are "just for show" here, they only
 	// help other programs/the user guess at what we're doing
 	purple_xfer_start(xfer, 0, url, 443);
 
+	dt->xfer_started = TRUE;
 	// TODO abusing the proxy callback method argument?
 	discord_fetch_url_with_method_len(da, "POST", url, postdata->str, postdata->len, purple_xfer_update_cb, xfer);
 
@@ -9862,13 +9883,16 @@ discord_create_xfer(PurpleConnection *pc, guint64 room_id, const gchar *receiver
 	// This may be weird; ideally we'd pass an existing pointer instead of
 	// creating a new one that we have to free later, but we can't do that
 	// since the DM channel id's are stored as strings
-	guint64 *room_id_ptr = g_new(guint64, 1);
-	*room_id_ptr = room_id;
-	xfer->data = room_id_ptr;
+	DiscordTransfer *dt = g_new(DiscordTransfer, 1);
+	dt->room_id = room_id;
+	dt->xfer_started = FALSE;
+	purple_xfer_set_protocol_data(xfer, dt);
 
 	purple_xfer_set_init_fnc(xfer, discord_xfer_send_init);
 	purple_xfer_set_end_fnc(xfer, discord_xfer_free);
+	purple_xfer_set_cancel_recv_fnc(xfer, discord_xfer_free);
 	// TODO prevent segfault from manual cancelation after send
+	purple_xfer_set_cancel_send_fnc(xfer, discord_xfer_cancel_send);
 
 	return xfer;
 }
