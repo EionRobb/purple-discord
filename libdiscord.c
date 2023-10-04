@@ -436,7 +436,7 @@ typedef struct {
 
 typedef struct {
 	guint64 room_id;
-	gboolean xfer_started;
+	gboolean canceleable;
 } DiscordTransfer;
 
 
@@ -9745,7 +9745,7 @@ discord_xfer_free(PurpleXfer *xfer) {
 static void
 discord_xfer_cancel_send(PurpleXfer *xfer) {
 	DiscordTransfer *dt = purple_xfer_get_protocol_data(xfer);
-	if (dt->xfer_started) {
+	if (dt->canceleable) {
 		// prevents segfault from freeing an xfer that is in use
 		purple_xfer_ref(xfer);
 		PurpleConnection *pc = purple_account_get_connection(purple_xfer_get_account(xfer));
@@ -9775,6 +9775,7 @@ purple_xfer_update_cb(DiscordAccount *da, JsonNode *node, gpointer userdata) {
 		purple_notify_error(pc, _("Connection Error"), NULL, xfer_info, purple_get_cpar_from_connection(pc));
 
 		purple_xfer_unref(xfer);
+		dt->canceleable = TRUE;
 		purple_xfer_cancel_remote(xfer);
 		return;
 	} else {
@@ -9795,6 +9796,7 @@ purple_xfer_update_cb(DiscordAccount *da, JsonNode *node, gpointer userdata) {
 		if (body != NULL) {
 			purple_notify_error(pc, _("Malformed Response"), _("Check Debug Logs For More Info") , xfer_info, purple_get_cpar_from_connection(pc));
 			purple_xfer_unref(xfer);
+			dt->canceleable = TRUE;
 			purple_xfer_cancel_remote(xfer);
 			return;
 		}
@@ -9810,6 +9812,7 @@ purple_xfer_update_cb(DiscordAccount *da, JsonNode *node, gpointer userdata) {
 			purple_debug_error("discord", "xfer/http upload returned code: %ld and message:\n%s\n", result_code, result_msg);
 			purple_notify_error(pc, code_str, result_msg, xfer_info, purple_get_cpar_from_connection(pc));
 			purple_xfer_unref(xfer);
+			dt->canceleable = TRUE;
 			purple_xfer_cancel_remote(xfer);
 			return;
 		}
@@ -9901,7 +9904,7 @@ discord_xfer_send_init(PurpleXfer *xfer)
 	purple_xfer_ui_ready(xfer);
 	purple_xfer_update_progress(xfer);
 
-	dt->xfer_started = TRUE;
+	dt->canceleable = TRUE;
 	discord_fetch_url_with_method_len(da, "POST", url, postdata->str, postdata->len, purple_xfer_update_cb, xfer);
 
 	purple_xfer_unref(xfer);
@@ -9925,12 +9928,11 @@ discord_create_xfer(PurpleConnection *pc, guint64 room_id, const gchar *receiver
 
 	DiscordTransfer *dt = g_new(DiscordTransfer, 1);
 	dt->room_id = room_id;
-	dt->xfer_started = FALSE;
+	dt->canceleable = FALSE;
 	purple_xfer_set_protocol_data(xfer, dt);
 
 	purple_xfer_set_init_fnc(xfer, discord_xfer_send_init);
 	purple_xfer_set_end_fnc(xfer, discord_xfer_free);
-	purple_xfer_set_cancel_recv_fnc(xfer, discord_xfer_free);
 	purple_xfer_set_cancel_send_fnc(xfer, discord_xfer_cancel_send);
 
 	return xfer;
@@ -9953,7 +9955,10 @@ discord_send_file(PurpleConnection *pc, const gchar *who, const gchar *filename)
 
 	PurpleXfer *xfer = discord_create_xfer(pc, room_id, who);
 
-	purple_xfer_request(xfer);
+	if (filename && *filename)
+		purple_xfer_request_accepted(xfer, filename);
+	else
+		purple_xfer_request(xfer);
 }
 
 static void
@@ -9972,7 +9977,13 @@ discord_chat_send_file(PurpleConnection *pc, int id, const gchar *filename) {
 
 	PurpleXfer *xfer = discord_create_xfer(pc, *room_id_ptr, conv->name);
 
-	purple_xfer_request(xfer);
+	// Pidgin itself doesn't actually let you drag and drop files into
+	// conversations, but this is in case any other client does (or Pidgin
+	// ends up supporting it)
+	if (filename && *filename)
+		purple_xfer_request_accepted(xfer, filename);
+	else
+		purple_xfer_request(xfer);
 }
 
 static gboolean
