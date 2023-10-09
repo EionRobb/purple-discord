@@ -9735,6 +9735,7 @@ discord_cmd_get_history(PurpleConversation *conv, const gchar *cmd, gchar **args
 	return PURPLE_CMD_RET_OK;
 }
 
+#if !PURPLE_VERSION_CHECK(3, 0, 0)
 static void
 discord_xfer_free(PurpleXfer *xfer) {
 	// we only need to free the user data
@@ -10002,6 +10003,7 @@ discord_chat_can_receive_file(PurpleConnection *pc, int id) {
 	// in case
 	return TRUE;
 }
+#endif
 
 static gboolean
 plugin_load(PurplePlugin *plugin, GError **error)
@@ -10264,10 +10266,12 @@ plugin_init(PurplePlugin *plugin)
 	prpl_info->add_deny = discord_block_user;
 	prpl_info->rem_deny = discord_unblock_user;
 
+	#if !PURPLE_VERSION_CHECK(3, 0, 0)
 	prpl_info->send_file = discord_send_file;
 	prpl_info->chat_send_file = discord_chat_send_file;
 	prpl_info->chat_can_receive_file = discord_chat_can_receive_file;
 	prpl_info->can_receive_file = discord_can_receive_file;
+	#endif
 
 	prpl_info->roomlist_get_list = discord_roomlist_get_list;
 	prpl_info->roomlist_room_serialize = discord_roomlist_serialize;
