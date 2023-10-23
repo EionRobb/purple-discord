@@ -3816,7 +3816,7 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		guint64 guild_id = to_int(json_object_get_string_member(data, "guild_id"));
 		JsonArray *ops = json_object_get_array_member(data, "ops");
 		int ops_len = json_array_get_length(ops);
-		int max_synced = 0;
+		guint max_synced = 0;
 
 		for (int i = 0; i < ops_len; i++) {
 			JsonObject *op = json_array_get_object_element(ops, i);
@@ -3832,7 +3832,7 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 
 			} else if (purple_strequal(optype, "SYNC")) {
 				JsonArray  *range = json_object_get_array_member(op, "range");
-				int synced_range_max = json_array_get_int_element(range, 1) + 1;
+				guint synced_range_max = json_array_get_int_element(range, 1) + 1;
 
 				if (synced_range_max > max_synced) {
 					max_synced = synced_range_max;
@@ -5454,11 +5454,11 @@ discord_send_lazy_guild_request(DiscordAccount *da, DiscordGuild *guild)
 static void
 discord_guild_get_offline_users(DiscordAccount *da, const gchar *guild_id)
 {
-	JsonObject *obj;
+	/*JsonObject *obj;
 	JsonObject *d;
 
 	// Try to request all offline users in this guild
-	/*d = json_object_new();
+	d = json_object_new();
 	json_object_set_string_member(d, "guild_id", guild_id);
 	json_object_set_string_member(d, "query", "");
 	json_object_set_int_member(d, "limit", 0);
@@ -9808,9 +9808,9 @@ purple_xfer_update_cb(DiscordAccount *da, JsonNode *node, gpointer userdata) {
 		if (code_node != NULL) {
 			gint64 result_code = json_node_get_int(code_node);
 			gchar code_str[1024];
-			g_snprintf(code_str, 1024, "%ld", result_code);
+			g_snprintf(code_str, 1024, "%" G_GINT64_FORMAT, result_code);
 			const gchar *result_msg = json_object_get_string_member(result, "message");
-			purple_debug_error("discord", "xfer/http upload returned code: %ld and message:\n%s\n", result_code, result_msg);
+			purple_debug_error("discord", "xfer/http upload returned code: %s and message:\n%s\n", code_str, result_msg);
 			purple_notify_error(pc, code_str, result_msg, xfer_info, purple_get_cpar_from_connection(pc));
 			purple_xfer_unref(xfer);
 			dt->canceleable = TRUE;
@@ -9880,7 +9880,7 @@ discord_xfer_send_init(PurpleXfer *xfer)
 	gchar *contents = g_mapped_file_get_contents(file);
 
 	gboolean guessing;
-	mimetype = g_content_type_guess(fullpath, contents, file_len, &guessing);
+	mimetype = g_content_type_guess(fullpath, (guchar *) contents, file_len, &guessing);
 	if (guessing)
 		purple_notify_info(da, fullpath, _("Guessing file type is:"), mimetype);
 
@@ -10200,6 +10200,19 @@ libpurple2_plugin_unload(PurplePlugin *plugin)
 	return plugin_unload(plugin, NULL);
 }
 
+// Add forwards-compatibility for newer libpurple's when compiling on older ones
+typedef struct 
+{
+	PurplePluginProtocolInfo parent;
+
+	#if !PURPLE_VERSION_CHECK(2, 14, 0)
+		char *(*get_cb_alias)(PurpleConnection *gc, int id, const char *who);
+		gboolean (*chat_can_receive_file)(PurpleConnection *, int id);
+		void (*chat_send_file)(PurpleConnection *, int id, const char *filename);
+	#endif
+} PurplePluginProtocolInfoExt;
+
+
 static void
 plugin_init(PurplePlugin *plugin)
 {
@@ -10210,7 +10223,8 @@ plugin_init(PurplePlugin *plugin)
 #endif
 
 	PurplePluginInfo *info;
-	PurplePluginProtocolInfo *prpl_info = g_new0(PurplePluginProtocolInfo, 1);
+	PurplePluginProtocolInfoExt *prpl_info_ext = g_new0(PurplePluginProtocolInfoExt, 1);
+	PurplePluginProtocolInfo *prpl_info = (PurplePluginProtocolInfo *) prpl_info_ext;
 
 	info = plugin->info;
 
@@ -10266,11 +10280,14 @@ plugin_init(PurplePlugin *plugin)
 	prpl_info->add_deny = discord_block_user;
 	prpl_info->rem_deny = discord_unblock_user;
 
-	#if !PURPLE_VERSION_CHECK(3, 0, 0)
 	prpl_info->send_file = discord_send_file;
-	prpl_info->chat_send_file = discord_chat_send_file;
-	prpl_info->chat_can_receive_file = discord_chat_can_receive_file;
 	prpl_info->can_receive_file = discord_can_receive_file;
+	#if PURPLE_VERSION_CHECK(2, 14, 0)
+		prpl_info->chat_send_file = discord_chat_send_file;
+		prpl_info->chat_can_receive_file = discord_chat_can_receive_file;
+	#else
+		prpl_info_ext->chat_send_file = discord_chat_send_file;
+		prpl_info_ext->chat_can_receive_file = discord_chat_can_receive_file;
 	#endif
 
 	prpl_info->roomlist_get_list = discord_roomlist_get_list;
