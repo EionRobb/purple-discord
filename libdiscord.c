@@ -434,6 +434,11 @@ typedef struct {
 	PurpleConversation *conv;
 } DiscordReply;
 
+typedef struct {
+	guint64 room_id;
+	gboolean canceleable;
+} DiscordTransfer;
+
 
 static guint64
 to_int(const gchar *id)
@@ -9730,6 +9735,276 @@ discord_cmd_get_history(PurpleConversation *conv, const gchar *cmd, gchar **args
 	return PURPLE_CMD_RET_OK;
 }
 
+#if !PURPLE_VERSION_CHECK(3, 0, 0)
+static void
+discord_xfer_free(PurpleXfer *xfer) {
+	// we only need to free the user data
+	g_free(purple_xfer_get_protocol_data(xfer));
+	purple_debug_info("discord", "ref count %d\n", xfer->ref);
+}
+
+static void
+discord_xfer_cancel_send(PurpleXfer *xfer) {
+	DiscordTransfer *dt = purple_xfer_get_protocol_data(xfer);
+	if (dt->canceleable) {
+		// prevents segfault from freeing an xfer that is in use
+		purple_xfer_ref(xfer);
+		PurpleConnection *pc = purple_account_get_connection(purple_xfer_get_account(xfer));
+		purple_notify_error(pc, _("Can't Cancel Upload"), _("Cannot Cancel Discord Upload After Start"), NULL, purple_get_cpar_from_connection(pc));
+	} else {
+		discord_xfer_free(xfer);
+	}
+}
+
+static void
+purple_xfer_update_cb(DiscordAccount *da, JsonNode *node, gpointer userdata) {
+	PurpleXfer *xfer = (PurpleXfer *) userdata;
+	purple_xfer_ref(xfer);
+	
+	DiscordTransfer *dt = purple_xfer_get_protocol_data(xfer);
+	PurpleAccount *acct = purple_xfer_get_account(xfer);
+	PurpleConnection *pc = purple_account_get_connection(acct);
+	const gchar *who = purple_xfer_get_remote_user(xfer);
+
+	// couldn't find a libpurple/glib standard buf size, this should be fine
+	gchar xfer_info[1024];
+	g_snprintf(xfer_info, 1024, "Upload From: %s\n To: %s", purple_account_get_name_for_display(acct), who);
+
+	// The following may say the xfer is canceled when it isn't, but it's
+	// the best we can do
+	if (node == NULL) {
+		purple_notify_error(pc, _("Connection Error"), NULL, xfer_info, purple_get_cpar_from_connection(pc));
+
+		purple_xfer_unref(xfer);
+		dt->canceleable = TRUE;
+		purple_xfer_cancel_remote(xfer);
+		return;
+	} else {
+		JsonObject *result = json_node_get_object(node);
+
+		gchar *json_str;
+		JsonGenerator *jg;
+
+		jg = json_generator_new();
+		json_generator_set_root(jg, node);
+		json_str = json_generator_to_data(jg, NULL);
+		purple_debug_info("discord", "xfer/http upload returned:\n %s\n", json_str);
+
+		g_free(json_str);
+		g_object_unref(jg);
+
+		const gchar *body = json_object_get_string_member(result, "body");
+		if (body != NULL) {
+			purple_notify_error(pc, _("Malformed Response"), _("Check Debug Logs For More Info") , xfer_info, purple_get_cpar_from_connection(pc));
+			purple_xfer_unref(xfer);
+			dt->canceleable = TRUE;
+			purple_xfer_cancel_remote(xfer);
+			return;
+		}
+
+		// if there any error codes that are worth it to work around we
+		// can put them here
+		JsonNode *code_node = json_object_get_member(result, "code");
+		if (code_node != NULL) {
+			gint64 result_code = json_node_get_int(code_node);
+			gchar code_str[1024];
+			g_snprintf(code_str, 1024, "%ld", result_code);
+			const gchar *result_msg = json_object_get_string_member(result, "message");
+			purple_debug_error("discord", "xfer/http upload returned code: %ld and message:\n%s\n", result_code, result_msg);
+			purple_notify_error(pc, code_str, result_msg, xfer_info, purple_get_cpar_from_connection(pc));
+			purple_xfer_unref(xfer);
+			dt->canceleable = TRUE;
+			purple_xfer_cancel_remote(xfer);
+			return;
+		}
+
+		// we could also update the bytes sent with the last two
+		// exceptions, but it isn't necessarily true or helpful
+		purple_xfer_set_bytes_sent(xfer, purple_xfer_get_size(xfer));
+		// updating the progress after setting the bytes sent is not
+		// necessary for pidgin, but it may be for other clients
+		purple_xfer_update_progress(xfer);
+		purple_xfer_unref(xfer);
+		purple_xfer_set_completed(xfer, TRUE);
+		purple_xfer_end(xfer);
+	}
+}
+
+// TODO progress, true cancel
+static void
+discord_xfer_send_init(PurpleXfer *xfer)
+{
+	gchar *filename;
+	gchar *url;
+	gchar *nonce;
+	gchar *mimetype;
+	GMappedFile *file;
+	GString *postdata;
+
+	purple_xfer_ref(xfer);
+
+	PurpleAccount *acct = purple_xfer_get_account(xfer);
+	PurpleConnection *pc = purple_account_get_connection(acct);
+	DiscordAccount *da = purple_connection_get_protocol_data(pc);
+	DiscordTransfer *dt = purple_xfer_get_protocol_data(xfer);
+
+	const gchar* fullpath = purple_xfer_get_local_filename(xfer);
+
+	GError *load_error = NULL;
+
+	file = g_mapped_file_new(fullpath, FALSE, &load_error);
+	if (load_error != NULL) {
+		purple_debug_error("discord", "Couldn't load file to send: %s\n", load_error->message);
+		purple_xfer_error(PURPLE_XFER_SEND, acct, purple_xfer_get_remote_user(xfer), _("Couldn't load file"));
+		// TODO afaik there's no way to get pidgin to close after a
+		// non-complete xfer :(
+		purple_xfer_cancel_local(xfer);
+		g_mapped_file_unref(file);
+		g_free(load_error);
+		return;
+	}
+	g_free(load_error);
+
+	goffset file_len = g_mapped_file_get_length(file);
+	if (file_len > 25000000) {
+		purple_xfer_error(PURPLE_XFER_SEND, acct, purple_xfer_get_remote_user(xfer), _("Maximum file size is 25MB"));
+		// "just for show"
+		purple_xfer_cancel_local(xfer);
+		g_mapped_file_unref(file);
+		return;
+	}
+	purple_xfer_set_size(xfer, file_len);
+
+	// though the gtk glib docs say otherwise, it appears that the contents
+	// are NOT the responsibility of the caller
+	gchar *contents = g_mapped_file_get_contents(file);
+
+	gboolean guessing;
+	mimetype = g_content_type_guess(fullpath, contents, file_len, &guessing);
+	if (guessing)
+		purple_notify_info(da, fullpath, _("Guessing file type is:"), mimetype);
+
+	filename = g_path_get_basename(fullpath);
+	purple_xfer_set_filename(xfer, filename);
+
+	// We don't insert this into sent messages because that will prevent it
+	// from appearing in our client
+	nonce = g_strdup_printf("%" G_GUINT32_FORMAT, g_random_int());
+
+	postdata = g_string_new(NULL);
+	g_string_append_printf(postdata, "------PurpleBoundary\r\nContent-Disposition: form-data; name=\"file\"; filename=\"%s\"\r\nContent-Type: %s\r\n\r\n", purple_url_encode(filename), mimetype);
+	g_string_append_len(postdata, contents, file_len);
+	g_string_append_printf(postdata, "\r\n------PurpleBoundary\r\nContent-Disposition: form-data; name=\"payload_json\"\r\n\r\n{\"content\":\"\",\"nonce\":\"%s\",\"tts\":false}\r\n", nonce);
+	g_string_append(postdata, "------PurpleBoundary--\r\n");
+
+	url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/channels/%" G_GUINT64_FORMAT "/messages", dt->room_id);
+
+	// This and a lot of status updates are "just for show" here, they only
+	// help other programs/the user guess at what we're doing
+	purple_xfer_start(xfer, -1, NULL, -1);
+	purple_xfer_ui_ready(xfer);
+	purple_xfer_update_progress(xfer);
+
+	dt->canceleable = TRUE;
+	discord_fetch_url_with_method_len(da, "POST", url, postdata->str, postdata->len, purple_xfer_update_cb, xfer);
+
+	purple_xfer_unref(xfer);
+
+	g_free(filename);
+	g_free(url);
+	g_free(nonce);
+	g_free(mimetype);
+	g_mapped_file_unref(file);
+	g_string_free(postdata, TRUE);
+}
+
+// This is not hooked into 'new_xfer' like you may see in other prpl's
+static PurpleXfer *
+discord_create_xfer(PurpleConnection *pc, guint64 room_id, const gchar *receiver) 
+{
+	DiscordAccount *da = purple_connection_get_protocol_data(pc);
+	PurpleXfer *xfer;
+
+	xfer = purple_xfer_new(da->account, PURPLE_XFER_SEND, receiver);
+
+	DiscordTransfer *dt = g_new(DiscordTransfer, 1);
+	dt->room_id = room_id;
+	dt->canceleable = FALSE;
+	purple_xfer_set_protocol_data(xfer, dt);
+
+	purple_xfer_set_init_fnc(xfer, discord_xfer_send_init);
+	purple_xfer_set_end_fnc(xfer, discord_xfer_free);
+	purple_xfer_set_cancel_send_fnc(xfer, discord_xfer_cancel_send);
+
+	return xfer;
+}
+
+static void
+discord_send_file(PurpleConnection *pc, const gchar *who, const gchar *filename) 
+{
+	DiscordAccount *da = purple_connection_get_protocol_data(pc);
+	gchar *room_id_str = g_hash_table_lookup(da->one_to_ones_rev, who);
+	if (room_id_str == NULL) {
+		// AFAIK creating new DM's seems to be somewhat broken, so
+		// sending a regular message might not work, but that issue
+		// isn't really in the scope of adding a file upload option
+		purple_notify_error(da, _("DM Does Not Exist"), _("DM does not exist"), _("Try Sending A Regular Message First"), 
+			purple_request_cpar_from_connection(pc));
+		return;
+	}
+	guint64 room_id = g_ascii_strtoull(room_id_str, NULL, 10);
+
+	PurpleXfer *xfer = discord_create_xfer(pc, room_id, who);
+
+	if (filename && *filename)
+		purple_xfer_request_accepted(xfer, filename);
+	else
+		purple_xfer_request(xfer);
+}
+
+static void
+discord_chat_send_file(PurpleConnection *pc, int id, const gchar *filename) {
+	DiscordAccount *da = purple_connection_get_protocol_data(pc);
+	PurpleConvChat *chatconv = purple_conversations_find_chat(pc, id);
+	PurpleConversation *conv = PURPLE_CONVERSATION(chatconv);
+	guint64 *room_id_ptr = purple_conversation_get_data(conv, "id");
+
+	if (room_id_ptr == NULL) {
+			purple_debug_error("discord", "Couldn't find room id of chat: %s\n", conv->name);
+			purple_notify_error(da, conv->name, _("Couldn't find room id"), _("Check debug messages for more info"), 
+				purple_request_cpar_from_connection(pc));
+			return;
+	}
+
+	PurpleXfer *xfer = discord_create_xfer(pc, *room_id_ptr, conv->name);
+
+	// Pidgin itself doesn't actually let you drag and drop files into
+	// conversations, but this is in case any other client does (or Pidgin
+	// ends up supporting it)
+	if (filename && *filename)
+		purple_xfer_request_accepted(xfer, filename);
+	else
+		purple_xfer_request(xfer);
+}
+
+static gboolean
+discord_can_receive_file(PurpleConnection *pc, const gchar *who) 
+{
+	if (!who || g_str_equal(who, purple_account_get_username(purple_connection_get_account(pc))))
+		return FALSE;
+
+	return TRUE;
+}
+
+static gboolean
+discord_chat_can_receive_file(PurpleConnection *pc, int id) {
+	// As of now, I don't forsee any conditions under which we'd like to
+	// prematurely disable the save function, but I'll leave this here just
+	// in case
+	return TRUE;
+}
+#endif
+
 static gboolean
 plugin_load(PurplePlugin *plugin, GError **error)
 {
@@ -9990,6 +10265,13 @@ plugin_init(PurplePlugin *plugin)
 	prpl_info->get_info = discord_get_info;
 	prpl_info->add_deny = discord_block_user;
 	prpl_info->rem_deny = discord_unblock_user;
+
+	#if !PURPLE_VERSION_CHECK(3, 0, 0)
+	prpl_info->send_file = discord_send_file;
+	prpl_info->chat_send_file = discord_chat_send_file;
+	prpl_info->chat_can_receive_file = discord_chat_can_receive_file;
+	prpl_info->can_receive_file = discord_can_receive_file;
+	#endif
 
 	prpl_info->roomlist_get_list = discord_roomlist_get_list;
 	prpl_info->roomlist_room_serialize = discord_roomlist_serialize;
