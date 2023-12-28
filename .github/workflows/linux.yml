@@ -1,0 +1,25 @@
+name: Linux
+on:
+  - push
+  - pull_request
+jobs:
+  build:
+    name: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: install deps
+        run: |
+          sudo apt update
+          sudo apt install -y libglib2.0-dev libjson-glib-dev libnss3-dev libqrencode-dev imagemagick gettext
+          sudo apt install -y libpurple-dev libpurple0 --no-install-recommends
+
+      - name: make
+        run: make
+
+      - name: archive
+        uses: actions/upload-artifact@v3
+        with: 
+            name: plugin 
+            path: lib*.so

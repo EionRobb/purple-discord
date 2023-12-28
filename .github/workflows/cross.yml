@@ -1,0 +1,58 @@
+name: Cross compile for Windows
+on:
+  - push
+  - pull_request
+jobs:
+  build:
+    name: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Set up MinGW
+        run: |
+          sudo apt update
+          sudo apt install -y gcc-mingw-w64-i686-win32
+
+      - name: Download Pidgin
+        run: |
+          curl -L https://sourceforge.net/projects/pidgin/files/Pidgin/2.14.1/pidgin-2.14.1.tar.bz2/download -o pidgin.tar.bz2
+          tar -xf pidgin.tar.bz2
+          mv pidgin-2.14.1 pidgin
+          curl -L https://sourceforge.net/projects/pidgin/files/Pidgin/2.14.1/pidgin-2.14.1-win32-bin.zip/download -o pidgin-win32bin.zip
+          unzip pidgin-win32bin.zip
+          cp pidgin-2.14.1-win32bin/libpurple.dll pidgin/libpurple/
+      
+      - name: Setup WinPidgin build
+        run: |
+          mkdir win32-dev
+          curl -L http://ftp.gnome.org/pub/gnome/binaries/win32/glib/2.28/glib-dev_2.28.8-1_win32.zip -o glib-dev.zip
+          unzip glib-dev.zip -d win32-dev/glib-2.28.8
+          curl -L http://ftp.gnome.org/pub/gnome/binaries/win32/dependencies/gettext-runtime-dev_0.18.1.1-2_win32.zip -o gettext-runtime.zip
+          unzip gettext-runtime.zip -d win32-dev/glib-2.28.8
+          curl -L http://ftp.gnome.org/pub/gnome/binaries/win32/dependencies/zlib-dev_1.2.5-2_win32.zip -o zlib-dev.zip
+          unzip zlib-dev.zip -d win32-dev/glib-2.28.8
+
+          cd win32-dev
+          curl -L https://data.imfreedom.org/pidgin/win32/nss-3.24-nspr-4.12.tar.gz -o nss-3.24-nspr-4.12.tar.gz
+          tar -xf nss-3.24-nspr-4.12.tar.gz
+          curl -L https://github.com/jgeboski/purple-facebook/releases/download/downloads/json-glib-0.14.tar.gz -o json-glib.tar.gz
+          tar -xf json-glib.tar.gz
+          curl -L https://github.com/EionRobb/purple-discord/files/13785079/qrencode-4.1.1.zip -o qrencode.zip
+          unzip qrencode.zip
+          cd ..
+
+          ls win32-dev/
+
+      - name: make
+        run: |
+          export WIN32_CC=i686-w64-mingw32-gcc 
+          export WIN32_DEV_TOP=win32-dev
+          export PIDGIN_TREE_TOP=pidgin
+          make libdiscord.dll
+
+      - name: archive
+        uses: actions/upload-artifact@v3
+        with: 
+            name: plugin 
+            path: lib*.dll
