@@ -161,6 +161,7 @@ typedef enum {
 	CHANNEL_GUILD_STAGE_VOICE = 13,
 	CHANNEL_GUILD_DIRECTORY = 14,
 	CHANNEL_GUILD_FORUM = 15,
+	CHANNEL_GUILD_MEDIA = 16,
 } DiscordChannelType;
 
 typedef enum {
@@ -271,9 +272,6 @@ typedef struct {
 } DiscordPermissionOverride;
 
 typedef struct {
-	gchar *name;
-	gchar *topic;
-	gboolean muted;
 	union {
 		struct {
 			GList *recipients;
@@ -296,10 +294,12 @@ typedef struct {
 			};
 		};
 	};
+	gchar *topic;
 } DiscordChannelData;
 
 typedef struct {
 	guint64 id;
+	gchar *name;
 	DiscordChannelType type;
 	guint64 last_message_id;
 
@@ -584,13 +584,14 @@ discord_new_channel(JsonObject *json)
 		return channel;
 	}
 
-	channel->d = g_new0(DiscordChannelData, 1);
+	channel->name = g_strdup(json_object_get_string_member(json, "name"));
 
-	channel->d->name = g_strdup(json_object_get_string_member(json, "name"));
+	channel->d = g_new0(DiscordChannelData, 1);
+	channel->d->topic = NULL;
 
 	if (channel->type == CHANNEL_GROUP_DM) {
 		channel->d->recipients = NULL;
-		channel->d->topic = g_strdup(json_object_get_string_member(json, "topic"));
+		channel->d->topic = json_object_has_member(json, "topic") ? g_strdup(json_object_get_string_member(json, "topic")) : NULL;
 		return channel;
 	}
 
@@ -598,7 +599,7 @@ discord_new_channel(JsonObject *json)
 	channel->d->parent_id = to_int(json_object_get_string_member(json, "parent_id"));
 
 	if (channel->type < CHANNEL_GUILD_NEWS_THREAD || channel->type >= CHANNEL_GUILD_STAGE_VOICE) {
-		channel->d->topic = g_strdup(json_object_get_string_member(json, "topic"));
+		channel->d->topic = json_object_has_member(json, "topic") ? g_strdup(json_object_get_string_member(json, "topic")) : NULL;
 		channel->d->position = json_object_get_int_member(json, "position");
 		channel->d->threads = g_hash_table_new_full(g_int64_hash, g_int64_equal, NULL, NULL);
 	} else { // thread
@@ -714,7 +715,6 @@ discord_free_channel(gpointer data)
 	DiscordChannel *channel = data;
 
 	if (channel->d != NULL) {
-		g_free(channel->d->name);
 		if (channel->type == CHANNEL_GROUP_DM) {
 			g_free(channel->d->topic);
 			g_list_free_full(channel->d->recipients, g_free);
@@ -722,7 +722,9 @@ discord_free_channel(gpointer data)
 			g_hash_table_unref(channel->d->permission_user_overrides);
 			g_hash_table_unref(channel->d->permission_role_overrides);
 			if (channel->type < CHANNEL_GUILD_NEWS_THREAD || channel->type > CHANNEL_GUILD_PUBLIC_THREAD) {
-				g_free(channel->d->topic);
+				if (channel->d->topic) {
+					g_free(channel->d->topic);
+				}
 				if (channel->d->threads) {
 					g_hash_table_unref(channel->d->threads);
 				}
@@ -731,6 +733,7 @@ discord_free_channel(gpointer data)
 		g_free(channel->d);
 	}
 
+	g_free(channel->name);
 	g_free(channel);
 }
 
@@ -1099,7 +1102,7 @@ discord_get_channel_global_name(DiscordAccount *da, const gchar *name)
 		while (g_hash_table_iter_next(&channel_iter, &key, &value)) {
 			DiscordChannel *channel = value;
 
-			if (purple_strequal(name, channel->d->name)) {
+			if (purple_strequal(name, channel->name)) {
 				return channel;
 			}
 		}
@@ -1221,13 +1224,15 @@ discord_print_guilds(GHashTable *guilds)
 
 			discord_print_append(1, buffer, row_buffer, "Channel id: %" G_GUINT64_FORMAT, channel->id);
 			discord_print_append(2, buffer, row_buffer, "Name: %s", channel->name);
-			discord_print_append(2, buffer, row_buffer, "Topic: %s", channel->topic);
 			discord_print_append(2, buffer, row_buffer, "Type: %d", channel->type);
-			discord_print_append(2, buffer, row_buffer, "Position: %d", channel->position);
 			discord_print_append(2, buffer, row_buffer, "Last message: %" G_GUINT64_FORMAT, channel->last_message_id);
+			if (channel->d != NULL) {
+				discord_print_append(2, buffer, row_buffer, "Topic: %s", channel->d->topic);
+				//discord_print_append(2, buffer, row_buffer, "Position: %d", channel->position);
+			}
 
-			discord_print_permission_override(buffer, channel->permission_role_overrides, "Role");
-			discord_print_permission_override(buffer, channel->permission_user_overrides, "User");
+			//discord_print_permission_override(buffer, channel->permission_role_overrides, "Role");
+			//discord_print_permission_override(buffer, channel->permission_user_overrides, "User");
 		}
 	}
 
@@ -1826,9 +1831,9 @@ discord_replace_channel(const GMatchInfo *match, GString *result, gpointer user_
 		/* TODO make this a clickable link */
 
 		if (guild) {
-			g_string_append_printf(result, "%s", discord_normalise_room_name(guild->name, channel->d->name));
+			g_string_append_printf(result, "%s", discord_normalise_room_name(guild->name, channel->name));
 		} else {
-			g_string_append_printf(result, "#%s", channel->d->name);
+			g_string_append_printf(result, "#%s", channel->name);
 		}
 	} else {
 		g_string_append(result, match_string);
@@ -2087,7 +2092,7 @@ discord_find_channel_by_name(DiscordGuild *guild, gchar *name)
 
 	while (g_hash_table_iter_next(&iter, (gpointer *) &key, &value)) {
 		DiscordChannel *channel = value;
-		if (purple_strequal(channel->d->name, name)) {
+		if (purple_strequal(channel->name, name)) {
 			return channel->id;
 		}
 	}
@@ -2663,6 +2668,7 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 	guint64 author_id = to_int(json_object_get_string_member(author_obj, "id"));
 
 	guint64 id = to_int(json_object_get_string_member(data, "channel_id"));
+	const gchar *id_s = json_object_get_string_member(data, "channel_id");
 	guint64 channel_id;
 	gchar *channel_id_s;
 
@@ -2690,6 +2696,7 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 
 	if (!channel) {
 		thread = discord_get_thread_global_int_guild(da, id, &guild);
+		purple_debug_info("discord","motherfucker\n");
 	}
 
 	if (thread) {
@@ -2698,27 +2705,16 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 
 	if (channel) {
 		channel_id = channel->id;
+		channel_id_s = from_int(channel_id);
 	} else {
 		channel_id = id;
+		channel_id_s = g_strdup(id_s);
 	}
 
-	channel_id_s = from_int(channel_id);
+	purple_debug_info("discord","%" G_GUINT64_FORMAT "\n", channel_id);
 
 	/* Check if we should receive messages at all and shortcircuit if not,
 	 * unless the user already opened the channel */
-
-	gboolean muted = channel->type != CHANNEL_DM ? channel->d->muted : FALSE;
-	if (thread && !muted) {
-		muted = thread->d->muted;
-	}
-
-	if (muted) {
-		if (purple_conversations_find_chat(da->pc, discord_chat_hash(channel_id)) == NULL) {
-			g_free(escaped_content);
-			g_free(channel_id_s);
-			return msg_id;
-		}
-	}
 
 	if (author_id == da->self_user_id) {
 		flags = PURPLE_MESSAGE_SEND | PURPLE_MESSAGE_REMOTE_SEND | PURPLE_MESSAGE_DELAYED;
@@ -3012,11 +3008,16 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 		}
 	}
 
+
+	purple_debug_info("discord", "1\n");
 	if (channel_id_s && g_hash_table_contains(da->one_to_ones, channel_id_s)) {
 		/* private message */
 
+		purple_debug_info("discord", "2\n");
 		if (author_id == da->self_user_id) {
+			purple_debug_info("discord", "3\n");
 			if (!nonce || !g_hash_table_remove(da->sent_message_ids, nonce)) {
+				purple_debug_info("discord", "4\n");
 				PurpleMessage *msg;
 
 				gchar *username = g_hash_table_lookup(da->one_to_ones, channel_id_s);
@@ -3050,6 +3051,7 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 					}
 				}
 			}
+			purple_debug_info("discord", "5\n");
 		} else {
 			DiscordUser *author = discord_upsert_user(da->new_users, author_obj);
 			gchar *merged_username = discord_create_fullname(author);
@@ -3240,7 +3242,7 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 			guint64 ref_id = to_int(json_object_get_string_member(thread_root, "message_id"));
 			time_t ref_timestamp = discord_time_from_snowflake(ref_id);
 			gchar *timestring = discord_parse_timestamp(ref_timestamp);
-			const gchar *thread_name = thread ? thread->d->name : escaped_content; // MESSAGE_THREAD_CREATED msgs have thread name as their content
+			const gchar *thread_name = thread ? thread->name : escaped_content; // MESSAGE_THREAD_CREATED msgs have thread name as their content
 			gchar *new_thread_txt;
 			if (ref_timestamp > DISCORD_EPOCH_MS/1000) {
 				new_thread_txt = g_strdup_printf(_("%s started thread \"%s\" from message at %s"), name, thread_name, timestring);
@@ -3578,7 +3580,7 @@ discord_add_channel_to_blist(DiscordAccount *da, DiscordChannel *channel, Purple
 	gchar *id = from_int(channel->id);
 
 	g_hash_table_replace(components, g_strdup("id"), id);
-	g_hash_table_replace(components, g_strdup("name"), g_strdup(channel->d->name));
+	g_hash_table_replace(components, g_strdup("name"), g_strdup(channel->name));
 
 	if (!group) {
 		group = discord_get_or_create_default_group();
@@ -3586,7 +3588,7 @@ discord_add_channel_to_blist(DiscordAccount *da, DiscordChannel *channel, Purple
 
 	/* Don't re-add the channel to the same group */
 	if (discord_find_chat_in_group(da->account, id, group) == NULL) {
-		PurpleChat *chat = purple_chat_new(da->account, channel->d->name, components);
+		PurpleChat *chat = purple_chat_new(da->account, channel->name, components);
 		purple_blist_add_chat(chat, group, NULL);
 	} else {
 		g_hash_table_unref(components);
@@ -3657,7 +3659,7 @@ discord_got_group_dm(DiscordAccount *da, JsonObject *data)
 
 	g_hash_table_replace_int64(da->group_dms, channel->id, channel);
 
-	channel->d->name = discord_name_group_dm(da, channel);
+	channel->name = discord_name_group_dm(da, channel);
 
 	gchar *id = from_int(channel->id);
 
@@ -3669,6 +3671,43 @@ discord_got_group_dm(DiscordAccount *da, JsonObject *data)
 	}
 
 	g_free(id);
+}
+
+static void
+discord_got_dm(DiscordAccount *da, JsonObject *data) {
+
+	DiscordChannel *channel = discord_new_channel(data);
+	JsonArray *recipients = json_object_get_array_member(data, "recipients");
+	const gchar *room_id = json_object_get_string_member(data, "id");
+	const gchar *last_message_id = json_object_get_string_member(data, "last_message_id");
+	gchar *merged_username = NULL;
+
+	if (recipients == NULL) {
+		//New API
+		recipients = json_object_get_array_member(data, "recipient_ids");
+		const gchar *user_id = json_array_get_string_element(recipients, 0);
+
+		DiscordUser *user = discord_get_user(da, to_int(user_id));
+		merged_username = discord_create_fullname(user);
+
+	} else {
+		// Old API
+		JsonObject *user = json_array_get_object_element(recipients, 0);
+		const gchar *username = json_object_get_string_member(user, "username");
+		const gchar *discriminator = json_object_get_string_member(user, "discriminator");
+		merged_username = discord_combine_username(username, discriminator);
+
+	}
+
+	if (merged_username != NULL) {
+		channel->name = g_strdup(merged_username);
+
+		g_hash_table_replace(da->one_to_ones, g_strdup(room_id), g_strdup(merged_username));
+		g_hash_table_replace(da->one_to_ones_rev, g_strdup(merged_username), g_strdup(room_id));
+		g_hash_table_replace(da->last_message_id_dm, g_strdup(room_id), g_strdup(last_message_id));
+
+		g_free(merged_username);
+	}
 }
 
 static void discord_send_lazy_guild_request(DiscordAccount *da, DiscordGuild *guild);
@@ -3810,11 +3849,8 @@ discord_update_guild_member_list(DiscordAccount *da, DiscordGuild *guild, GList 
 			return;
 		}
 		purple_conv_chat_add_users(chat, nicks_to_add, NULL, perms, FALSE);
-		while (nicks_to_add != NULL) {
-			g_free(nicks_to_add->data);
-			nicks_to_add = g_list_delete_link(nicks_to_add, nicks_to_add);
-		}
 		g_list_free(perms);
+		g_list_free(nicks_to_add);
 	}
 }
 
@@ -4234,31 +4270,17 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 	} else if (purple_strequal(type, "CHANNEL_CREATE") || purple_strequal(type, "THREAD_CREATE")) {
 		const gchar *channel_id = json_object_get_string_member(data, "id");
 		gint64 channel_type = json_object_get_int_member(data, "type");
-		const gchar *last_message_id = json_object_get_string_member(data, "last_message_id");
+		DiscordChannel *channel;
 
 		if (channel_type == CHANNEL_DM) {
 			/* 1:1 direct message */
-
-			JsonObject *first_recipient = json_array_get_object_element(json_object_get_array_member(data, "recipients"), 0);
-
-			if (first_recipient != NULL) {
-				const gchar *username = json_object_get_string_member(first_recipient, "username");
-				const gchar *discriminator = json_object_get_string_member(first_recipient, "discriminator");
-				gchar *combined_username = discord_combine_username(username, discriminator);
-
-				if (combined_username != NULL) {
-					g_hash_table_replace(da->one_to_ones, g_strdup(channel_id), g_strdup(combined_username));
-					g_hash_table_replace(da->last_message_id_dm, g_strdup(channel_id), g_strdup(last_message_id));
-					g_hash_table_replace(da->one_to_ones_rev, combined_username, g_strdup(channel_id));
-				}
-			}
+			discord_got_dm(da, data);
 		} else if (channel_type == CHANNEL_GROUP_DM) {
 			discord_got_group_dm(da, data);
 		} else if (channel_type == CHANNEL_GUILD_TEXT || channel_type == CHANNEL_GUILD_NEWS || (channel_type >= CHANNEL_GUILD_NEWS_THREAD && channel_type != CHANNEL_GUILD_STAGE_VOICE)) {
 			const gchar *guild_id = json_object_get_string_member(data, "guild_id");
 			DiscordGuild *guild = discord_get_guild(da, to_int(guild_id));
 			if (guild != NULL) {
-				DiscordChannel *channel;
 				if (channel_type < CHANNEL_GUILD_NEWS_THREAD) {
 					channel = discord_add_channel(da, guild, data, guild->id);
 				} else {
@@ -4872,8 +4894,8 @@ discord_get_room_category(DiscordAccount *da, GHashTable *id_to_category, guint6
 	if (!channel)
 		return parent;
 
-	room = purple_roomlist_room_new(PURPLE_ROOMLIST_ROOMTYPE_CATEGORY, channel->d->name, parent);
-	purple_roomlist_room_add_field(roomlist, room, (gpointer) channel->d->name);
+	room = purple_roomlist_room_new(PURPLE_ROOMLIST_ROOMTYPE_CATEGORY, channel->name, parent);
+	purple_roomlist_room_add_field(roomlist, room, (gpointer) channel->name);
 	purple_roomlist_room_add(roomlist, room);
 
 	/* Record it */
@@ -4920,7 +4942,7 @@ discord_roomlist_got_list(DiscordAccount *da, DiscordGuild *guild, gpointer user
 		PurpleRoomlistRoom *local_category =
 			discord_get_room_category(da, id_to_category, guild ? channel->d->parent_id : 0, roomlist, category);
 
-		room = purple_roomlist_room_new(PURPLE_ROOMLIST_ROOMTYPE_ROOM, channel->d->name, local_category);
+		room = purple_roomlist_room_new(PURPLE_ROOMLIST_ROOMTYPE_ROOM, channel->name, local_category);
 		purple_roomlist_room_add_field(roomlist, room, channel_id);
 		purple_roomlist_room_add_field(roomlist, room, discord_is_channel_thread(channel) ? NULL : channel->d->topic);
 
@@ -5241,40 +5263,11 @@ discord_got_private_channels(DiscordAccount *da, JsonNode *node, gpointer user_d
 
 	for (i = len - 1; i >= 0; i--) {
 		JsonObject *channel = json_array_get_object_element(private_channels, i);
-		JsonArray *recipients = json_object_get_array_member(channel, "recipients");
-		const gchar *room_id = json_object_get_string_member(channel, "id");
-		const gchar *last_message_id = json_object_get_string_member(channel, "last_message_id");
 		gint64 room_type = json_object_get_int_member(channel, "type");
 
-		if (room_type == 1) {
-			gchar *merged_username = NULL;
-
-			/* One-to-one DM */
-			if (recipients == NULL) {
-				//New API
-				recipients = json_object_get_array_member(channel, "recipient_ids");
-				const gchar *user_id = json_array_get_string_element(recipients, 0);
-
-				DiscordUser *user = discord_get_user(da, to_int(user_id));
-				merged_username = discord_create_fullname(user);
-
-			} else {
-				// Old API
-				JsonObject *user = json_array_get_object_element(recipients, 0);
-				const gchar *username = json_object_get_string_member(user, "username");
-				const gchar *discriminator = json_object_get_string_member(user, "discriminator");
-				merged_username = discord_combine_username(username, discriminator);
-
-			}
-
-			if (merged_username != NULL) {
-				g_hash_table_replace(da->one_to_ones, g_strdup(room_id), g_strdup(merged_username));
-				g_hash_table_replace(da->one_to_ones_rev, g_strdup(merged_username), g_strdup(room_id));
-				g_hash_table_replace(da->last_message_id_dm, g_strdup(room_id), g_strdup(last_message_id));
-
-				g_free(merged_username);
-			}
-		} else if (room_type == 3) {
+		if (room_type == CHANNEL_DM) {
+			discord_got_dm(da, channel);
+		} else if (room_type == CHANNEL_GROUP_DM) {
 			discord_got_group_dm(da, channel);
 		}
 	}
@@ -5418,7 +5411,7 @@ discord_buddy_guild(DiscordAccount *da, DiscordGuild *guild)
 		DiscordChannel *cat = g_hash_table_lookup_int64(guild->channels, channel->d->parent_id);
 
 		if (cat)
-			category_name = cat->d->name;
+			category_name = cat->name;
 		if (purple_strequal(category_id, "0")) {
 			g_free(category_id);
 			category_id = from_int(guild->id);
@@ -5744,7 +5737,7 @@ discord_got_read_states(DiscordAccount *da, JsonNode *node, gpointer user_data)
 					g_free(tmp);
 
 				} else if (mentions) {
-					purple_debug_misc("discord", "%d unhandled mentions in channel %s\n", mentions, dchannel ? dchannel->d->name : channel);
+					purple_debug_misc("discord", "%d unhandled mentions in channel %s\n", mentions, dchannel ? dchannel->name : channel);
 				}
 			}
 		}
@@ -5764,7 +5757,6 @@ discord_got_guild_setting(DiscordAccount *da, JsonObject *settings)
 		return;
 
 	/* Grab global settings */
-	gboolean all_mute = json_object_get_boolean_member(settings, "muted");
 	gboolean all_suppressed = json_object_get_boolean_member(settings, "suppress_everyone");
 	DiscordNotificationLevel all_notification = json_object_get_int_member(settings, "message_notifications");
 
@@ -5777,7 +5769,6 @@ discord_got_guild_setting(DiscordAccount *da, JsonObject *settings)
 
 	while (g_hash_table_iter_next(&iter, &key, &value)) {
 		DiscordChannel *channel = value;
-		channel->d->muted = all_mute;
 		channel->d->suppress_everyone = all_suppressed;
 		channel->d->notification_level = all_notification;
 	}
@@ -5797,8 +5788,6 @@ discord_got_guild_setting(DiscordAccount *da, JsonObject *settings)
 			continue;
 
 		/* Apply overrides */
-		channel->d->muted = json_object_get_boolean_member(override, "muted");
-		purple_debug_info("discord", "%s: %smute\n", channel->d->name, channel->d->muted ? "" : "un");
 		DiscordNotificationLevel level = json_object_get_int_member(override, "message_notifications");
 
 		if (level != NOTIFICATIONS_INHERIT && discord_is_channel_guild_channel(channel))
@@ -7008,7 +6997,7 @@ discord_chat_threads(PurpleConnection *pc, int id, const gchar *filter)
 			else
 				last_message_time_s = g_date_time_format(last_message_time, "%F %T");
 
-			gchar *tmp = g_strdup_printf("%s\n %s | %s | %s", threads_list, creation_time_s, last_message_time_s, thread->d->name);
+			gchar *tmp = g_strdup_printf("%s\n %s | %s | %s", threads_list, creation_time_s, last_message_time_s, thread->name);
 			g_free(threads_list);
 			threads_list = tmp;
 
@@ -7293,7 +7282,7 @@ discord_chat_info_defaults(PurpleConnection *pc, const char *chatname)
 			DiscordChannel *channel = discord_get_channel_global(da, chatname);
 
 			if (channel && channel->type != CHANNEL_DM) {
-				g_hash_table_insert(defaults, "name", g_strdup(channel->d->name));
+				g_hash_table_insert(defaults, "name", g_strdup(channel->name));
 			}
 
 			g_hash_table_insert(defaults, "id", g_strdup(chatname));
@@ -7301,7 +7290,7 @@ discord_chat_info_defaults(PurpleConnection *pc, const char *chatname)
 			DiscordChannel *channel = discord_get_channel_global_name(da, chatname);
 
 			if (channel && channel->type != CHANNEL_DM) {
-				g_hash_table_insert(defaults, "name", g_strdup(channel->d->name));
+				g_hash_table_insert(defaults, "name", g_strdup(channel->name));
 				g_hash_table_insert(defaults, "id", from_int(channel->id));
 			}
 		}
@@ -8676,53 +8665,6 @@ discord_toggle_history_limit(PurpleBlistNode *node, gpointer userdata)
 	purple_blist_node_set_bool(node, "limit_history", !is_limited);
 }
 
-/* If a channel is muted, unmute it, or vice verse */
-
-static void
-discord_toggle_mute(PurpleBlistNode *node, gpointer userdata)
-{
-	DiscordAccount *da = (DiscordAccount *) userdata;
-	PurpleChat *chat = PURPLE_CHAT(node);
-
-	DiscordChannel *channel = discord_channel_from_chat(da, chat);
-
-	if (!channel || channel->type == CHANNEL_DM) {
-		return;
-	}
-
-	/* Toggle the mute */
-	channel->d->muted = !channel->d->muted;
-
-	/* PATCH /users/@me/guilds/[guild id]/settings
-	 * {"channel_overrides": {"channel_id": {"muted": true}}} */
-
-	DiscordGuild *guild = discord_is_channel_guild_channel(channel) ? discord_get_guild(da, channel->d->guild_id) : NULL;
-
-	if (guild != NULL) {
-		gchar *channel_id = from_int(channel->id);
-
-		JsonObject *data = json_object_new();
-		JsonObject *override = json_object_new();
-		JsonObject *setting = json_object_new();
-
-		json_object_set_boolean_member(setting, "muted", channel->d->muted);
-		json_object_set_object_member(override, channel_id, setting);
-		json_object_set_object_member(data, "channel_overrides", override);
-
-		gchar *postdata = json_object_to_string(data);
-
-		gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/users/@me/guilds/%" G_GUINT64_FORMAT "/settings", guild->id);
-		discord_fetch_url_with_method(da, "PATCH", url, postdata, NULL, NULL);
-
-		g_free(channel_id);
-		g_free(url);
-		g_free(postdata);
-
-		json_object_unref(setting);
-		json_object_unref(override);
-		json_object_unref(data);
-	}
-}
 
 static GList *
 discord_blist_node_menu(PurpleBlistNode *node)
@@ -8745,13 +8687,9 @@ discord_blist_node_menu(PurpleBlistNode *node)
 
 	if (channel && channel->d) {
 		/* Make a menu */
-		const char *mute_toggle = channel->d->muted ? _("Unmute") : _("Mute");
-		PurpleMenuAction *act = purple_menu_action_new(mute_toggle, PURPLE_CALLBACK(discord_toggle_mute), da, NULL);
-		m = g_list_append(m, act);
-
 		gboolean is_limited = purple_blist_node_get_bool(node, "limit_history");
 		const char *hist_limit_toggle = is_limited ? _("Grab Full History") : _("Limit Grabbed History");
-		act = purple_menu_action_new(hist_limit_toggle, PURPLE_CALLBACK(discord_toggle_history_limit), da, NULL);
+		PurpleMenuAction *act = purple_menu_action_new(hist_limit_toggle, PURPLE_CALLBACK(discord_toggle_history_limit), da, NULL);
 		m = g_list_append(m, act);
 
 		gboolean is_large = purple_blist_node_get_bool(node, "large_channel");
@@ -10290,20 +10228,6 @@ plugin_load(PurplePlugin *plugin, GError **error)
 	);
 
 #if 0
-	purple_cmd_register(
-		"mute", "s", PURPLE_CMD_P_PLUGIN,
-		PURPLE_CMD_FLAG_CHAT | PURPLE_CMD_FLAG_PROTOCOL_ONLY | PURPLE_CMD_FLAG_ALLOW_WRONG_ARGS,
-		DISCORD_PLUGIN_ID, discord_slash_command,
-		_("mute <username>:  Mute someone in channel"), NULL
-	);
-
-	purple_cmd_register(
-		"unmute", "s", PURPLE_CMD_P_PLUGIN,
-		PURPLE_CMD_FLAG_CHAT | PURPLE_CMD_FLAG_PROTOCOL_ONLY | PURPLE_CMD_FLAG_ALLOW_WRONG_ARGS,
-		DISCORD_PLUGIN_ID, discord_slash_command,
-		_("unmute <username>:  Un-mute someone in channel"), NULL
-	);
-
 	purple_cmd_register(
 		"topic", "s", PURPLE_CMD_P_PLUGIN,
 		PURPLE_CMD_FLAG_CHAT | PURPLE_CMD_FLAG_PROTOCOL_ONLY | PURPLE_CMD_FLAG_ALLOW_WRONG_ARGS,
