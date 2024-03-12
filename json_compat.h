@@ -36,6 +36,11 @@
 #define json_array_get_length(JSON_ARRAY) \
 	(JSON_ARRAY ? json_array_get_length(JSON_ARRAY) : 0)
 
+#define json_node_get_object(JSON_NODE) \
+	(JSON_NODE ? (JSON_NODE_HOLDS_OBJECT(JSON_NODE) ? json_node_get_object(JSON_NODE) : NULL) : NULL)
+#define json_node_get_array(JSON_NODE) \
+	(JSON_NODE ? (JSON_NODE_HOLDS_ARRAY(JSON_NODE) ? json_node_get_array(JSON_NODE) : NULL) : NULL)
+
 static gchar *
 json_object_to_string(JsonObject *obj)
 {
