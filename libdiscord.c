@@ -7162,7 +7162,11 @@ str_is_number(const gchar *str)
 	return TRUE;
 }
 
-static __attribute__((optimize("O0"))) GHashTable *
+#if defined(__GNUC__) && !defined(__clang__)
+#define optnone optimize("O0")
+#endif
+
+static __attribute__((optnone)) GHashTable *
 discord_chat_info_defaults(PurpleConnection *pc, const char *chatname)
 {
 	DiscordAccount *da = purple_connection_get_protocol_data(pc);
@@ -7535,7 +7539,7 @@ discord_got_channel_info(DiscordAccount *da, JsonNode *node, gpointer user_data)
 
 			if (name != NULL) {
 				users = g_list_prepend(users, name);
-				flags = g_list_prepend(flags, PURPLE_CHAT_USER_NONE);
+				flags = g_list_prepend(flags, GINT_TO_POINTER(PURPLE_CHAT_USER_NONE));
 			}
 		}
 
@@ -7543,7 +7547,7 @@ discord_got_channel_info(DiscordAccount *da, JsonNode *node, gpointer user_data)
 		DiscordUser *self = discord_get_user(da, da->self_user_id);
 		gchar *self_name = discord_create_nickname(self, NULL, chan);
 		users = g_list_prepend(users, self_name);
-		flags = g_list_prepend(flags, PURPLE_CHAT_USER_NONE);
+		flags = g_list_prepend(flags, GINT_TO_POINTER(PURPLE_CHAT_USER_NONE));
 		purple_chat_conversation_set_nick(chatconv, self_name);
 
 		purple_chat_conversation_clear_users(chatconv);
