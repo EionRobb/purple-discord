@@ -1,0 +1,19 @@
+version: "1.0"
+linter: jetbrains/qodana-clang:2024.1-eap
+bootstrap: |
+  sudo apt-get update; 
+  sudo apt-get install -y libglib2.0-dev libjson-glib-dev gettext libnss3-dev libqrencode-dev imagemagick; 
+  sudo apt download libpurple0 libpurple-dev; 
+  sudo dpkg --force-depends -i libpurple0*.deb libpurple-dev*.deb;
+#  sudo apt-get install -y bear;
+#  make clean;
+#  bear -- make
+  
+#include:
+#  - name: All files
+#    paths:
+#      - .
+
+exclude:
+  - name: clang-analyzer-optin.core.EnumCastOutOfRange # clang get bitwise confused with enum
+  - name: clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling # we use C99 and clang suggests C11 stuff
