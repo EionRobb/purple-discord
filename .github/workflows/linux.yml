@@ -7,19 +7,22 @@ jobs:
     name: build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
 
       - name: install deps
         run: |
           sudo apt update
           sudo apt install -y libglib2.0-dev libjson-glib-dev libnss3-dev libqrencode-dev imagemagick gettext
-          sudo apt install -y libpurple-dev libpurple0 --no-install-recommends
+          # We only need these to build, not to run.  Skip the dependency check.
+          sudo apt download libpurple0 libpurple-dev
+          sudo dpkg --force-depends -i libpurple0*.deb libpurple-dev*.deb
 
       - name: make
         run: make
 
       - name: archive
-        uses: actions/upload-artifact@v3
+        if: ${{ !env.ACT }}
+        uses: actions/upload-artifact@v4
         with: 
             name: plugin 
             path: lib*.so

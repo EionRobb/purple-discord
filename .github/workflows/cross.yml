@@ -7,14 +7,22 @@ jobs:
     name: build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
 
       - name: Set up MinGW
         run: |
           sudo apt update
           sudo apt install -y gcc-mingw-w64-i686-win32
 
+      - name: Load Pidgin from cache
+        id: pidgin-cache
+        uses: actions/cache@v4
+        with:
+          path: pidgin
+          key: pidgin-2.14.1
+
       - name: Download Pidgin
+        if: steps.pidgin-cache.outputs.cache-hit != 'true'
         run: |
           curl -L https://sourceforge.net/projects/pidgin/files/Pidgin/2.14.1/pidgin-2.14.1.tar.bz2/download -o pidgin.tar.bz2
           tar -xf pidgin.tar.bz2
@@ -23,7 +31,15 @@ jobs:
           unzip pidgin-win32bin.zip
           cp pidgin-2.14.1-win32bin/libpurple.dll pidgin/libpurple/
       
+      - name: Load Win32 deps from cache
+        id: win32-cache
+        uses: actions/cache@v4
+        with:
+          path: win32-dev
+          key: win32-dev
+
       - name: Setup WinPidgin build
+        if: steps.win32-cache.outputs.cache-hit != 'true'
         run: |
           mkdir win32-dev
           curl -L http://ftp.gnome.org/pub/gnome/binaries/win32/glib/2.28/glib-dev_2.28.8-1_win32.zip -o glib-dev.zip
@@ -52,7 +68,8 @@ jobs:
           make libdiscord.dll
 
       - name: archive
-        uses: actions/upload-artifact@v3
+        if: ${{ !env.ACT }}
+        uses: actions/upload-artifact@v4
         with: 
             name: plugin 
             path: lib*.dll
