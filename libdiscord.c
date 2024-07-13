@@ -8922,6 +8922,26 @@ discord_guild_member_screening(DiscordAccount *da, JsonNode *node, gpointer user
 	);
 }
 
+static void
+discord_check_invite_response(DiscordAccount *da, JsonNode *node, gpointer user_data)
+{
+	JsonObject *response = json_node_get_object(node);
+	// A successful join will have "code" as a string, which converts to a 0 int
+	gint code = json_object_get_int_member(response, "code");
+	gchar *invite_code = user_data;
+
+	if (code != 0) {
+		const gchar *message = json_object_get_string_member(response, "message");
+		gchar *error = g_strdup_printf(_("Error with invite code %s"), invite_code);
+
+		purple_notify_error(da->pc, NULL, error, message, purple_request_cpar_from_connection(da->pc));
+
+		g_free(error);
+	}
+
+	g_free(invite_code);
+}
+
 void
 discord_join_server_text(gpointer user_data, const gchar *text)
 {
@@ -8937,9 +8957,9 @@ discord_join_server_text(gpointer user_data, const gchar *text)
 		invite_code += 1;
 	}
 
-	url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/invite/%s", purple_url_encode(invite_code));
+	url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/invites/%s", purple_url_encode(invite_code));
 
-	discord_fetch_url(da, url, "", NULL, NULL);
+	discord_fetch_url(da, url, "{\"session_id\":null}", discord_check_invite_response, g_strdup(invite_code));
 
 	g_free(url);
 }
@@ -9761,6 +9781,40 @@ discord_cmd_get_history(PurpleConversation *conv, const gchar *cmd, gchar **args
 	return PURPLE_CMD_RET_OK;
 }
 
+static PurpleCmdRet
+discord_cmd_get_server_name(PurpleConversation *conv, const gchar *cmd, gchar **args, gchar **error, gpointer data)
+{
+	PurpleConnection *pc = purple_conversation_get_connection(conv);
+	DiscordAccount *da = purple_connection_get_protocol_data(pc);
+	guint64 room_id = *(guint64 *) purple_conversation_get_data(conv, "id");
+
+	if (pc == NULL || (int)room_id == -1) {
+		return PURPLE_CMD_RET_FAILED;
+	}
+
+	DiscordGuild *guild = discord_get_guild(da, room_id);
+	if (guild == NULL) {
+		return PURPLE_CMD_RET_FAILED;
+	}
+
+	gchar *server_msg = g_strdup_printf(_("Server Name: %s"), guild->name);
+	purple_conversation_write_system_message(conv, server_msg, PURPLE_MESSAGE_SYSTEM);
+	g_free(server_msg);
+
+	return PURPLE_CMD_RET_OK;
+}
+
+static PurpleCmdRet
+discord_cmd_join_server(PurpleConversation *conv, const gchar *cmd, gchar **args, gchar **error, gpointer data)
+{
+	PurpleConnection *pc = purple_conversation_get_connection(conv);
+	DiscordAccount *da = purple_connection_get_protocol_data(pc);
+
+	discord_join_server_text(da, args[0]);
+
+	return PURPLE_CMD_RET_OK;
+}
+
 #if !PURPLE_VERSION_CHECK(3, 0, 0)
 static void
 discord_xfer_free(PurpleXfer *xfer) {
@@ -10154,6 +10208,20 @@ plugin_load(PurplePlugin *plugin, GError **error)
 			PURPLE_CMD_FLAG_CHAT | PURPLE_CMD_FLAG_PROTOCOL_ONLY,
 						DISCORD_PLUGIN_ID, discord_cmd_get_history,
 						_("hist:  Retrieves full history of channel. Intended for rules channels and the like. Using this on old, highly active channels is not recommended.<br />Alias of grabhistory"), NULL
+	);
+
+	purple_cmd_register(
+			"servername", "", PURPLE_CMD_P_PLUGIN,
+			PURPLE_CMD_FLAG_CHAT | PURPLE_CMD_FLAG_PROTOCOL_ONLY,
+						DISCORD_PLUGIN_ID, discord_cmd_get_server_name,
+						_("servername:  Displays the name of the server for the current channel."), NULL
+	);
+
+	purple_cmd_register(
+			"joinserver", "s", PURPLE_CMD_P_PLUGIN,
+			PURPLE_CMD_FLAG_CHAT | PURPLE_CMD_FLAG_IM | PURPLE_CMD_FLAG_PROTOCOL_ONLY,
+						DISCORD_PLUGIN_ID, discord_cmd_join_server,
+						_("joinserver &lt;invite code/URL&gt;:   Joins a new server using the invite code or URL."), NULL
 	);
 
 #if 0
