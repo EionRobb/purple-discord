@@ -8,6 +8,7 @@ WIN32_CC ?= $(WIN32_DEV_TOP)/mingw-4.7.2/bin/gcc
 
 PROTOC_C ?= protoc-c
 PKG_CONFIG ?= pkg-config
+XGETTEXT ?= xgettext
 
 DIR_PERM = 0755
 LIB_PERM = 0755
@@ -129,7 +130,7 @@ libdiscord3.dll: $(PURPLE_C_FILES) $(PURPLE_COMPAT_FILES)
 	$(WIN32_CC) -O0 -g -ggdb -shared -o $@ $^ $(WIN32_PIDGIN3_CFLAGS) $(WIN32_PIDGIN3_LDFLAGS)
 
 po/purple-discord.pot: libdiscord.c
-	xgettext $^ -k_ --no-location -o $@
+	$(XGETTEXT) $^ -k_ --no-location -o $@
 
 po/%.po: po/purple-discord.pot
 	msgmerge $@ po/purple-discord.pot > tmp-$*

@@ -893,6 +893,9 @@ discord_create_fullname(DiscordUser *user)
 {
 	g_return_val_if_fail(user != NULL, NULL);
 
+	if (user->discriminator == 0) {
+		return g_strdup(user->name);
+	}
 	return g_strdup_printf("%s#%04d", user->name, user->discriminator);
 }
 
@@ -925,7 +928,11 @@ discord_alloc_nickname(DiscordUser *user, DiscordGuild *guild, const gchar *sugg
 	if (existing && existing->id != user->id) {
 		/* Ambiguous; try with the discriminator */
 
-		nick = g_strdup_printf("%s#%04d", base_nick, user->discriminator);
+		if (user->discriminator == 0) {
+			nick = g_strdup(base_nick);
+		} else {
+			nick = g_strdup_printf("%s#%04d", base_nick, user->discriminator);
+		}
 
 		existing = g_hash_table_lookup(guild->nicknames_rev, nick);
 
@@ -933,7 +940,11 @@ discord_alloc_nickname(DiscordUser *user, DiscordGuild *guild, const gchar *sugg
 			/* Ambiguous; use the full tag */
 
 			g_free(nick);
-			nick = g_strdup_printf("%s (%s#%04d)", base_nick, user->name, user->discriminator);
+			if (user->discriminator == 0) {
+				nick = g_strdup_printf("%s (%s)", base_nick, user->name);
+			} else {
+				nick = g_strdup_printf("%s (%s#%04d)", base_nick, user->name, user->discriminator);
+			}
 		}
 	}
 
@@ -1300,11 +1311,13 @@ discord_combine_username(const gchar *username, const gchar *discriminator)
 {
 	g_return_val_if_fail(username != NULL, NULL);
 
-	if (discriminator == NULL) {
-		discriminator = "0000";
+	gint disc_int = to_int(discriminator);
+
+	if (disc_int == 0) {
+		return g_strdup(username);
 	}
 
-	return g_strconcat(username, "#", discriminator, NULL);
+	return g_strdup_printf("%s#%04d", username, disc_int);
 }
 
 static gchar *
@@ -5050,8 +5063,21 @@ discord_create_relationship(DiscordAccount *da, JsonObject *json)
 		PurpleBuddy *buddy = purple_blist_find_buddy(da->account, merged_username);
 
 		if (buddy == NULL) {
+			PurpleContact *buddy_contact = NULL;
+			PurpleGroup *buddy_group = discord_get_or_create_default_group();
+
+			// Special case: Check we're not migrating a friend from #0000 to just the username, so we can keep logs
+			if (user->discriminator == 0) {
+				gchar *old_username = g_strdup_printf("%s#0000", user->name);
+				PurpleBuddy *old_buddy = purple_blist_find_buddy(da->account, old_username);
+				if (old_buddy != NULL) {
+					buddy_contact = purple_buddy_get_contact(old_buddy);
+					buddy_group = purple_buddy_get_group(old_buddy);
+				}
+				g_free(old_username);
+			}
 			buddy = purple_buddy_new(da->account, merged_username, user->name);
-			purple_blist_add_buddy(buddy, NULL, discord_get_or_create_default_group(), NULL);
+			purple_blist_add_buddy(buddy, buddy_contact, buddy_group, NULL);
 		}
 
 		discord_get_avatar(da, user, TRUE);
