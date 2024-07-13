@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-07-13 08:55+0100\n"
+"POT-Creation-Date: 2024-07-13 10:12+0100\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -354,6 +354,10 @@ msgstr ""
 msgid "_OK"
 msgstr ""
 
+#, c-format
+msgid "Error with invite code %s"
+msgstr ""
+
 msgid "Join a server"
 msgstr ""
 
@@ -403,6 +407,10 @@ msgstr ""
 msgid ""
 "Fetching a channel's entire history can take a lot of memory and time to "
 "complete. Are you sure you want to continue?"
+msgstr ""
+
+#, c-format
+msgid "Server Name: %s"
 msgstr ""
 
 msgid "Can't Cancel Upload"
@@ -511,6 +519,14 @@ msgid ""
 "hist:  Retrieves full history of channel. Intended for rules channels and "
 "the like. Using this on old, highly active channels is not recommended.<br /"
 ">Alias of grabhistory"
+msgstr ""
+
+msgid "servername:  Displays the name of the server for the current channel."
+msgstr ""
+
+msgid ""
+"joinserver &lt;invite code/URL&gt;:   Joins a new server using the invite "
+"code or URL."
 msgstr ""
 
 msgid "mute <username>:  Mute someone in channel"
