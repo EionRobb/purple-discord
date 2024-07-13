@@ -831,7 +831,7 @@ discord_permission_is_role(JsonObject *json)
 }
 
 static DiscordUser *
-discord_get_user_name(DiscordAccount *da, int discriminator, gchar *name)
+discord_get_user_name(DiscordAccount *da, int discriminator, const gchar *name)
 {
 	GHashTableIter iter;
 	gpointer key, value;
@@ -863,6 +863,10 @@ discord_get_user_fullname(DiscordAccount *da, const gchar *name)
 		}
 
 		g_strfreev(split_name);
+	}
+
+	if (user == NULL) {
+		user = discord_get_user_name(da, 0, name);
 	}
 
 	return user;
