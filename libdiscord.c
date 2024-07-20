@@ -381,6 +381,7 @@ typedef struct {
 	GSList *pending_writes;
 	DiscordTokenBucket *gateway_bucket;
 	gint roomlist_guild_count;
+	gchar *gateway_url;
 
 	gboolean compress;
 	z_stream *zstream;
@@ -4231,6 +4232,14 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 			}
 		}
 
+		if (json_object_has_member(data, "resume_gateway_url")) {
+			const gchar *resume_gateway_url = json_object_get_string_member(data, "resume_gateway_url");
+			if (strncmp(resume_gateway_url, "wss://", 6) == 0) {
+				g_free(da->gateway_url);
+				da->gateway_url = g_strdup(&resume_gateway_url[6]);
+			}
+		}
+
 	} else if (purple_strequal(type, "READY_SUPPLEMENTAL")) {
 
 		discord_got_presences(da, json_object_get_member(data, "merged_presences"), NULL);
@@ -5817,6 +5826,7 @@ discord_login(PurpleAccount *account)
 		da->last_load_last_message_id = (da->last_load_last_message_id << 32) | ((guint64) purple_account_get_int(account, "last_message_id_low", 0) & 0xFFFFFFFF);
 	}
 
+	da->gateway_url = g_strdup(DISCORD_GATEWAY_SERVER);
 	da->gateway_bucket = g_new0(DiscordTokenBucket, 1);
 	da->gateway_bucket->num_tokens = 120;
 	da->gateway_bucket->max_tokens = 120;
@@ -5939,6 +5949,7 @@ discord_close(PurpleConnection *pc)
 	}
 
 	g_free(da->gateway_bucket);
+	g_free(da->gateway_url);
 
 	g_hash_table_destroy(da->cookie_table);
 	da->cookie_table = NULL;
@@ -6573,10 +6584,13 @@ discord_socket_connected(gpointer userdata, PurpleSslConnection *conn, PurpleInp
 	DiscordAccount *da = userdata;
 	gchar *websocket_header;
 	const gchar *websocket_key = "15XF+ptKDhYVERXoGcdHTA=="; /* TODO don't be lazy */
+	const gchar *server;
 
 	g_return_if_fail(conn == da->websocket);
 
 	purple_ssl_input_add(da->websocket, discord_socket_got_data, da);
+
+	server = da->gateway_url ? da->gateway_url : DISCORD_GATEWAY_SERVER;
 
 	websocket_header = g_strdup_printf(
 		"GET %s%s HTTP/1.1\r\n"
@@ -6597,7 +6611,7 @@ discord_socket_connected(gpointer userdata, PurpleSslConnection *conn, PurpleInp
 #ifdef USE_QRCODE_AUTH
 		da->running_auth_qrcode ? DISCORD_QRCODE_AUTH_SERVER :
 #endif
-		DISCORD_GATEWAY_SERVER, websocket_key
+		server, websocket_key
 	);
 
 	purple_ssl_write(da->websocket, websocket_header, strlen(websocket_header));
@@ -6623,6 +6637,8 @@ discord_socket_failed(PurpleSslConnection *conn, PurpleSslErrorType errortype, g
 static void
 discord_start_socket(DiscordAccount *da)
 {
+	const gchar *server;
+
 	if (da->heartbeat_timeout) {
 		g_source_remove(da->heartbeat_timeout);
 	}
@@ -6653,7 +6669,9 @@ discord_start_socket(DiscordAccount *da)
 		da->websocket = purple_ssl_connect(da->account, DISCORD_QRCODE_AUTH_SERVER, DISCORD_QRCODE_AUTH_SERVER_PORT, discord_socket_connected, discord_socket_failed, da);
 	} else
 #endif
-	da->websocket = purple_ssl_connect(da->account, DISCORD_GATEWAY_SERVER, DISCORD_GATEWAY_PORT, discord_socket_connected, discord_socket_failed, da);
+
+	server = da->gateway_url ? da->gateway_url : DISCORD_GATEWAY_SERVER;
+	da->websocket = purple_ssl_connect(da->account, server, DISCORD_GATEWAY_PORT, discord_socket_connected, discord_socket_failed, da);
 }
 
 static gboolean
