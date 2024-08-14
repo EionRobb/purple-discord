@@ -6667,11 +6667,15 @@ discord_start_socket(DiscordAccount *da)
 #ifdef USE_QRCODE_AUTH
 	if (da->running_auth_qrcode) {
 		da->websocket = purple_ssl_connect(da->account, DISCORD_QRCODE_AUTH_SERVER, DISCORD_QRCODE_AUTH_SERVER_PORT, discord_socket_connected, discord_socket_failed, da);
-	} else
+	} else {
 #endif
 
 	server = da->gateway_url ? da->gateway_url : DISCORD_GATEWAY_SERVER;
 	da->websocket = purple_ssl_connect(da->account, server, DISCORD_GATEWAY_PORT, discord_socket_connected, discord_socket_failed, da);
+
+#ifdef USE_QRCODE_AUTH
+	}
+#endif
 }
 
 static gboolean
