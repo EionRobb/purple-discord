@@ -1272,6 +1272,7 @@ static gboolean _purple_http_recv_loopbody(PurpleHttpConnection *hc, gint fd)
 			hc->request->max_redirects > hc->redirects_count))
 		{
 			PurpleHttpURL *url = purple_http_url_parse(redirect);
+			PurpleHttpRequest *req = hc->request;
 
 			hc->redirects_count++;
 
@@ -1290,6 +1291,9 @@ static gboolean _purple_http_recv_loopbody(PurpleHttpConnection *hc, gint fd)
 			purple_http_url_relative(hc->url, url);
 			purple_http_url_free(url);
 
+			purple_http_request_set_method(req, "GET");
+			purple_http_request_set_contents(req, NULL, 0);
+	
 			_purple_http_reconnect(hc);
 			return FALSE;
 		}
@@ -2639,7 +2643,7 @@ void purple_http_request_set_contents(PurpleHttpRequest *request,
 		return;
 	}
 
-	if (length == 0)
+	if (length == -1)
 		length = strlen(contents);
 	request->contents = g_memdup2(contents, length);
 	request->contents_length = length;
