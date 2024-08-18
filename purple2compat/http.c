@@ -2629,7 +2629,7 @@ purple_http_request_get_keepalive_pool(PurpleHttpRequest *request)
 }
 
 void purple_http_request_set_contents(PurpleHttpRequest *request,
-	const gchar *contents, gsize length)
+	const gchar *contents, gssize length)
 {
 	g_return_if_fail(request != NULL);
 
