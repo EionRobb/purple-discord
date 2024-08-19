@@ -8234,6 +8234,10 @@ discord_get_avatar(DiscordAccount *da, DiscordUser *user, gboolean is_buddy)
 		return;
 	}
 
+	/* bitlbee is allergic to pictures */
+	if (purple_strequal(purple_core_get_ui(), "BitlBee"))
+		return;
+
 	/* libpurple only manages checksums for buddies. If we're fetching our
 	 * own icon, we need to use our own store */
 
