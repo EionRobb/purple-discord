@@ -8301,15 +8301,14 @@ discord_add_buddy(PurpleConnection *pc, PurpleBuddy *buddy, PurpleGroup *group
 	gchar *postdata;
 	gchar **usersplit;
 
-	if (!strchr(buddy_name, '#')) {
-		purple_blist_remove_buddy(buddy);
-		return;
-	}
-
 	usersplit = g_strsplit_set(buddy_name, "#", 2);
 	data = json_object_new();
 	json_object_set_string_member(data, "username", g_strstrip(usersplit[0]));
-	json_object_set_string_member(data, "discriminator", g_strstrip(usersplit[1]));
+	if (usersplit[1] && *usersplit[1]) {
+		json_object_set_string_member(data, "discriminator", g_strstrip(usersplit[1]));
+	} else {
+		json_object_set_null_member(data, "discriminator");
+	}
 
 	postdata = json_object_to_string(data);
 
