@@ -884,7 +884,7 @@ discord_upsert_user(GHashTable *user_table, JsonObject *json)
 	guint64 *key = NULL, user_id = to_int(json_object_get_string_member(json, "id"));
 	DiscordUser *user = NULL;
 
-	if (g_hash_table_lookup_extended_int64(user_table, user_id, (gpointer) &key, (gpointer) &user)) {
+	if (g_hash_table_lookup_extended_int64(user_table, user_id, (gpointer) &key, (gpointer) &user) && user->id) {
 		return user;
 	} else {
 		user = discord_new_user(json);
@@ -3675,6 +3675,7 @@ discord_handle_guild_member_update(DiscordAccount *da, guint64 guild_id, JsonObj
 		gpointer key, value;
 		g_hash_table_iter_init(&iter, guild->channels);
 		gchar *nickname = discord_create_nickname(user, guild, NULL);
+		g_return_if_fail(nickname != NULL);
 
 		while (g_hash_table_iter_next(&iter, &key, &value)) {
 			DiscordChannel *channel = value;
