@@ -58,11 +58,11 @@
 
 #define DISCORD_PLUGIN_ID "prpl-eionrobb-discord"
 #ifndef DISCORD_PLUGIN_VERSION
-#define DISCORD_PLUGIN_VERSION "0.1"
+#define DISCORD_PLUGIN_VERSION "1.0"
 #endif
 #define DISCORD_PLUGIN_WEBSITE "https://github.com/EionRobb/purple-discord"
 
-#define DISCORD_USERAGENT_VERSION "92.0.4515.159"
+#define DISCORD_USERAGENT_VERSION "126.0.0.0"
 #define DISCORD_USERAGENT "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/" DISCORD_USERAGENT_VERSION " Safari/537.36"
 
 #define DISCORD_BUFFER_DEFAULT_SIZE 40960
@@ -70,8 +70,8 @@
 #define DISCORD_API_SERVER "discord.com"
 #define DISCORD_GATEWAY_SERVER "gateway.discord.gg"
 #define DISCORD_GATEWAY_PORT 443
-#define DISCORD_GATEWAY_SERVER_PATH "/?encoding=json&v=9"
-#define DISCORD_API_VERSION "v9"
+#define DISCORD_GATEWAY_SERVER_PATH "/?encoding=json&v=10"
+#define DISCORD_API_VERSION "v10"
 #define DISCORD_CDN_SERVER "cdn.discordapp.com"
 
 #ifdef USE_QRCODE_AUTH
