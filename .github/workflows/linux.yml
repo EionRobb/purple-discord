@@ -6,6 +6,11 @@ jobs:
   build:
     name: build
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: write
+      attestations: write
+
     steps:
       - uses: actions/checkout@v4
 
@@ -26,3 +31,19 @@ jobs:
         with: 
             name: plugin 
             path: lib*.so
+
+      - name: release
+        if: ${{ !env.ACT }}
+        uses: ncipollo/release-action@v1
+        with:
+          artifacts: lib*.so
+          tag: nightly-${{ github.sha }}
+          name: Nightly ${{ github.sha }}
+          allowUpdates: true
+          makeLatest: true
+
+      - name: attest
+        if: ${{ !env.ACT }}
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-path: lib*.so
