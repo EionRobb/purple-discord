@@ -1,5 +1,5 @@
 version: "1.0"
-linter: jetbrains/qodana-clang:2024.1-eap
+linter: jetbrains/qodana-clang:latest
 bootstrap: |
   sudo apt-get update; 
   sudo apt-get install -y libglib2.0-dev libjson-glib-dev gettext libnss3-dev libqrencode-dev imagemagick; 
