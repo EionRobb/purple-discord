@@ -1672,7 +1672,7 @@ discord_fetch_url_with_method_delay(DiscordAccount *da, const gchar *method, con
 		request->url = g_strdup(url);
 		request->contents = postdata ? g_strdup(postdata) : NULL;
 
-		purple_timeout_add(delay + MAX(30,xRateDelayPerRequest), discord_fetch_url_with_method_delay_cb, request);
+		purple_timeout_add(delay + MAX(65,xRateDelayPerRequest), discord_fetch_url_with_method_delay_cb, request);
 }
 
 static void
