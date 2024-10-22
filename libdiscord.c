@@ -1478,19 +1478,22 @@ static void UpdateRateLimits(const gchar *xrateLimitS, const gchar *xrateRemaini
 	xRateAllowedRemaining = xRateAllowedPerSecond;
 	xRateDelayPerRequest =  (int)((1.0 / (double)xRateAllowedPerSecond) * 1000.0);
 }
+static void parse_rate_limit_headers(PurpleHttpResponse *response) {
+    const gchar *xrateLimitS = purple_http_response_get_header(response,"X-RateLimit-Limit");
+    const gchar *xrateRemainingS = purple_http_response_get_header(response,"X-RateLimit-Remaining");  
+    const gchar *xRateReset = purple_http_response_get_header(response,"X-RateLimit-Reset");
+    const gchar *xRateResetAfter = purple_http_response_get_header(response,"X-RateLimit-Reset-After");
+    UpdateRateLimits(xrateLimitS, xrateRemainingS, xRateReset, xRateResetAfter);
+}
 
 static void
 discord_response_callback(PurpleHttpConnection *http_conn,
 							PurpleHttpResponse *response, gpointer user_data)
 {
 	gsize len;
-	const gchar *xrateLimitS = purple_http_response_get_header(response,"X-RateLimit-Limit");
-	const gchar *xrateRemainingS = purple_http_response_get_header(response,"X-RateLimit-Remaining");
-	const gchar *xRateReset = purple_http_response_get_header(response,"X-RateLimit-Reset");
-	const gchar *xRateResetAfter = purple_http_response_get_header(response,"X-RateLimit-Reset-After");
-	UpdateRateLimits(xrateLimitS,xrateRemainingS,xRateReset,xRateResetAfter);
 	const gchar *url_text = purple_http_response_get_data(response, &len);
 	const gchar *error_message = purple_http_response_get_error(response);
+	parse_rate_limit_headers(response);
 	const gchar *body;
 	gsize body_len;
 	DiscordProxyConnection *conn = user_data;
