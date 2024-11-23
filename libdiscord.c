@@ -9843,8 +9843,10 @@ discord_cmd_get_server_name(PurpleConversation *conv, const gchar *cmd, gchar **
 		return PURPLE_CMD_RET_FAILED;
 	}
 
-	DiscordGuild *guild = discord_get_guild(da, room_id);
-	if (guild == NULL) {
+	DiscordGuild *guild = NULL;
+	DiscordChannel *channel = discord_get_channel_global_int_guild(da, room_id, &guild);
+
+	if (channel == NULL || guild == NULL) {
 		return PURPLE_CMD_RET_FAILED;
 	}
 
@@ -10263,6 +10265,13 @@ plugin_load(PurplePlugin *plugin, GError **error)
 
 	purple_cmd_register(
 			"servername", "", PURPLE_CMD_P_PLUGIN,
+			PURPLE_CMD_FLAG_CHAT | PURPLE_CMD_FLAG_PROTOCOL_ONLY,
+						DISCORD_PLUGIN_ID, discord_cmd_get_server_name,
+						_("servername:  Displays the name of the server for the current channel."), NULL
+	);
+
+	purple_cmd_register(
+			"server", "", PURPLE_CMD_P_PLUGIN,
 			PURPLE_CMD_FLAG_CHAT | PURPLE_CMD_FLAG_PROTOCOL_ONLY,
 						DISCORD_PLUGIN_ID, discord_cmd_get_server_name,
 						_("servername:  Displays the name of the server for the current channel."), NULL
