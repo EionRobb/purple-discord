@@ -5790,6 +5790,23 @@ discord_login_response(DiscordAccount *da, JsonNode *node, gpointer user_data)
 			purple_connection_error(da->pc, PURPLE_CONNECTION_ERROR_AUTHENTICATION_FAILED, _("Need CAPTCHA to login. Consider using Harmony first, then retry."));
 			return;
 		}
+
+		// {"message": "Invalid Form Body", "code": 50035, "errors": {"email": {"_errors": [{"code": "ACCOUNT_COMPROMISED_RESET_PASSWORD", "message": "Please reset your password to log in."}]}}}
+		if (json_object_has_member(response, "errors")) {
+			JsonObject *errors = json_object_get_object_member(response, "errors");
+			if (json_object_has_member(errors, "email")) {
+				JsonObject *email = json_object_get_object_member(errors, "email");
+				if (json_object_has_member(email, "_errors")) {
+					JsonArray *email_errors = json_object_get_array_member(email, "_errors");
+					JsonObject *email_error = json_array_get_object_element(email_errors, 0);
+					//const gchar *code = json_object_get_string_member(email_error, "code");
+					const gchar *message = json_object_get_string_member(email_error, "message");
+
+					purple_connection_error(da->pc, PURPLE_CONNECTION_ERROR_AUTHENTICATION_FAILED, message);
+					return;
+				}
+			}
+		}
 	}
 
 	purple_connection_error(da->pc, PURPLE_CONNECTION_ERROR_AUTHENTICATION_FAILED, _("Bad username/password"));
