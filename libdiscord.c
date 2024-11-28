@@ -104,6 +104,20 @@ static GRegex *natural_mention_regex = NULL;
 static GRegex *discord_mention_regex = NULL;
 static GRegex *discord_spaced_mention_regex = NULL;
 
+/*
+ 	xRateAllowedPerSecond = (int)( (double)xrateRemainign / (double)xrateResetAfter );
+	xRateAllowedRemaining = xRateAllowedPerSecond;
+	xRateDelayPerRequest =  (int)((1.0 / (double)xRateAllowedPerSecond) * 1000.0);
+ */
+
+static int xrateLimit=40;
+static int xrateRemainign=10;
+static double xrateReset=55;
+static double xrateResetAfter=1;
+static int xRateAllowedPerSecond=40;
+static int xRateDelayPerRequest=100;
+static int xRateAllowedRemaining=10;
+
 typedef enum {
 	OP_DISPATCH = 0,
 	OP_HEARTBEAT = 1,
@@ -1449,6 +1463,45 @@ discord_cookies_to_string(DiscordAccount *ya)
 }
 
 static void discord_fetch_url_with_method_delay(DiscordAccount *da, const gchar *method, const gchar *url, const gchar *postdata, DiscordProxyCallbackFunc callback, gpointer user_data, guint delay);
+static void UpdateRateLimits(const gchar *xrateLimitS, const gchar *xrateRemainingS, const gchar *xRateReset, const gchar *xRateResetAfter)
+{
+	if(xrateLimitS) {
+		xrateLimit=atoi(xrateLimitS);
+		purple_debug_info("discord", "X-RateLimit-Limit: %s\n", xrateLimitS);
+	}
+	if(xrateRemainingS) {
+		xrateRemainign=atoi(xrateRemainingS);
+		purple_debug_info("discord", "X-RateLimit-Remaining: %s\n", xrateRemainingS);
+	}
+	if(xRateReset) {
+		xrateReset=atof(xRateReset);
+		purple_debug_info("discord", "X-RateLimit-Reset: %s\n", xRateReset);
+	}
+	if(xRateResetAfter) {
+		xrateResetAfter=atof(xRateResetAfter);
+		purple_debug_info("discord", "X-RateLimit-Reset-After: %s\n", xRateResetAfter);
+	}
+	if (xrateResetAfter > 0) {
+		xRateAllowedPerSecond = (int)( (double)xrateRemaining / (double)xrateResetAfter );
+		xRateAllowedRemaining = xRateAllowedPerSecond;
+		xRateDelayPerRequest = xRateAllowedPerSecond > 0 ? 
+			(int)((1.0 / (double)xRateAllowedPerSecond) * 1000.0) : 1000;
+		purple_debug_info("discord", "Rate limits calculated: %d requests/sec, %d ms delay\n", 
+			xRateAllowedPerSecond, xRateDelayPerRequest);
+	} else {
+		purple_debug_warning("discord", "Invalid rate limit reset value\n");
+		xRateAllowedPerSecond = 1;
+		xRateAllowedRemaining = 1; 
+		xRateDelayPerRequest = 1000;
+	}
+}
+static void parse_rate_limit_headers(PurpleHttpResponse *response) {
+    const gchar *xrateLimitS = purple_http_response_get_header(response,"X-RateLimit-Limit");
+    const gchar *xrateRemainingS = purple_http_response_get_header(response,"X-RateLimit-Remaining");  
+    const gchar *xRateReset = purple_http_response_get_header(response,"X-RateLimit-Reset");
+    const gchar *xRateResetAfter = purple_http_response_get_header(response,"X-RateLimit-Reset-After");
+    UpdateRateLimits(xrateLimitS, xrateRemainingS, xRateReset, xRateResetAfter);
+}
 
 static void
 discord_response_callback(PurpleHttpConnection *http_conn,
@@ -1457,6 +1510,7 @@ discord_response_callback(PurpleHttpConnection *http_conn,
 	gsize len;
 	const gchar *url_text = purple_http_response_get_data(response, &len);
 	const gchar *error_message = purple_http_response_get_error(response);
+	parse_rate_limit_headers(response);
 	const gchar *body;
 	gsize body_len;
 	DiscordProxyConnection *conn = user_data;
@@ -1635,7 +1689,7 @@ discord_fetch_url_with_method_delay(DiscordAccount *da, const gchar *method, con
 		request->url = g_strdup(url);
 		request->contents = postdata ? g_strdup(postdata) : NULL;
 
-		purple_timeout_add(delay + 30, discord_fetch_url_with_method_delay_cb, request);
+		purple_timeout_add(delay + MAX(65,xRateDelayPerRequest), discord_fetch_url_with_method_delay_cb, request);
 }
 
 static void
