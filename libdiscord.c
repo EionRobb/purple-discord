@@ -1481,9 +1481,19 @@ static void UpdateRateLimits(const gchar *xrateLimitS, const gchar *xrateRemaini
 		xrateResetAfter=atof(xRateResetAfter);
 		purple_debug_info("discord", "X-RateLimit-Reset-After: %s\n", xRateResetAfter);
 	}
-	xRateAllowedPerSecond = (int)( (double)xrateRemainign / (double)xrateResetAfter );
-	xRateAllowedRemaining = xRateAllowedPerSecond;
-	xRateDelayPerRequest =  (int)((1.0 / (double)xRateAllowedPerSecond) * 1000.0);
+	if (xrateResetAfter > 0) {
+		xRateAllowedPerSecond = (int)( (double)xrateRemaining / (double)xrateResetAfter );
+		xRateAllowedRemaining = xRateAllowedPerSecond;
+		xRateDelayPerRequest = xRateAllowedPerSecond > 0 ? 
+			(int)((1.0 / (double)xRateAllowedPerSecond) * 1000.0) : 1000;
+		purple_debug_info("discord", "Rate limits calculated: %d requests/sec, %d ms delay\n", 
+			xRateAllowedPerSecond, xRateDelayPerRequest);
+	} else {
+		purple_debug_warning("discord", "Invalid rate limit reset value\n");
+		xRateAllowedPerSecond = 1;
+		xRateAllowedRemaining = 1; 
+		xRateDelayPerRequest = 1000;
+	}
 }
 static void parse_rate_limit_headers(PurpleHttpResponse *response) {
     const gchar *xrateLimitS = purple_http_response_get_header(response,"X-RateLimit-Limit");
