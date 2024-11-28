@@ -103,13 +103,20 @@ static GRegex *mention_regex = NULL;
 static GRegex *natural_mention_regex = NULL;
 static GRegex *discord_mention_regex = NULL;
 static GRegex *discord_spaced_mention_regex = NULL;
-static int xrateLimit=0;
-static int xrateRemainign=0;
-static double xrateReset=0;
-static double xrateResetAfter=0;
-static int xRateAllowedPerSecond=0;
-static int xRateDelayPerRequest=0;
-static int xRateAllowedRemaining=0;
+
+/*
+ 	xRateAllowedPerSecond = (int)( (double)xrateRemainign / (double)xrateResetAfter );
+	xRateAllowedRemaining = xRateAllowedPerSecond;
+	xRateDelayPerRequest =  (int)((1.0 / (double)xRateAllowedPerSecond) * 1000.0);
+ */
+
+static int xrateLimit=40;
+static int xrateRemainign=1;
+static double xrateReset=55;
+static double xrateResetAfter=55;
+static int xRateAllowedPerSecond=40;
+static int xRateDelayPerRequest=60;
+static int xRateAllowedRemaining=1;
 
 typedef enum {
 	OP_DISPATCH = 0,
