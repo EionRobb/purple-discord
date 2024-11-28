@@ -111,12 +111,12 @@ static GRegex *discord_spaced_mention_regex = NULL;
  */
 
 static int xrateLimit=40;
-static int xrateRemainign=1;
+static int xrateRemainign=10;
 static double xrateReset=55;
-static double xrateResetAfter=55;
+static double xrateResetAfter=1;
 static int xRateAllowedPerSecond=40;
-static int xRateDelayPerRequest=60;
-static int xRateAllowedRemaining=1;
+static int xRateDelayPerRequest=100;
+static int xRateAllowedRemaining=10;
 
 typedef enum {
 	OP_DISPATCH = 0,
