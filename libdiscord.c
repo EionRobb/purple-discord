@@ -52,6 +52,7 @@
 #include "purple_compat.h"
 
 #include "markdown.h"
+#include "ratelimiter.h"
 
 // Prevent segfault in libpurple ssl plugins
 #define purple_ssl_read(a, b, c)  ((a) && (a)->private_data ? purple_ssl_read((a), (b), (c)) : 0)
@@ -1489,6 +1490,7 @@ static void UpdateRateLimits(const gchar *xrateLimitS, const gchar *xrateRemaini
 			(int)((1.0 / (double)xRateAllowedPerSecond) * 1000.0) : 1000;
 		purple_debug_info("discord", "Rate limits calculated: %d requests/sec, %d ms delay\n", 
 			xRateAllowedPerSecond, xRateDelayPerRequest);
+		initialize_rate_limiter(xRateDelayPerRequest);
 	} else {
 		purple_debug_warning("discord", "Invalid rate limit reset value\n");
 		xRateAllowedPerSecond = 1;
@@ -1690,7 +1692,7 @@ discord_fetch_url_with_method_delay(DiscordAccount *da, const gchar *method, con
 		request->url = g_strdup(url);
 		request->contents = postdata ? g_strdup(postdata) : NULL;
 
-		purple_timeout_add(delay + MAX(65,xRateDelayPerRequest), discord_fetch_url_with_method_delay_cb, request);
+		rlimited_timeout_add(delay + MAX(65,xRateDelayPerRequest), discord_fetch_url_with_method_delay_cb, request);
 }
 
 static void
@@ -6332,7 +6334,7 @@ discord_socket_delay_write_data(DiscordAccount *ya, guchar *data, gsize data_len
 	info->type = type;
 
 	// Set timer for when to check the bucket again. Could probably make this more intelligent.
-	purple_timeout_add(1000, discord_socket_write_data_delay_cb, info);
+	rlimited_timeout_add(1000, discord_socket_write_data_delay_cb, info);
 }
 
 static void
@@ -10670,6 +10672,7 @@ PURPLE_DEFINE_TYPE_EXTENDED(
 static gboolean
 libpurple3_plugin_load(PurplePlugin *plugin, GError **error)
 {
+	initialize_rate_limiter(83);
 	discord_protocol_register_type(plugin);
 	discord_protocol = purple_protocols_add(DISCORD_TYPE_PROTOCOL, error);
 
@@ -10683,6 +10686,7 @@ libpurple3_plugin_load(PurplePlugin *plugin, GError **error)
 static gboolean
 libpurple3_plugin_unload(PurplePlugin *plugin, GError **error)
 {
+	stop_rate_limiter();
 	if (!plugin_unload(plugin, error)) {
 		return FALSE;
 	}
