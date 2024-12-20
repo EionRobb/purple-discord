@@ -5844,6 +5844,23 @@ discord_login_response(DiscordAccount *da, JsonNode *node, gpointer user_data)
 			purple_connection_error(da->pc, PURPLE_CONNECTION_ERROR_AUTHENTICATION_FAILED, _("Need CAPTCHA to login. Consider using Harmony first, then retry."));
 			return;
 		}
+
+		// {"message": "Invalid Form Body", "code": 50035, "errors": {"email": {"_errors": [{"code": "ACCOUNT_COMPROMISED_RESET_PASSWORD", "message": "Please reset your password to log in."}]}}}
+		if (json_object_has_member(response, "errors")) {
+			JsonObject *errors = json_object_get_object_member(response, "errors");
+			if (json_object_has_member(errors, "email")) {
+				JsonObject *email = json_object_get_object_member(errors, "email");
+				if (json_object_has_member(email, "_errors")) {
+					JsonArray *email_errors = json_object_get_array_member(email, "_errors");
+					JsonObject *email_error = json_array_get_object_element(email_errors, 0);
+					//const gchar *code = json_object_get_string_member(email_error, "code");
+					const gchar *message = json_object_get_string_member(email_error, "message");
+
+					purple_connection_error(da->pc, PURPLE_CONNECTION_ERROR_AUTHENTICATION_FAILED, message);
+					return;
+				}
+			}
+		}
 	}
 
 	purple_connection_error(da->pc, PURPLE_CONNECTION_ERROR_AUTHENTICATION_FAILED, _("Bad username/password"));
@@ -9880,8 +9897,10 @@ discord_cmd_get_server_name(PurpleConversation *conv, const gchar *cmd, gchar **
 		return PURPLE_CMD_RET_FAILED;
 	}
 
-	DiscordGuild *guild = discord_get_guild(da, room_id);
-	if (guild == NULL) {
+	DiscordGuild *guild = NULL;
+	DiscordChannel *channel = discord_get_channel_global_int_guild(da, room_id, &guild);
+
+	if (channel == NULL || guild == NULL) {
 		return PURPLE_CMD_RET_FAILED;
 	}
 
@@ -10300,6 +10319,13 @@ plugin_load(PurplePlugin *plugin, GError **error)
 
 	purple_cmd_register(
 			"servername", "", PURPLE_CMD_P_PLUGIN,
+			PURPLE_CMD_FLAG_CHAT | PURPLE_CMD_FLAG_PROTOCOL_ONLY,
+						DISCORD_PLUGIN_ID, discord_cmd_get_server_name,
+						_("servername:  Displays the name of the server for the current channel."), NULL
+	);
+
+	purple_cmd_register(
+			"server", "", PURPLE_CMD_P_PLUGIN,
 			PURPLE_CMD_FLAG_CHAT | PURPLE_CMD_FLAG_PROTOCOL_ONLY,
 						DISCORD_PLUGIN_ID, discord_cmd_get_server_name,
 						_("servername:  Displays the name of the server for the current channel."), NULL
