@@ -105,13 +105,13 @@ static GRegex *discord_mention_regex = NULL;
 static GRegex *discord_spaced_mention_regex = NULL;
 
 /*
- 	xRateAllowedPerSecond = (int)( (double)xrateRemainign / (double)xrateResetAfter );
+ 	xRateAllowedPerSecond = (int)( (double)xrateRemaining / (double)xrateResetAfter );
 	xRateAllowedRemaining = xRateAllowedPerSecond;
 	xRateDelayPerRequest =  (int)((1.0 / (double)xRateAllowedPerSecond) * 1000.0);
  */
 
 const int init_xrateLimit=40;
-const int init_xrateRemainign=10;
+const int init_xrateRemaining=10;
 const double init_xrateReset=55;
 const double init_xrateResetAfter=1;
 const int init_xRateAllowedPerSecond=12;
@@ -119,7 +119,7 @@ const int init_xRateDelayPerRequest=(int)((1.0 / (double)init_xRateAllowedPerSec
 const int init_xRateAllowedRemaining=10;
 
 static int xrateLimit=init_xrateLimit;
-static int xrateRemainign=init_xrateRemainign;
+static int xrateRemaining=init_xrateRemaining;
 static double xrateReset=init_xrateReset;
 static double xrateResetAfter=init_xrateResetAfter;
 static int xRateAllowedPerSecond=init_xRateAllowedPerSecond;
@@ -1476,7 +1476,7 @@ static void UpdateRateLimits(const gchar *xrateLimitS, const gchar *xrateRemaini
 	if(!xrateLimitS || !xrateRemainingS || !xRateReset || !xRateResetAfter) return;
 	xrateLimit=atoi(xrateLimitS);
 	purple_debug_info("discord", "X-RateLimit-Limit: %s\n", xrateLimitS);
-	xrateRemainign=atoi(xrateRemainingS);
+	xrateRemaining=atoi(xrateRemainingS);
 	purple_debug_info("discord", "X-RateLimit-Remaining: %s\n", xrateRemainingS);
 	xrateReset=atof(xRateReset);
 	purple_debug_info("discord", "X-RateLimit-Reset: %s\n", xRateReset);
