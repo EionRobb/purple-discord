@@ -109,6 +109,7 @@ static GRegex *discord_spaced_mention_regex = NULL;
 	xRateAllowedRemaining = xRateAllowedPerSecond;
 	xRateDelayPerRequest =  (int)((1.0 / (double)xRateAllowedPerSecond) * 1000.0);
  */
+
 const int init_xrateLimit=40;
 const int init_xrateRemainign=10;
 const double init_xrateReset=55;
@@ -1481,15 +1482,21 @@ static void UpdateRateLimits(const gchar *xrateLimitS, const gchar *xrateRemaini
 	purple_debug_info("discord", "X-RateLimit-Reset: %s\n", xRateReset);
 	xrateResetAfter=atof(xRateResetAfter) * 4.0;
 	purple_debug_info("discord", "X-RateLimit-Reset-After: %s\n", xRateResetAfter);
-	xRateAllowedPerSecond = (int)( (double)xrateRemainign / (double)xrateResetAfter );
-	xRateAllowedRemaining = xRateAllowedPerSecond;
-	xRateDelayPerRequest =  (int)((1.0 / (double)xRateAllowedPerSecond) * 1000.0);
+	if (xrateResetAfter > 0) {
+		xRateAllowedPerSecond = (int)( (double)xrateRemaining / (double)xrateResetAfter );
+		xRateAllowedRemaining = xRateAllowedPerSecond;
+		xRateDelayPerRequest = xRateAllowedPerSecond > 0 ? 
+			(int)((1.0 / (double)xRateAllowedPerSecond) * 1000.0) : 1000;
+		purple_debug_info("discord", "Rate limits calculated: %d requests/sec, %d ms delay\n", 
+			xRateAllowedPerSecond, xRateDelayPerRequest);
+	} else {
+		purple_debug_warning("discord", "Invalid rate limit reset value\n");
+		xRateAllowedPerSecond = 1;
+		xRateAllowedRemaining = 1; 
+		xRateDelayPerRequest = 1000;
+	}
 }
 static void parse_rate_limit_headers(PurpleHttpResponse *response) {
-	if(!response) {
-		purple_debug_warning("discord", "No response to parse rate limit headers from\n");
-		return;
-	}
     const gchar *xrateLimitS = purple_http_response_get_header(response,"X-RateLimit-Limit");
     const gchar *xrateRemainingS = purple_http_response_get_header(response,"X-RateLimit-Remaining");  
     const gchar *xRateReset = purple_http_response_get_header(response,"X-RateLimit-Reset");
@@ -5838,6 +5845,23 @@ discord_login_response(DiscordAccount *da, JsonNode *node, gpointer user_data)
 			purple_connection_error(da->pc, PURPLE_CONNECTION_ERROR_AUTHENTICATION_FAILED, _("Need CAPTCHA to login. Consider using Harmony first, then retry."));
 			return;
 		}
+
+		// {"message": "Invalid Form Body", "code": 50035, "errors": {"email": {"_errors": [{"code": "ACCOUNT_COMPROMISED_RESET_PASSWORD", "message": "Please reset your password to log in."}]}}}
+		if (json_object_has_member(response, "errors")) {
+			JsonObject *errors = json_object_get_object_member(response, "errors");
+			if (json_object_has_member(errors, "email")) {
+				JsonObject *email = json_object_get_object_member(errors, "email");
+				if (json_object_has_member(email, "_errors")) {
+					JsonArray *email_errors = json_object_get_array_member(email, "_errors");
+					JsonObject *email_error = json_array_get_object_element(email_errors, 0);
+					//const gchar *code = json_object_get_string_member(email_error, "code");
+					const gchar *message = json_object_get_string_member(email_error, "message");
+
+					purple_connection_error(da->pc, PURPLE_CONNECTION_ERROR_AUTHENTICATION_FAILED, message);
+					return;
+				}
+			}
+		}
 	}
 
 	purple_connection_error(da->pc, PURPLE_CONNECTION_ERROR_AUTHENTICATION_FAILED, _("Bad username/password"));
@@ -9874,8 +9898,10 @@ discord_cmd_get_server_name(PurpleConversation *conv, const gchar *cmd, gchar **
 		return PURPLE_CMD_RET_FAILED;
 	}
 
-	DiscordGuild *guild = discord_get_guild(da, room_id);
-	if (guild == NULL) {
+	DiscordGuild *guild = NULL;
+	DiscordChannel *channel = discord_get_channel_global_int_guild(da, room_id, &guild);
+
+	if (channel == NULL || guild == NULL) {
 		return PURPLE_CMD_RET_FAILED;
 	}
 
@@ -10294,6 +10320,13 @@ plugin_load(PurplePlugin *plugin, GError **error)
 
 	purple_cmd_register(
 			"servername", "", PURPLE_CMD_P_PLUGIN,
+			PURPLE_CMD_FLAG_CHAT | PURPLE_CMD_FLAG_PROTOCOL_ONLY,
+						DISCORD_PLUGIN_ID, discord_cmd_get_server_name,
+						_("servername:  Displays the name of the server for the current channel."), NULL
+	);
+
+	purple_cmd_register(
+			"server", "", PURPLE_CMD_P_PLUGIN,
 			PURPLE_CMD_FLAG_CHAT | PURPLE_CMD_FLAG_PROTOCOL_ONLY,
 						DISCORD_PLUGIN_ID, discord_cmd_get_server_name,
 						_("servername:  Displays the name of the server for the current channel."), NULL
