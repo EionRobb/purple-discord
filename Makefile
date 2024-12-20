@@ -27,8 +27,9 @@ PLUGIN_VERSION ?= 0.9.$(shell date +%Y.%m.%d)
 endif
 
 CFLAGS ?= -O2 -g -pipe -Wall
-
+CPPFLAGS ?= -O2 -g -pipe -Wall
 CFLAGS += -std=c99 -DDISCORD_PLUGIN_VERSION='"$(PLUGIN_VERSION)"' -DMARKDOWN_PIDGIN
+CPPFLAGS+= -std=c++20
 
 # Comment out to disable localisation
 CFLAGS += -DENABLE_NLS
@@ -59,8 +60,10 @@ else
     INCLUDES = -I/opt/local/include -lz $(OS)
 
     CC = gcc
+    CXX = g++
   else
     CC ?= gcc
+    CXX = g++
     LDFLAGS ?= -Wl,-z,relro
   endif
 
@@ -107,7 +110,7 @@ CFLAGS += -DLOCALEDIR=\"$(LOCALEDIR)\"
 
 C_FILES := markdown.c
 PURPLE_COMPAT_FILES := purple2compat/*.c
-PURPLE_C_FILES := libdiscord.c $(C_FILES)
+PURPLE_C_FILES := ratelimiter.cpp libdiscord.c $(C_FILES)
 
 .PHONY: all build install FAILNOPURPLE clean build-icons install-icons build-locales install-locales %-locale-install
 
