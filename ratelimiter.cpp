@@ -6,7 +6,7 @@
 #include <thread>
 #include <functional>
 
-struct Command {
+struct CommandData {
 	guint interval;
 	GSourceFunc function;
 	gpointer data;
