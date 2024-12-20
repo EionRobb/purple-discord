@@ -184,7 +184,13 @@ void EventLoop::loopFunction()
 		}
 		for (Command& func : readBuffer)
 		{
+			try {
 				func();
+			} catch (const std::exception& e) {
+				g_warning("Command execution failed: %s", e.what());
+			} catch (...) {
+				g_warning("Command execution failed with unknown error");
+			}
 		}
 		readBuffer.clear();
 	}
