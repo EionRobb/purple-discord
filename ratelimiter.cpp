@@ -198,11 +198,13 @@ EventLoop::EventLoop()
 
 EventLoop::~EventLoop()
 {
-	enqueue([this]
-	{
-		isRunning = false;
-	});
-	loopThread.join();
+    {
+        std::lock_guard<std::mutex> lockguard(commandsMutex);
+        isRunning = false;
+        writeBuffer.clear();
+    }
+    condVar.notify_all();
+    loopThread.join();
 }
 
 bool EventLoop::running() const
