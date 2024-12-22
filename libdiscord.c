@@ -114,7 +114,7 @@ const int init_xrateLimit=40;
 const int init_xrateRemaining=10;
 const double init_xrateReset=55;
 const double init_xrateResetAfter=1;
-const int init_xRateAllowedPerSecond=12;
+const int init_xRateAllowedPerSecond=15;
 const int init_xRateDelayPerRequest=(int)((1.0 / (double)init_xRateAllowedPerSecond) * 1000.0);
 const int init_xRateAllowedRemaining=10;
 
@@ -125,6 +125,13 @@ static double xrateResetAfter=init_xrateResetAfter;
 static int xRateAllowedPerSecond=init_xRateAllowedPerSecond;
 static int xRateDelayPerRequest=init_xRateDelayPerRequest;
 static int xRateAllowedRemaining=init_xRateAllowedRemaining;
+
+static int getJitteredDelay(int delay) {
+	return (g_random_int() % delay) + delay;
+}
+static int getJitteredDelayGlobal(void) {
+	return getJitteredDelay(xRateDelayPerRequest);
+}
 
 typedef enum {
 	OP_DISPATCH = 0,
@@ -1480,7 +1487,8 @@ static void UpdateRateLimits(const gchar *xrateLimitS, const gchar *xrateRemaini
 	purple_debug_info("discord", "X-RateLimit-Remaining: %s\n", xrateRemainingS);
 	xrateReset=atof(xRateReset);
 	purple_debug_info("discord", "X-RateLimit-Reset: %s\n", xRateReset);
-	xrateResetAfter=atof(xRateResetAfter) * 4.0;
+	// Multiply reset after by 4 to be more conservative with rate limiting
+	xrateResetAfter=atof(xRateResetAfter) * 3.0;
 	purple_debug_info("discord", "X-RateLimit-Reset-After: %s\n", xRateResetAfter);
 	if (xrateResetAfter > 0) {
 		xRateAllowedPerSecond = (int)( (double)xrateRemaining / (double)xrateResetAfter );
@@ -1690,7 +1698,7 @@ discord_fetch_url_with_method_delay(DiscordAccount *da, const gchar *method, con
 		request->url = g_strdup(url);
 		request->contents = postdata ? g_strdup(postdata) : NULL;
 
-		purple_timeout_add(delay + MAX(65,xRateDelayPerRequest), discord_fetch_url_with_method_delay_cb, request);
+		purple_timeout_add(delay + getJitteredDelay(MAX(65,xRateDelayPerRequest)), discord_fetch_url_with_method_delay_cb, request);
 }
 
 static void
