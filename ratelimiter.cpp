@@ -40,10 +40,13 @@ public:
         condVar.notify_all();
     }
 
-    void waitForToken() {
+    bool waitForToken(std::chrono::milliseconds timeout = std::chrono::seconds(30)) {
         std::unique_lock<std::mutex> lock(bucketMutex);
-        condVar.wait(lock, [this] { return tokens > 0; });
+        if (!condVar.wait_for(lock, timeout, [this] { return tokens > 0; })) {
+            return false;  // Timeout occurred
+        }
         --tokens;
+        return true;
     }
 };
 
