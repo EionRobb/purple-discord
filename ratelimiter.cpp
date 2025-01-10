@@ -21,7 +21,9 @@ private:
     std::condition_variable condVar;
 public:
     explicit TokenBucket(guint rateLimitPerSecond)
-        : tokens(rateLimitPerSecond), maxTokens(rateLimitPerSecond), interval(1000 / rateLimitPerSecond) {}
+        : tokens(rateLimitPerSecond), maxTokens(rateLimitPerSecond), interval(1000 / rateLimitPerSecond) {
+			g_info("Initializing token bucket with an interval of %d tokens per second.", rateLimitPerSecond);
+		}
 
     bool acquire() {
         std::unique_lock<std::mutex> lock(bucketMutex);
@@ -226,13 +228,14 @@ void EventLoop::loopFunction()
 EventLoop::EventLoop()
 	: isRunning(true), loopThread(&EventLoop::loopFunction, this)
 {
-
+	g_info("Initializing Discord rate-limiter event loop.");
 }
 
 EventLoop::~EventLoop()
 {
     {
         std::lock_guard<std::mutex> lockguard(commandsMutex);
+		g_info("Stopping Discord rate-limiter event loop.");
         isRunning = false;
         writeBuffer.clear();
     }
@@ -267,8 +270,10 @@ static std::unique_ptr<EventLoop> EVENT_LOOP = nullptr;
 static std::unique_ptr<TokenBucket> TOKEN_BUCKET = nullptr;
 static std::atomic<bool> refillThreadRunning{false};
 static std::thread refillThread;
+static std::mutex rateLimiterAccessMutex;
 
 void initialize_rate_limiter(guint rateLimitPerSecond) {
+        std::lock_guard<std::mutex> lockguard(rateLimiterAccessMutex);
 	if (refillThreadRunning.exchange(true)) {
         return;  // Thread already running
     }
@@ -280,6 +285,7 @@ void initialize_rate_limiter(guint rateLimitPerSecond) {
         while (*refillThreadRunning) {
             std::this_thread::sleep_for(std::chrono::seconds(1));
             if (TOKEN_BUCKET) {
+				g_info("Refilling Discord rate-limiter token bucket.");
                 TOKEN_BUCKET->refill();
             }
         }
@@ -288,8 +294,10 @@ void initialize_rate_limiter(guint rateLimitPerSecond) {
 }
 
 void stop_rate_limiter() {
+	std::lock_guard<std::mutex> lockguard(rateLimiterAccessMutex);
 	refillThreadRunning = false;
 	std::this_thread::sleep_for(std::chrono::seconds(1));
+	refillThread.join();
     if (EVENT_LOOP) {
         EVENT_LOOP.reset();
         EVENT_LOOP = nullptr;
@@ -301,11 +309,17 @@ void stop_rate_limiter() {
 }
 
 guint rlimited_timeout_add(guint interval, GSourceFunc function, gpointer data) {
+	std::lock_guard<std::mutex> lockguard(rateLimiterAccessMutex);
     if (!EVENT_LOOP || !TOKEN_BUCKET) {
         g_warning("Rate limiter not initialized.");
+        initialize_rate_limiter(15);
+    }
+    if (!EVENT_LOOP || !TOKEN_BUCKET) {
+        g_warning("Rate limiter somehow failed to initialize?!.");
         return 0;
     }
 
+    g_info("Enquing deferred function execution on the rate limiter!\nInterval: %d\nFunction pointer:%p\nUser data pointer:%p\n", interval, (void*)function, (void*)data);
     EVENT_LOOP->enqueue([interval, function, data]() {
         TOKEN_BUCKET->waitForToken(); // Wait until a token is available
         if (function) {
