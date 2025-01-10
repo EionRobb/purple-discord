@@ -263,23 +263,31 @@ void EventLoop::enqueue(const Command& callable)
 
 static EventLoop* EVENT_LOOP = nullptr;
 static TokenBucket* TOKEN_BUCKET = nullptr;
+static std::atomic<bool> refillThreadRunning{false};
+static std::thread refillThread;
 
 void initialize_rate_limiter(guint rateLimitPerSecond) {
+	if (refillThreadRunning.exchange(true)) {
+        return;  // Thread already running
+    }
     if (!EVENT_LOOP) EVENT_LOOP = new EventLoop();
     if (!TOKEN_BUCKET) TOKEN_BUCKET = new TokenBucket(rateLimitPerSecond);
 
     // Start a thread to refill tokens at a regular interval.
-    std::thread([]() {
+    refillThread = std::thread([&refillThreadRunning]() {
         while (EVENT_LOOP) {
             std::this_thread::sleep_for(std::chrono::seconds(1));
             if (TOKEN_BUCKET) {
                 TOKEN_BUCKET->refill();
             }
         }
-    }).detach();
+    });
+	refillThread.detach();
 }
 
 void stop_rate_limiter() {
+	refillThreadRunning = false;
+	std::this_thread::sleep_for(std::chrono::seconds(1));
     if (EVENT_LOOP) {
         delete EVENT_LOOP;
         EVENT_LOOP = nullptr;
