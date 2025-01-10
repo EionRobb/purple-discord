@@ -6,7 +6,7 @@
 #include <thread>
 #include <functional>
 
-struct Command {
+struct RateLimitCommand {
 	guint interval;
 	GSourceFunc function;
 	gpointer data;
@@ -168,7 +168,7 @@ public:
 
 		packaged_task_type task(std::forward<Func>(callable));
 
-		enqueue([&]
+		enqueue([task = std::move(task), args...]
 		{
 			task(std::forward<Args>(args)...);
 		});
@@ -231,10 +231,12 @@ EventLoop::EventLoop()
 
 EventLoop::~EventLoop()
 {
-	enqueue([this]
-	{
-		isRunning = false;
-	});
+    {
+        std::lock_guard<std::mutex> lockguard(commandsMutex);
+        isRunning = false;
+        writeBuffer.clear();
+    }
+    condVar.notify_all();
 	loopThread.join();
 }
 
@@ -261,8 +263,8 @@ void EventLoop::enqueue(const Command& callable)
 	condVar.notify_one();
 }
 
-static EventLoop* EVENT_LOOP = nullptr;
-static TokenBucket* TOKEN_BUCKET = nullptr;
+static std::unique_ptr<EventLoop> EVENT_LOOP = nullptr;
+static std::unique_ptr<TokenBucket> TOKEN_BUCKET = nullptr;
 static std::atomic<bool> refillThreadRunning{false};
 static std::thread refillThread;
 
@@ -270,12 +272,12 @@ void initialize_rate_limiter(guint rateLimitPerSecond) {
 	if (refillThreadRunning.exchange(true)) {
         return;  // Thread already running
     }
-    if (!EVENT_LOOP) EVENT_LOOP = new EventLoop();
-    if (!TOKEN_BUCKET) TOKEN_BUCKET = new TokenBucket(rateLimitPerSecond);
+    if (!EVENT_LOOP) EVENT_LOOP = std::unique_ptr<EventLoop>(new EventLoop());
+    if (!TOKEN_BUCKET) TOKEN_BUCKET = std::unique_ptr<TokenBucket>(new TokenBucket(rateLimitPerSecond));
 
     // Start a thread to refill tokens at a regular interval.
-    refillThread = std::thread([&refillThreadRunning]() {
-        while (EVENT_LOOP) {
+    refillThread = std::thread([refillThreadRunning = &refillThreadRunning]() {
+        while (*refillThreadRunning) {
             std::this_thread::sleep_for(std::chrono::seconds(1));
             if (TOKEN_BUCKET) {
                 TOKEN_BUCKET->refill();
@@ -289,11 +291,11 @@ void stop_rate_limiter() {
 	refillThreadRunning = false;
 	std::this_thread::sleep_for(std::chrono::seconds(1));
     if (EVENT_LOOP) {
-        delete EVENT_LOOP;
+        EVENT_LOOP.reset();
         EVENT_LOOP = nullptr;
     }
     if (TOKEN_BUCKET) {
-        delete TOKEN_BUCKET;
+        TOKEN_BUCKET.reset();
         TOKEN_BUCKET = nullptr;
     }
 }
