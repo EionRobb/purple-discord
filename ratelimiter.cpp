@@ -327,5 +327,6 @@ guint rlimited_timeout_add(guint interval, GSourceFunc function, gpointer data) 
         }
     });
 
-    return 1; // Return a placeholder ID (or a meaningful one if task tracking is added).
+    static std::atomic<guint> nextId{1};
+    return nextId++;  // Return a unique task ID
 }
