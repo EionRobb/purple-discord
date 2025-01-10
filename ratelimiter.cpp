@@ -293,7 +293,6 @@ void initialize_rate_limiter(guint rateLimitPerSecond) {
             }
         }
     });
-	refillThread.detach();
 }
 
 void stop_rate_limiter() {
@@ -321,18 +320,23 @@ guint rlimited_timeout_add(guint interval, GSourceFunc function, gpointer data) 
         g_warning("Rate limiter somehow failed to initialize?!.");
         return 0;
     }
-
+    // Promise for returning the g_timeout_add task ID
     g_info("Enquing deferred function execution on the rate limiter!\nInterval: %d\nFunction pointer:%p\nUser data pointer:%p\n", interval, (void*)function, (void*)data);
-    EVENT_LOOP->enqueue([interval, function, data]() {
+    auto promise = std::make_shared<std::promise<guint>>();
+    auto future = promise->get_future();
+    EVENT_LOOP->enqueue([interval, function, data, promise]() {
         if (!TOKEN_BUCKET->waitForToken()) {
             g_warning("Failed to acquire rate limit token, skipping function execution");
+			promise->set_value(0);  // Return 0 to indicate failure
             return;
         }
         if (function) {
-            function(data);
-        }
+            // Schedule the function with g_timeout_add
+            guint id = g_timeout_add(interval, function, data);
+            promise->set_value(id);  // Return the timeout ID
+        } else {
+			promise->set_value(0);  // Return 0 if function is null
+		}
     });
-
-    static std::atomic<guint> nextId{1};
-    return nextId++;  // Return a unique task ID
+	return future.get();
 }
