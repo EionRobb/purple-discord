@@ -270,10 +270,10 @@ static std::unique_ptr<EventLoop> EVENT_LOOP = nullptr;
 static std::unique_ptr<TokenBucket> TOKEN_BUCKET = nullptr;
 static std::atomic<bool> refillThreadRunning{false};
 static std::thread refillThread;
-static std::mutex rateLimiterAccessMutex;
+static std::recursive_mutex rateLimiterAccessMutex;
 
 void initialize_rate_limiter(guint rateLimitPerSecond) {
-        std::lock_guard<std::mutex> lockguard(rateLimiterAccessMutex);
+	std::lock_guard<std::recursive_mutex> lockguard(rateLimiterAccessMutex);
 	if (refillThreadRunning.exchange(true)) {
         return;  // Thread already running
     }
@@ -294,7 +294,7 @@ void initialize_rate_limiter(guint rateLimitPerSecond) {
 }
 
 void stop_rate_limiter() {
-	std::lock_guard<std::mutex> lockguard(rateLimiterAccessMutex);
+	std::lock_guard<std::recursive_mutex> lockguard(rateLimiterAccessMutex);
 	refillThreadRunning = false;
 	std::this_thread::sleep_for(std::chrono::seconds(1));
 	refillThread.join();
@@ -309,7 +309,7 @@ void stop_rate_limiter() {
 }
 
 guint rlimited_timeout_add(guint interval, GSourceFunc function, gpointer data) {
-	std::lock_guard<std::mutex> lockguard(rateLimiterAccessMutex);
+	std::lock_guard<std::recursive_mutex> lockguard(rateLimiterAccessMutex);
     if (!EVENT_LOOP || !TOKEN_BUCKET) {
         g_warning("Rate limiter not initialized.");
         initialize_rate_limiter(15);
