@@ -324,7 +324,10 @@ guint rlimited_timeout_add(guint interval, GSourceFunc function, gpointer data) 
 
     g_info("Enquing deferred function execution on the rate limiter!\nInterval: %d\nFunction pointer:%p\nUser data pointer:%p\n", interval, (void*)function, (void*)data);
     EVENT_LOOP->enqueue([interval, function, data]() {
-        TOKEN_BUCKET->waitForToken(); // Wait until a token is available
+        if (!TOKEN_BUCKET->waitForToken()) {
+            g_warning("Failed to acquire rate limit token, skipping function execution");
+            return;
+        }
         if (function) {
             function(data);
         }
