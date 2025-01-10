@@ -115,7 +115,7 @@ const int init_xrateLimit=40;
 const int init_xrateRemaining=10;
 const double init_xrateReset=55;
 const double init_xrateResetAfter=1;
-const int init_xRateAllowedPerSecond=12;
+const int init_xRateAllowedPerSecond=15;
 const int init_xRateDelayPerRequest=(int)((1.0 / (double)init_xRateAllowedPerSecond) * 1000.0);
 const int init_xRateAllowedRemaining=10;
 

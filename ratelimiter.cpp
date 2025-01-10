@@ -12,6 +12,39 @@ struct Command {
 	gpointer data;
 };
 
+class TokenBucket {
+private:
+    guint tokens;
+    const guint maxTokens;
+    const guint interval; // in milliseconds
+    mutable std::mutex bucketMutex;
+    std::condition_variable condVar;
+public:
+    explicit TokenBucket(guint rateLimitPerSecond)
+        : tokens(rateLimitPerSecond), maxTokens(rateLimitPerSecond), interval(1000 / rateLimitPerSecond) {}
+
+    bool acquire() {
+        std::unique_lock<std::mutex> lock(bucketMutex);
+        if (tokens > 0) {
+            --tokens;
+            return true;
+        }
+        return false;
+    }
+
+    void refill() {
+        std::unique_lock<std::mutex> lock(bucketMutex);
+        tokens = maxTokens;
+        condVar.notify_all();
+    }
+
+    void waitForToken() {
+        std::unique_lock<std::mutex> lock(bucketMutex);
+        condVar.wait(lock, [this] { return tokens > 0; });
+        --tokens;
+    }
+};
+
 class EventLoop
 {
 public:
@@ -229,26 +262,42 @@ void EventLoop::enqueue(const Command& callable)
 }
 
 static EventLoop* EVENT_LOOP = nullptr;
-static guint INTERVAL = 0;
+static TokenBucket* TOKEN_BUCKET = nullptr;
 
-void initialize_rate_limiter(guint interval) {
-	if(!EVENT_LOOP) EVENT_LOOP = new EventLoop();
-	INTERVAL = interval;
+void initialize_rate_limiter(guint rateLimitPerSecond) {
+    if (!EVENT_LOOP) EVENT_LOOP = new EventLoop();
+    if (!TOKEN_BUCKET) TOKEN_BUCKET = new TokenBucket(rateLimitPerSecond);
+
+    // Start a thread to refill tokens at a regular interval.
+    std::thread([]() {
+        while (EVENT_LOOP) {
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+            if (TOKEN_BUCKET) {
+                TOKEN_BUCKET->refill();
+            }
+        }
+    }).detach();
 }
+
 void stop_rate_limiter() {
-	if(EVENT_LOOP) {
-		delete EVENT_LOOP;
-		EVENT_LOOP = nullptr;
-	}
+    if (EVENT_LOOP) {
+        delete EVENT_LOOP;
+        EVENT_LOOP = nullptr;
+    }
+    if (TOKEN_BUCKET) {
+        delete TOKEN_BUCKET;
+        TOKEN_BUCKET = nullptr;
+    }
 }
+
 guint rlimited_timeout_add(guint interval, GSourceFunc function, gpointer data) {
-    if (!EVENT_LOOP) {
+    if (!EVENT_LOOP || !TOKEN_BUCKET) {
         g_warning("Rate limiter not initialized.");
         return 0;
     }
 
-    EVENT_LOOP->enqueue([interval, function, data, INTERVAL]() {
-        std::this_thread::sleep_for(std::chrono::milliseconds(interval ? interval : INTERVAL));
+    EVENT_LOOP->enqueue([interval, function, data]() {
+        TOKEN_BUCKET->waitForToken(); // Wait until a token is available
         if (function) {
             function(data);
         }
