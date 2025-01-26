@@ -6261,7 +6261,9 @@ discord_socket_write_data_delay_cb(gpointer user_data)
 {
 	DiscordSocketInfo *info = user_data;
 
-	discord_socket_write_data(info->ya, info->data, info->data_len, info->type);
+	if (PURPLE_CONNECTION_IS_VALID(info->ya->pc)) {
+		discord_socket_write_data(info->ya, info->data, info->data_len, info->type);
+	}
 	g_free(info);
 
 	return FALSE;
@@ -10274,7 +10276,7 @@ plugin_load(PurplePlugin *plugin, GError **error)
 			"server", "", PURPLE_CMD_P_PLUGIN,
 			PURPLE_CMD_FLAG_CHAT | PURPLE_CMD_FLAG_PROTOCOL_ONLY,
 						DISCORD_PLUGIN_ID, discord_cmd_get_server_name,
-						_("servername:  Displays the name of the server for the current channel."), NULL
+						_("server:  Displays the name of the server for the current channel."), NULL
 	);
 
 	purple_cmd_register(
