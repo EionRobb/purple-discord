@@ -5830,9 +5830,9 @@ discord_login_response(DiscordAccount *da, JsonNode *node, gpointer user_data)
 			return;
 		}
 
-		if (json_object_has_member(response, "email")) {
+		if (json_object_has_member(response, "login")) {
 			/* Probably an error about new location */
-			purple_connection_error(da->pc, PURPLE_CONNECTION_ERROR_AUTHENTICATION_FAILED, json_object_get_string_member(response, "email"));
+			purple_connection_error(da->pc, PURPLE_CONNECTION_ERROR_AUTHENTICATION_FAILED, json_object_get_string_member(response, "login"));
 			return;
 		}
 
@@ -5851,8 +5851,8 @@ discord_login_response(DiscordAccount *da, JsonNode *node, gpointer user_data)
 		// {"message": "Invalid Form Body", "code": 50035, "errors": {"email": {"_errors": [{"code": "ACCOUNT_COMPROMISED_RESET_PASSWORD", "message": "Please reset your password to log in."}]}}}
 		if (json_object_has_member(response, "errors")) {
 			JsonObject *errors = json_object_get_object_member(response, "errors");
-			if (json_object_has_member(errors, "email")) {
-				JsonObject *email = json_object_get_object_member(errors, "email");
+			if (json_object_has_member(errors, "login")) {
+				JsonObject *email = json_object_get_object_member(errors, "login");
 				if (json_object_has_member(email, "_errors")) {
 					JsonArray *email_errors = json_object_get_array_member(email, "_errors");
 					JsonObject *email_error = json_array_get_object_element(email_errors, 0);
@@ -5936,7 +5936,7 @@ discord_login(PurpleAccount *account)
 		JsonObject *data = json_object_new();
 		gchar *str;
 
-		json_object_set_string_member(data, "email", purple_account_get_username(account));
+		json_object_set_string_member(data, "login", purple_account_get_username(account));
 		json_object_set_string_member(data, "password", account_password);
 
 		str = json_object_to_string(data);
@@ -6318,7 +6318,9 @@ discord_socket_write_data_delay_cb(gpointer user_data)
 {
 	DiscordSocketInfo *info = user_data;
 
-	discord_socket_write_data(info->ya, info->data, info->data_len, info->type);
+	if (PURPLE_CONNECTION_IS_VALID(info->ya->pc)) {
+		discord_socket_write_data(info->ya, info->data, info->data_len, info->type);
+	}
 	g_free(info);
 
 	return FALSE;
@@ -10331,7 +10333,7 @@ plugin_load(PurplePlugin *plugin, GError **error)
 			"server", "", PURPLE_CMD_P_PLUGIN,
 			PURPLE_CMD_FLAG_CHAT | PURPLE_CMD_FLAG_PROTOCOL_ONLY,
 						DISCORD_PLUGIN_ID, discord_cmd_get_server_name,
-						_("servername:  Displays the name of the server for the current channel."), NULL
+						_("server:  Displays the name of the server for the current channel."), NULL
 	);
 
 	purple_cmd_register(

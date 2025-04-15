@@ -1,11 +1,11 @@
-name: Linux
+name: Linux ARM64
 on:
   - push
   - pull_request
 jobs:
   build:
     name: build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     permissions:
       id-token: write
       contents: write

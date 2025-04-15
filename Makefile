@@ -6,7 +6,6 @@ WIN32_DEV_TOP ?= $(PIDGIN_TREE_TOP)/../win32-dev
 
 WIN32_CC ?= $(WIN32_DEV_TOP)/mingw-4.7.2/bin/gcc
 
-PROTOC_C ?= protoc-c
 PKG_CONFIG ?= pkg-config
 XGETTEXT ?= xgettext
 
