@@ -23,7 +23,9 @@ jobs:
           sudo dpkg --force-depends -i libpurple0t64*.deb libpurple-dev*.deb
 
       - name: make
-        run: make
+        run: |
+            make
+            mv libdiscord.so libdiscord-arm64.so
 
       - name: archive
         if: ${{ !env.ACT }}
