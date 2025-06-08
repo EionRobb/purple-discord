@@ -6477,7 +6477,7 @@ discord_socket_got_data(gpointer userdata, PurpleSslConnection *conn, PurpleInpu
 						ping_frame_len = GUINT64_FROM_BE(ping_frame_len);
 					}
 
-					if (ping_frame_len) {
+					if (ping_frame_len > 0) {
 						guchar *pong_data = g_new0(guchar, ping_frame_len);
 						purple_ssl_read(conn, pong_data, ping_frame_len);
 
