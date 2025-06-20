@@ -3126,7 +3126,7 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 			g_free(merged_username);
 		}
 
-		if (reactions != NULL) {
+		if (reactions != NULL && purple_account_get_bool(da->account, "show-reactions", TRUE)) {
 			const gchar *username = g_hash_table_lookup(da->one_to_ones, channel_id_s);
 
 			guint reactions_len = json_array_get_length(reactions);
@@ -3340,7 +3340,7 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 			}
 		}
 
-		if (reactions != NULL) {
+		if (reactions != NULL && purple_account_get_bool(da->account, "show-reactions", TRUE)) {
 			if (conv == NULL) {
 				PurpleChatConversation *chatconv = purple_conversations_find_chat(da->pc, discord_chat_hash(channel_id));
 				conv = PURPLE_CONVERSATION(chatconv);
@@ -4613,7 +4613,7 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 			}
 		}
 
-	} else if (purple_strequal(type, "MESSAGE_REACTION_ADD")) {
+	} else if (purple_strequal(type, "MESSAGE_REACTION_ADD") && purple_account_get_bool(da->account, "show-reactions", TRUE)) {
 
 		const gchar *channel_id_s = json_object_get_string_member(data, "channel_id");
 		guint64 channel_id = to_int(channel_id_s);
@@ -4643,7 +4643,7 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		g_free(url);
 
 
-	} else if (purple_strequal(type, "MESSAGE_REACTION_REMOVE")) {
+	} else if (purple_strequal(type, "MESSAGE_REACTION_REMOVE") && purple_account_get_bool(da->account, "show-reactions", TRUE)) {
 
 		const gchar *channel_id_s = json_object_get_string_member(data, "channel_id");
 		guint64 channel_id = to_int(channel_id_s);
@@ -8825,6 +8825,9 @@ static GList *
 discord_add_account_options(GList *account_options)
 {
 	PurpleAccountOption *option;
+
+	option = purple_account_option_bool_new(_("Show reaction emojis"), "show-reactions", TRUE);
+	account_options = g_list_append(account_options, option);
 
 	option = purple_account_option_bool_new(_("Use status message as in-game info"), "use-status-as-game", FALSE);
 	account_options = g_list_append(account_options, option);
