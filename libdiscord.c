@@ -103,6 +103,7 @@ static GRegex *mention_regex = NULL;
 static GRegex *natural_mention_regex = NULL;
 static GRegex *discord_mention_regex = NULL;
 static GRegex *discord_spaced_mention_regex = NULL;
+static GRegex *discord_timestamp_regex = NULL;
 
 typedef enum {
 	OP_DISPATCH = 0,
@@ -1999,6 +2000,27 @@ discord_replace_mention(const GMatchInfo *match, GString *result, gpointer user_
 	return FALSE;
 }
 
+static gboolean
+discord_replace_timestamp(const GMatchInfo *match, GString *result, gpointer user_data)
+{
+	gchar *match_string = g_match_info_fetch(match, 0);
+	gchar *timestamp_str = g_match_info_fetch(match, 1);
+	gint64 timestamp = to_int(timestamp_str);
+
+	if (timestamp > 0) {
+		gchar *formatted_time = discord_parse_timestamp(timestamp);
+		g_string_append_printf(result, "<i>%s</i>", formatted_time);
+		g_free(formatted_time);
+	} else {
+		g_string_append(result, match_string);
+	}
+
+	g_free(timestamp_str);
+	g_free(match_string);
+
+	return FALSE;
+}
+
 static gchar *
 discord_replace_mentions_bare(DiscordAccount *da, DiscordGuild *g, gchar *message)
 {
@@ -2026,6 +2048,13 @@ discord_replace_mentions_bare(DiscordAccount *da, DiscordGuild *g, gchar *messag
 			g_free(message);
 			message = tmp;
 		}
+	}
+
+	/* Replace <t:timestamp:t> with the current time */
+	tmp = g_regex_replace_eval(discord_timestamp_regex, message, -1, 0, 0, discord_replace_timestamp, &ag, NULL);
+	if (tmp != NULL) {
+		g_free(message);
+		message = tmp;
 	}
 
 	return message;
@@ -10120,6 +10149,7 @@ plugin_load(PurplePlugin *plugin, GError **error)
 	natural_mention_regex = g_regex_new("^([^:]+): ", G_REGEX_OPTIMIZE, 0, NULL);
 	discord_mention_regex = g_regex_new("(?:^|\\s)@([^\\s@]+)\\b", G_REGEX_OPTIMIZE, 0, NULL);
 	discord_spaced_mention_regex = g_regex_new("(?:^|\\s)@([^\\s@]+ [^\\s@]+)\\b", G_REGEX_OPTIMIZE, 0, NULL);
+	discord_timestamp_regex = g_regex_new("&lt;t:(\\d+):t&gt;", G_REGEX_OPTIMIZE, 0, NULL);
 
 	purple_cmd_register(
 		"reply", "S", PURPLE_CMD_P_PLUGIN,
@@ -10294,6 +10324,7 @@ plugin_unload(PurplePlugin *plugin, GError **error)
 	g_regex_unref(natural_mention_regex);
 	g_regex_unref(discord_mention_regex);
 	g_regex_unref(discord_spaced_mention_regex);
+	g_regex_unref(discord_timestamp_regex);
 
 	return TRUE;
 }
