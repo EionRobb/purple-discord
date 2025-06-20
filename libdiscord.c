@@ -2005,10 +2005,73 @@ discord_replace_timestamp(const GMatchInfo *match, GString *result, gpointer use
 {
 	gchar *match_string = g_match_info_fetch(match, 0);
 	gchar *timestamp_str = g_match_info_fetch(match, 1);
+	gchar *format_str = g_match_info_fetch(match, 2);
+	gchar format_char = format_str && format_str[0] ? format_str[0] : 'f';
 	gint64 timestamp = to_int(timestamp_str);
 
+	if (format_char == ':') {
+		format_char = format_str[1] ? format_str[1] : 'f';
+	}
+
 	if (timestamp > 0) {
-		gchar *formatted_time = discord_parse_timestamp(timestamp);
+		GDateTime *date_time = g_date_time_new_from_unix_local(timestamp);
+		gchar *formatted_time;
+		switch(format_char) {
+			case 't': // Short time - excluding seconds
+			case 'T': // Long time - including seconds
+				formatted_time = g_date_time_format(date_time, "%X");
+				break;
+			case 'd': // Short date
+			case 'D': // Long date
+				formatted_time = g_date_time_format(date_time, "%x");
+				break;
+			default:
+			case 'f': // Short date and time
+			case 'F': // Long date and time
+				formatted_time = g_date_time_format(date_time, "%c");
+				break;
+			case 'R': // Relative time
+				{
+					time_t now = time(NULL);
+					gint64 diff = now - timestamp;
+
+					if (diff > 0) {
+						if (diff < 60) {
+							formatted_time = g_strdup_printf(_("%d second%s ago"), (gint) diff, diff > 1 ? "s" : "");
+						} else if (diff < 3600) {
+							gint minutes = diff / 60;
+							formatted_time = g_strdup_printf(_("%d minute%s ago"), minutes, minutes > 1 ? "s" : "");
+						} else if (diff < 86400) {
+							gint hours = diff / 3600;
+							formatted_time = g_strdup_printf(_("%d hour%s ago"), hours, hours > 1 ? "s" : "");
+						} else if (diff < 31536000) {
+							gint days = diff / 86400;
+							formatted_time = g_strdup_printf(_("%d day%s ago"), days, days > 1 ? "s" : "");
+						} else {
+							gint years = diff / 31536000;
+							formatted_time = g_strdup_printf(_("%d year%s ago"), years, years > 1 ? "s" : "");
+						}
+					} else {
+						if (diff > -60) {
+							formatted_time = g_strdup_printf(_("in %d second%s"), (gint) -diff, -diff > 1 ? "s" : "");
+						} else if (diff > -3600) {
+							gint minutes = -diff / 60;
+							formatted_time = g_strdup_printf(_("in %d minute%s"), minutes, minutes > 1 ? "s" : "");
+						} else if (diff > -86400) {
+							gint hours = -diff / 3600;
+							formatted_time = g_strdup_printf(_("in %d hour%s"), hours, hours > 1 ? "s" : "");
+						} else if (diff > -31536000) {
+							gint days = -diff / 86400;
+							formatted_time = g_strdup_printf(_("in %d day%s"), days, days > 1 ? "s" : "");
+						} else {
+							gint years = -diff / 31536000;
+							formatted_time = g_strdup_printf(_("in %d year%s"), years, years > 1 ? "s" : "");
+						}
+					}
+				}
+				break;
+		}
+		g_date_time_unref(date_time);
 		g_string_append_printf(result, "<i>%s</i>", formatted_time);
 		g_free(formatted_time);
 	} else {
@@ -10152,7 +10215,7 @@ plugin_load(PurplePlugin *plugin, GError **error)
 	natural_mention_regex = g_regex_new("^([^:]+): ", G_REGEX_OPTIMIZE, 0, NULL);
 	discord_mention_regex = g_regex_new("(?:^|\\s)@([^\\s@]+)\\b", G_REGEX_OPTIMIZE, 0, NULL);
 	discord_spaced_mention_regex = g_regex_new("(?:^|\\s)@([^\\s@]+ [^\\s@]+)\\b", G_REGEX_OPTIMIZE, 0, NULL);
-	discord_timestamp_regex = g_regex_new("&lt;t:(\\d+):t&gt;", G_REGEX_OPTIMIZE, 0, NULL);
+	discord_timestamp_regex = g_regex_new("&lt;t:(\\d+)(:\\w)?&gt;", G_REGEX_OPTIMIZE, 0, NULL);
 
 	purple_cmd_register(
 		"reply", "S", PURPLE_CMD_P_PLUGIN,
