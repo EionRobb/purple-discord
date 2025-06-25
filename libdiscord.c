@@ -1580,6 +1580,7 @@ discord_fetch_url_with_method_len(DiscordAccount *ya, const gchar *method, const
 	purple_debug_info("discord", "Fetching url %s\n", url);
 
 	PurpleHttpRequest *request = purple_http_request_new(url);
+	purple_http_request_set_max_len(request, -1);
 	purple_http_request_set_method(request, method);
 	purple_http_request_header_set(request, "Accept", "*/*");
 	purple_http_request_header_set(request, "User-Agent", DISCORD_USERAGENT);
