@@ -38,7 +38,7 @@
 #      include <glib/gi18n-lib.h>
 #	ifdef _WIN32
 #		ifdef LOCALEDIR
-#			unset LOCALEDIR
+#			undef LOCALEDIR
 #		endif
 #		define LOCALEDIR  wpurple_locale_dir()
 #	endif
@@ -104,6 +104,7 @@ static GRegex *mention_regex = NULL;
 static GRegex *natural_mention_regex = NULL;
 static GRegex *discord_mention_regex = NULL;
 static GRegex *discord_spaced_mention_regex = NULL;
+static GRegex *discord_timestamp_regex = NULL;
 
 /*
  	xRateAllowedPerSecond = (int)( (double)xrateRemaining / (double)xrateResetAfter );
@@ -441,7 +442,7 @@ typedef struct _DiscordImgMsgContext {
 } DiscordImgMsgContext;
 
 typedef struct {
-	PurpleConversation *conv;
+	guint64 room_id;
 	guint64 user_id;
 	guint count;
 	gboolean is_me;
@@ -455,7 +456,6 @@ typedef struct {
 	guint64 room_id;
 	time_t msg_time;
 	gchar *msg_txt;
-	PurpleConversation *conv;
 } DiscordReply;
 
 typedef struct {
@@ -1116,6 +1116,28 @@ discord_get_channel_global(DiscordAccount *da, const gchar *id)
 {
 	return discord_get_channel_global_int(da, to_int(id));
 }
+
+static PurpleConversation *
+discord_get_conv_from_channel_id(DiscordAccount *da, guint64 channel_id)
+{
+	PurpleConversation *conv = NULL;
+	gchar *channel_id_s = from_int(channel_id);
+
+	if (g_hash_table_contains(da->one_to_ones, channel_id_s)) {
+		gchar *username = g_hash_table_lookup(da->one_to_ones, channel_id_s);
+		PurpleIMConversation *imconv = purple_conversations_find_im_with_account(username, da->account);
+		conv = PURPLE_CONVERSATION(imconv);
+
+	} else {
+		PurpleChatConversation *chatconv = purple_conversations_find_chat(da->pc, discord_chat_hash(channel_id));
+		conv = PURPLE_CONVERSATION(chatconv);
+	}
+
+	g_free(channel_id_s);
+
+	return conv;
+}
+
 /* debug */
 
 #define discord_print_append(L, B, R, M, D) \
@@ -2035,6 +2057,90 @@ discord_replace_mention(const GMatchInfo *match, GString *result, gpointer user_
 	return FALSE;
 }
 
+static gboolean
+discord_replace_timestamp(const GMatchInfo *match, GString *result, gpointer user_data)
+{
+	gchar *match_string = g_match_info_fetch(match, 0);
+	gchar *timestamp_str = g_match_info_fetch(match, 1);
+	gchar *format_str = g_match_info_fetch(match, 2);
+	gchar format_char = format_str && format_str[0] ? format_str[0] : 'f';
+	gint64 timestamp = to_int(timestamp_str);
+
+	if (format_char == ':') {
+		format_char = format_str[1] ? format_str[1] : 'f';
+	}
+
+	if (timestamp > 0) {
+		GDateTime *date_time = g_date_time_new_from_unix_local(timestamp);
+		gchar *formatted_time;
+		switch(format_char) {
+			case 't': // Short time - excluding seconds
+			case 'T': // Long time - including seconds
+				formatted_time = g_date_time_format(date_time, "%X");
+				break;
+			case 'd': // Short date
+			case 'D': // Long date
+				formatted_time = g_date_time_format(date_time, "%x");
+				break;
+			default:
+			case 'f': // Short date and time
+			case 'F': // Long date and time
+				formatted_time = g_date_time_format(date_time, "%c");
+				break;
+			case 'R': // Relative time
+				{
+					time_t now = time(NULL);
+					gint64 diff = now - timestamp;
+
+					if (diff > 0) {
+						if (diff < 60) {
+							formatted_time = g_strdup_printf(_("%d second%s ago"), (gint) diff, diff > 1 ? "s" : "");
+						} else if (diff < 3600) {
+							gint minutes = diff / 60;
+							formatted_time = g_strdup_printf(_("%d minute%s ago"), minutes, minutes > 1 ? "s" : "");
+						} else if (diff < 86400) {
+							gint hours = diff / 3600;
+							formatted_time = g_strdup_printf(_("%d hour%s ago"), hours, hours > 1 ? "s" : "");
+						} else if (diff < 31536000) {
+							gint days = diff / 86400;
+							formatted_time = g_strdup_printf(_("%d day%s ago"), days, days > 1 ? "s" : "");
+						} else {
+							gint years = diff / 31536000;
+							formatted_time = g_strdup_printf(_("%d year%s ago"), years, years > 1 ? "s" : "");
+						}
+					} else {
+						if (diff > -60) {
+							formatted_time = g_strdup_printf(_("in %d second%s"), (gint) -diff, -diff > 1 ? "s" : "");
+						} else if (diff > -3600) {
+							gint minutes = -diff / 60;
+							formatted_time = g_strdup_printf(_("in %d minute%s"), minutes, minutes > 1 ? "s" : "");
+						} else if (diff > -86400) {
+							gint hours = -diff / 3600;
+							formatted_time = g_strdup_printf(_("in %d hour%s"), hours, hours > 1 ? "s" : "");
+						} else if (diff > -31536000) {
+							gint days = -diff / 86400;
+							formatted_time = g_strdup_printf(_("in %d day%s"), days, days > 1 ? "s" : "");
+						} else {
+							gint years = -diff / 31536000;
+							formatted_time = g_strdup_printf(_("in %d year%s"), years, years > 1 ? "s" : "");
+						}
+					}
+				}
+				break;
+		}
+		g_date_time_unref(date_time);
+		g_string_append_printf(result, "<i>%s</i>", formatted_time);
+		g_free(formatted_time);
+	} else {
+		g_string_append(result, match_string);
+	}
+
+	g_free(timestamp_str);
+	g_free(match_string);
+
+	return FALSE;
+}
+
 static gchar *
 discord_replace_mentions_bare(DiscordAccount *da, DiscordGuild *g, gchar *message)
 {
@@ -2062,6 +2168,13 @@ discord_replace_mentions_bare(DiscordAccount *da, DiscordGuild *g, gchar *messag
 			g_free(message);
 			message = tmp;
 		}
+	}
+
+	/* Replace <t:timestamp:t> with the current time */
+	tmp = g_regex_replace_eval(discord_timestamp_regex, message, -1, 0, 0, discord_replace_timestamp, &ag, NULL);
+	if (tmp != NULL) {
+		g_free(message);
+		message = tmp;
 	}
 
 	return message;
@@ -2474,7 +2587,7 @@ discord_get_react_text(DiscordAccount *da, const gchar *author_nick, const gchar
 	time_t msg_time = react->msg_time;
 	gchar *msg_text = react->msg_txt;
 	gchar *emoji_name = react->reaction;
-	PurpleConversation *conv = react->conv;
+	PurpleConversation *conv = discord_get_conv_from_channel_id(da, react->room_id);
 
 	gchar *prev_text;
 	if (author_nick == NULL) {
@@ -2518,11 +2631,7 @@ discord_reactor_cb(DiscordAccount *da, JsonNode *node, gpointer user_data)
 	guint count = react->count;
 	JsonArray *users = json_node_get_array(node);
 	guint users_len = users ? json_array_get_length(users) : 0;
-	guint64 room_id = *(guint64 *) purple_conversation_get_data(react->conv, "id");
-	if (!room_id) {
-		/* TODO FIXME? */
-		room_id = to_int(purple_conversation_get_name(react->conv));
-	}
+	guint64 room_id = react->room_id;
 	DiscordGuild *guild = NULL;
 	DiscordChannel *channel = discord_get_channel_global_int_guild(da, room_id, &guild);
 
@@ -2574,7 +2683,9 @@ discord_reactor_cb(DiscordAccount *da, JsonNode *node, gpointer user_data)
 	g_free(reactors_text);
 	g_free(author_nick);
 
-	purple_conversation_write_system_message(react->conv, react_text, PURPLE_MESSAGE_SYSTEM);
+	PurpleConversation *conv;
+	conv = discord_get_conv_from_channel_id(da, room_id);
+	purple_conversation_write_system_message(conv, react_text, PURPLE_MESSAGE_SYSTEM);
 
 	g_free(react_text);
 	discord_free_reaction(react);
@@ -2800,18 +2911,7 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 	}
 
 	// Find the conversation for adding the emoji's to
-	if (channel_id_s && g_hash_table_contains(da->one_to_ones, channel_id_s)) {
-		PurpleIMConversation *imconv;
-
-		gchar *username = g_hash_table_lookup(da->one_to_ones, channel_id_s);
-		imconv = purple_conversations_find_im_with_account(username, da->account);
-
-		conv = PURPLE_CONVERSATION(imconv);
-	} else {
-		PurpleChatConversation *chatconv = purple_conversations_find_chat(da->pc, discord_chat_hash(channel_id));
-
-		conv = PURPLE_CONVERSATION(chatconv);
-	}
+	conv = discord_get_conv_from_channel_id(da, channel_id);
 
 	/* Replace <:emoji:id> with emojis */
 	tmp = g_regex_replace_eval(emoji_regex, escaped_content, -1, 0, 0, discord_replace_emoji, conv, NULL);
@@ -3146,11 +3246,8 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 			g_free(merged_username);
 		}
 
-		if (reactions != NULL) {
-			PurpleIMConversation *imconv;
+		if (reactions != NULL && purple_account_get_bool(da->account, "show-reactions", TRUE)) {
 			const gchar *username = g_hash_table_lookup(da->one_to_ones, channel_id_s);
-			imconv = purple_conversations_find_im_with_account(username, da->account);
-			conv = PURPLE_CONVERSATION(imconv);
 
 			guint reactions_len = json_array_get_length(reactions);
 			for (guint n = 0; n < reactions_len; n++) {
@@ -3163,7 +3260,7 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 
 				DiscordReaction *reaction_data;
 				reaction_data = g_new0(DiscordReaction, 1);
-				reaction_data->conv = conv;
+				reaction_data->room_id = channel_id;
 				reaction_data->user_id = author_id;
 				reaction_data->msg_time = discord_time_from_snowflake(msg_id);
 				reaction_data->msg_txt = g_strdup(escaped_content);
@@ -3182,7 +3279,7 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 					gchar *reaction_str = discord_get_react_text(da, NULL, username, reaction_data);
 					discord_free_reaction(reaction_data);
 
-					if (reaction_str != NULL) {
+					if (reaction_str != NULL && conv != NULL) {
 						purple_conversation_write_system_message(conv, reaction_str, PURPLE_MESSAGE_SYSTEM);
 						g_free(reaction_str);
 					}
@@ -3363,7 +3460,7 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 			}
 		}
 
-		if (reactions != NULL) {
+		if (reactions != NULL && purple_account_get_bool(da->account, "show-reactions", TRUE)) {
 			if (conv == NULL) {
 				PurpleChatConversation *chatconv = purple_conversations_find_chat(da->pc, discord_chat_hash(channel_id));
 				conv = PURPLE_CONVERSATION(chatconv);
@@ -3380,7 +3477,7 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 
 						DiscordReaction *reaction_data;
 						reaction_data = g_new0(DiscordReaction, 1);
-						reaction_data->conv = conv;
+						reaction_data->room_id = channel_id;
 						reaction_data->user_id = author_id;
 						reaction_data->msg_time = discord_time_from_snowflake(msg_id);
 						reaction_data->msg_txt = g_strdup(escaped_content);
@@ -3995,9 +4092,9 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		g_free(n);
 	} else if (purple_strequal(type, "MESSAGE_DELETE") || purple_strequal(type, "MESSAGE_DELETE_BULK")) {
 
-		const gchar *channel_id = json_object_get_string_member(data, "channel_id");
+		const gchar *channel_id_s = json_object_get_string_member(data, "channel_id");
 
-		if (!channel_id) {
+		if (!channel_id_s) {
 			return;
 		}
 
@@ -4036,15 +4133,7 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		}
 
 		PurpleConversation *conv;
-		if (g_hash_table_contains(da->one_to_ones, channel_id)) {
-			gchar *username = g_hash_table_lookup(da->one_to_ones, channel_id);
-			PurpleIMConversation *imconv = purple_conversations_find_im_with_account(username, da->account);
-			conv = PURPLE_CONVERSATION(imconv);
-
-		} else {
-			PurpleChatConversation *chatconv = purple_conversations_find_chat(da->pc, discord_chat_hash(to_int(channel_id)));
-			conv = PURPLE_CONVERSATION(chatconv);
-		}
+		conv = discord_get_conv_from_channel_id(da, to_int(channel_id_s));
 		if (conv == NULL) {
 			g_free(msg_times);
 			return;
@@ -4644,7 +4733,7 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 			}
 		}
 
-	} else if (purple_strequal(type, "MESSAGE_REACTION_ADD")) {
+	} else if (purple_strequal(type, "MESSAGE_REACTION_ADD") && purple_account_get_bool(da->account, "show-reactions", TRUE)) {
 
 		const gchar *channel_id_s = json_object_get_string_member(data, "channel_id");
 		guint64 channel_id = to_int(channel_id_s);
@@ -4657,22 +4746,9 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 			emoji_name = "?";
 		}
 
-		PurpleConversation *conv;
-
-		if (channel_id_s && g_hash_table_contains(da->one_to_ones, channel_id_s)) {
-			PurpleIMConversation *imconv;
-
-			gchar *username = g_hash_table_lookup(da->one_to_ones, channel_id_s);
-			imconv = purple_conversations_find_im_with_account(username, da->account);
-			conv = PURPLE_CONVERSATION(imconv);
-		} else {
-			PurpleChatConversation *chatconv = purple_conversations_find_chat(da->pc, discord_chat_hash(channel_id));
-			conv = PURPLE_CONVERSATION(chatconv);
-		}
-
 		DiscordReaction *reaction;
 		reaction = g_new0(DiscordReaction, 1);
-		reaction->conv = conv;
+		reaction->room_id = channel_id;
 		reaction->user_id = user_id;
 		reaction->msg_time = discord_time_from_snowflake(message_id);
 		reaction->msg_txt = NULL;
@@ -4687,7 +4763,7 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		g_free(url);
 
 
-	} else if (purple_strequal(type, "MESSAGE_REACTION_REMOVE")) {
+	} else if (purple_strequal(type, "MESSAGE_REACTION_REMOVE") && purple_account_get_bool(da->account, "show-reactions", TRUE)) {
 
 		const gchar *channel_id_s = json_object_get_string_member(data, "channel_id");
 		guint64 channel_id = to_int(channel_id_s);
@@ -4700,22 +4776,9 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 			emoji_name = "?";
 		}
 
-		PurpleConversation *conv;
-
-		if (channel_id_s && g_hash_table_contains(da->one_to_ones, channel_id_s)) {
-			PurpleIMConversation *imconv;
-
-			gchar *username = g_hash_table_lookup(da->one_to_ones, channel_id_s);
-			imconv = purple_conversations_find_im_with_account(username, da->account);
-			conv = PURPLE_CONVERSATION(imconv);
-		} else {
-			PurpleChatConversation *chatconv = purple_conversations_find_chat(da->pc, discord_chat_hash(channel_id));
-			conv = PURPLE_CONVERSATION(chatconv);
-		}
-
 		DiscordReaction *reaction;
 		reaction = g_new0(DiscordReaction, 1);
-		reaction->conv = conv;
+		reaction->room_id = channel_id;
 		reaction->user_id = user_id;
 		reaction->msg_time = discord_time_from_snowflake(message_id);
 		reaction->msg_txt = NULL;
@@ -6563,7 +6626,7 @@ discord_socket_got_data(gpointer userdata, PurpleSslConnection *conn, PurpleInpu
 						ping_frame_len = GUINT64_FROM_BE(ping_frame_len);
 					}
 
-					if (ping_frame_len) {
+					if (ping_frame_len > 0) {
 						guchar *pong_data = g_new0(guchar, ping_frame_len);
 						purple_ssl_read(conn, pong_data, ping_frame_len);
 
@@ -6841,7 +6904,6 @@ discord_react_cb(DiscordAccount *da, JsonNode *node, gpointer user_data)
 	guint len = json_array_get_length(data_items);
 	JsonObject *data = json_array_get_object_element(data_items, len-1);
 	DiscordReaction *react = user_data;
-	PurpleConversation *conv = react->conv;
 	guint64 reactor_id = react->user_id;
 
 	if (node == NULL) {
@@ -6871,11 +6933,13 @@ discord_react_cb(DiscordAccount *da, JsonNode *node, gpointer user_data)
 		author_nick = discord_get_display_name_or_unk(da, guild, channel, author, author_obj);
 	}
 
+	PurpleConversation *conv = discord_get_conv_from_channel_id(da, to_int(channel_id_s));
+
 	gchar *react_text = discord_get_react_text(da, author_nick, reactor_nick, react);
 	g_free(author_nick);
 	g_free(reactor_nick);
 
-	purple_conversation_write_system_message(conv, react_text, PURPLE_MESSAGE_SYSTEM);
+	purple_conversation_write(conv, NULL, react_text, PURPLE_MESSAGE_SYSTEM, react->msg_time);
 
 	g_free(react_text);
 	discord_free_reaction(react);
@@ -8882,6 +8946,9 @@ discord_add_account_options(GList *account_options)
 {
 	PurpleAccountOption *option;
 
+	option = purple_account_option_bool_new(_("Show reaction emojis"), "show-reactions", TRUE);
+	account_options = g_list_append(account_options, option);
+
 	option = purple_account_option_bool_new(_("Use status message as in-game info"), "use-status-as-game", FALSE);
 	account_options = g_list_append(account_options, option);
 
@@ -9264,10 +9331,7 @@ discord_reply_cb(DiscordAccount *da, JsonNode *node, gpointer user_data)
 	time_t intended_time = reply->msg_time;
 	gchar *msg_txt = reply->msg_txt;
 	guint64 room_id = reply->room_id;
-	PurpleConversation *conv = reply->conv;
-
-	PurpleConnection *pc = purple_conversation_get_connection(conv);
-
+	PurpleConversation *conv = discord_get_conv_from_channel_id(da, room_id);
 	DiscordGuild *guild = NULL;
 	DiscordChannel *channel = discord_get_channel_global_int_guild(da, room_id, &guild);
 
@@ -9304,7 +9368,7 @@ discord_reply_cb(DiscordAccount *da, JsonNode *node, gpointer user_data)
 
 	if (guild) {
 		gchar *name = discord_create_nickname_from_id(da, guild, channel, da->self_user_id);
-		purple_serv_got_chat_in(pc, discord_chat_hash(room_id), name, PURPLE_MESSAGE_SEND, msg_txt, time(NULL));
+		purple_serv_got_chat_in(da->pc, discord_chat_hash(room_id), name, PURPLE_MESSAGE_SEND, msg_txt, time(NULL));
 		g_free(name);
 	}
 
@@ -9530,7 +9594,6 @@ discord_chat_reply(DiscordAccount *da, PurpleConversation *conv, guint64 room_id
 	DiscordReply *reply = g_new0(DiscordReply, 1);
 	reply->room_id = room_id;
 	reply->msg_txt = g_strdup(msg_txt);
-	reply->conv = conv;
 
 	time_t msg_time;
 	if (strchr(args[0], ':')) {
@@ -9587,7 +9650,7 @@ discord_chat_react(DiscordAccount *da, PurpleConversation *conv, guint64 id, gbo
 		time_t msg_time = discord_parse_timestring(args[0]);
 		guint64 placeholder_id = discord_snowflake_from_time(msg_time);
 		DiscordReaction *send_react = g_new0(DiscordReaction, 1);
-		send_react->conv = conv;
+		send_react->room_id = id;
 		send_react->msg_time = msg_time;
 		send_react->reaction = (gpointer) emoji;
 		send_react->is_unreact = is_unreact;
@@ -10209,6 +10272,7 @@ plugin_load(PurplePlugin *plugin, GError **error)
 	natural_mention_regex = g_regex_new("^([^:]+): ", G_REGEX_OPTIMIZE, 0, NULL);
 	discord_mention_regex = g_regex_new("(?:^|\\s)@([^\\s@]+)\\b", G_REGEX_OPTIMIZE, 0, NULL);
 	discord_spaced_mention_regex = g_regex_new("(?:^|\\s)@([^\\s@]+ [^\\s@]+)\\b", G_REGEX_OPTIMIZE, 0, NULL);
+	discord_timestamp_regex = g_regex_new("&lt;t:(\\d+)(:\\w)?&gt;", G_REGEX_OPTIMIZE, 0, NULL);
 
 	purple_cmd_register(
 		"reply", "S", PURPLE_CMD_P_PLUGIN,
@@ -10383,6 +10447,7 @@ plugin_unload(PurplePlugin *plugin, GError **error)
 	g_regex_unref(natural_mention_regex);
 	g_regex_unref(discord_mention_regex);
 	g_regex_unref(discord_spaced_mention_regex);
+	g_regex_unref(discord_timestamp_regex);
 
 	return TRUE;
 }
