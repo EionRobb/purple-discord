@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-03-13 21:40+0100\n"
+"POT-Creation-Date: 2025-06-29 22:12+0100\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -25,6 +25,46 @@ msgstr ""
 
 #, c-format
 msgid "Connection error: %s."
+msgstr ""
+
+#, c-format
+msgid "%d second%s ago"
+msgstr ""
+
+#, c-format
+msgid "%d minute%s ago"
+msgstr ""
+
+#, c-format
+msgid "%d hour%s ago"
+msgstr ""
+
+#, c-format
+msgid "%d day%s ago"
+msgstr ""
+
+#, c-format
+msgid "%d year%s ago"
+msgstr ""
+
+#, c-format
+msgid "in %d second%s"
+msgstr ""
+
+#, c-format
+msgid "in %d minute%s"
+msgstr ""
+
+#, c-format
+msgid "in %d hour%s"
+msgstr ""
+
+#, c-format
+msgid "in %d day%s"
+msgstr ""
+
+#, c-format
+msgid "in %d year%s"
 msgstr ""
 
 msgid "your"
@@ -173,6 +213,12 @@ msgstr ""
 msgid "Reauthentication required"
 msgstr ""
 
+msgid "Websocket protocol error"
+msgstr ""
+
+msgid "Websocket protocol error: unreasonable frame length"
+msgstr ""
+
 msgid "Lost connection to server"
 msgstr ""
 
@@ -299,6 +345,9 @@ msgid "%s"
 msgstr ""
 
 msgid "Email address..."
+msgstr ""
+
+msgid "Show reaction emojis"
 msgstr ""
 
 msgid "Use status message as in-game info"

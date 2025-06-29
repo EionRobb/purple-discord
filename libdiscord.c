@@ -6592,6 +6592,7 @@ discord_socket_got_data(gpointer userdata, PurpleSslConnection *conn, PurpleInpu
 
 			length_code = 0;
 			purple_ssl_read(conn, &length_code, 1);
+			length_code = length_code & ~0x80;
 
 			if (length_code <= 125) {
 				ya->frame_len = length_code;
@@ -6601,6 +6602,18 @@ discord_socket_got_data(gpointer userdata, PurpleSslConnection *conn, PurpleInpu
 			} else if (length_code == 127) {
 				purple_ssl_read(conn, &ya->frame_len, 8);
 				ya->frame_len = GUINT64_FROM_BE(ya->frame_len);
+				if ((ya->frame_len & (1ULL << 63)) != 0) {
+					purple_debug_error("discord", "Frame length has MSB set, possible protocol error\n");
+					purple_connection_error(ya->pc, PURPLE_CONNECTION_ERROR_NETWORK_ERROR, _("Websocket protocol error"));
+					return;
+				}
+			}
+
+			// Check for unreasonable frame_len value
+			if (ya->frame_len > (16 * 1024 * 1024)) { // 16MB max frame size
+				purple_debug_error("discord", "Unreasonable frame length: %" G_GUINT64_FORMAT "\n", ya->frame_len);
+				purple_connection_error(ya->pc, PURPLE_CONNECTION_ERROR_NETWORK_ERROR, _("Websocket protocol error: unreasonable frame length"));
+				return;
 			}
 
 			ya->frame = g_new0(gchar, ya->frame_len + 1);
