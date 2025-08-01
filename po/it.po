@@ -5,54 +5,138 @@ msgid ""
 msgstr ""
 "Project-Id-Version: 0.9\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2018-12-16 11:00-0800\n"
+"POT-Creation-Date: 2025-03-13 21:40+0100\n"
 "PO-Revision-Date: 2018-12-19 23:20+0200\n"
 "Last-Translator: Penaz <penazarea@altervista.org>\n"
 "Language-Team: Italian <>\n"
-"Language: it\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
+"Language: it\n"
 "X-Generator: Gtranslator 2.91.7\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+msgid "Unknown user"
+msgstr "Utente sconosciuto"
+
+#, c-format
+msgid "&lt;message at %s&gt;"
+msgstr ""
 
 #, c-format
 msgid "Connection error: %s."
 msgstr "Errore di Connessione: %s."
 
+msgid "your"
+msgstr ""
+
+#, c-format
+msgid "%s's"
+msgstr ""
+
+#, c-format
+msgid "%s removed the reaction \"%s\"%s"
+msgstr ""
+
+#, c-format
+msgid "%s reacted with \"%s\"%s"
+msgstr ""
+
+msgid "You"
+msgstr ""
+
+msgid "person"
+msgstr ""
+
+msgid "people"
+msgstr ""
+
+#, c-format
+msgid "%d %s%s"
+msgstr ""
+
+msgid "other "
+msgstr ""
+
+#, fuzzy, c-format
+msgid "and %s"
+msgstr "In gioco: %s"
+
+msgid ", "
+msgstr ""
+
+msgid " "
+msgstr ""
+
 #, c-format
 msgid "EDIT: %s"
 msgstr "MODIFICATO: %s"
 
+#, c-format
+msgid "%s started a call"
+msgstr ""
+
+#, c-format
+msgid "%s joined the guild!"
+msgstr ""
+
+#, c-format
+msgid "%s started thread \"%s\" from message at %s"
+msgstr ""
+
+#, c-format
+msgid "%s started thread \"%s\""
+msgstr ""
+
+#, c-format
+msgid "%d %s"
+msgstr ""
+
+#, c-format
+msgid "%u messages between "
+msgstr ""
+
+#, c-format
+msgid "%u messages at "
+msgstr ""
+
+#, c-format
+msgid "%sand %s were deleted"
+msgstr ""
+
+#, c-format
+msgid "Message at %s was deleted"
+msgstr ""
+
+#, c-format
+msgid "Your request to join the server %s has been approved!"
+msgstr ""
+
+#, c-format
+msgid ""
+"Your request to join the server %s is currently pending. You will be "
+"notified of any updates regarding your request."
+msgstr ""
+
+#, c-format
+msgid ""
+"Your request to join the server %s was rejected. The reason given was:\n"
+"\n"
+"%s"
+msgstr ""
+
+msgid "Server Join Request Update"
+msgstr ""
+
 msgid "Group DMs"
 msgstr "Messaggi di gruppo"
-
-msgid "Text"
-msgstr "Testo"
-
-msgid "Direct Message"
-msgstr "Messaggio Diretto"
-
-msgid "Voice"
-msgstr "Voce"
-
-msgid "Group DM"
-msgstr "Messaggio di Gruppo"
-
-msgid "Guild Category"
-msgstr "Categoria Gilda"
-
-msgid "Unknown"
-msgstr "Sconosciuto"
 
 msgid "ID"
 msgstr "Identificatore"
 
-msgid "Name"
-msgstr "Nome"
-
-msgid "Room Type"
-msgstr "Tipo di Stanza"
+#, fuzzy
+msgid "Topic"
+msgstr "Voce"
 
 msgid "Cancelled 2FA auth"
 msgstr "Autorizzazione in 2 passaggi annullata"
@@ -72,11 +156,18 @@ msgstr "_Inizio sessione"
 msgid "_Cancel"
 msgstr "_Annulla"
 
+msgid "Need CAPTCHA to login. Consider using Harmony first, then retry."
+msgstr ""
+
 msgid "Bad username/password"
 msgstr "Nome Utente/Password errati"
 
 msgid "Username needs to be an email address"
 msgstr "Il nome utente deve essere un indirizzo email"
+
+#, fuzzy
+msgid "Cancelled QR Code auth"
+msgstr "Autorizzazione in 2 passaggi annullata"
 
 msgid "Websocket failed to send"
 msgstr "Invio Websocket fallito"
@@ -92,6 +183,20 @@ msgstr "Impossibile connettersi al gateway"
 
 msgid "No pinned messages"
 msgstr "Nessun messaggio fissato"
+
+msgid ""
+"Active Threads:\n"
+"<pre>Creation Time       | Last Message Time   | Name"
+msgstr ""
+
+msgid "Server Roles:"
+msgstr ""
+
+msgid "No server roles"
+msgstr ""
+
+msgid "Name"
+msgstr "Nome"
 
 msgid "Bad channel type"
 msgstr "Tipo di canale errato"
@@ -109,14 +214,13 @@ msgid "Invalid channel for this user"
 msgstr "Canale non valido per questo utente"
 
 msgid "Cannot send a message to someone who is not on your friend list."
-msgstr "Impossibile inviare un messaggio a qualcuno che non fa parte della tua lista amici."
+msgstr ""
+"Impossibile inviare un messaggio a qualcuno che non fa parte della tua lista "
+"amici."
 
 #, c-format
 msgid "No users with tag %s exist"
 msgstr "Non esiste alcun utente con il tag %s"
-
-msgid "Unknown user"
-msgstr "Utente sconosciuto"
 
 msgid "Username"
 msgstr "Nome Utente"
@@ -133,11 +237,29 @@ msgstr "Disconnesso"
 msgid "Do Not Disturb"
 msgstr "Non Disturbare"
 
+msgid "Mobile - Online"
+msgstr ""
+
+msgid "Mobile - Idle"
+msgstr ""
+
+#, fuzzy
+msgid "Mobile - Offline"
+msgstr "Disconnesso"
+
+#, fuzzy
+msgid "Mobile - Do Not Disturb"
+msgstr "Non Disturbare"
+
 msgid "Status"
 msgstr "Stato"
 
 msgid "Playing"
 msgstr "In Gioco"
+
+#, fuzzy
+msgid "Custom Status"
+msgstr "Stato"
 
 #, fuzzy
 msgid "Connected Accounts"
@@ -149,9 +271,42 @@ msgstr "Server in comune"
 msgid "Invisible"
 msgstr "Invisibile"
 
+msgid "Mobile"
+msgstr ""
+
+msgid "Unmute"
+msgstr ""
+
+msgid "Mute"
+msgstr ""
+
+msgid "Grab Full History"
+msgstr ""
+
+msgid "Limit Grabbed History"
+msgstr ""
+
+msgid "Default"
+msgstr ""
+
+#, fuzzy
+msgid "Large Channel"
+msgstr "Identificativo Canale"
+
+#, fuzzy
+msgid "Small Channel"
+msgstr "Identificativo Canale"
+
+msgid "Force Treat as..."
+msgstr ""
+
 #, c-format
 msgid "Playing %s"
 msgstr "In gioco: %s"
+
+#, c-format
+msgid "%s"
+msgstr ""
 
 msgid "Email address..."
 msgstr "Indirizzo email..."
@@ -165,6 +320,54 @@ msgstr "Inserisci le stanze nella lista dei contatti automaticamente"
 msgid "Number of users in a large channel"
 msgstr "Numero di utenti per considerare un canale come \"grande\""
 
+msgid "Display images in conversations"
+msgstr ""
+
+msgid "Display images in large servers"
+msgstr ""
+
+msgid "Max displayed image width (0 disables)"
+msgstr ""
+
+msgid "Display custom emoji as inline images"
+msgstr ""
+
+msgid ""
+"Approximate max number of users to keep track of, per server (0 disables)"
+msgstr ""
+
+msgid "Fetch names for reactors to backlogged messages (can be spammy)"
+msgstr ""
+
+msgid "Fetch unread chat messages when account connects"
+msgstr ""
+
+msgid "Open chat when you are @mention'd"
+msgstr ""
+
+msgid "Indicate thread replies with this prefix: "
+msgstr ""
+
+msgid "Indicate thread parent messages with this prefix: "
+msgstr ""
+
+msgid "Auth token"
+msgstr ""
+
+msgid "Server Rules"
+msgstr ""
+
+#, c-format
+msgid "%s Member Screening"
+msgstr ""
+
+msgid "_OK"
+msgstr ""
+
+#, c-format
+msgid "Error with invite code %s"
+msgstr ""
+
 msgid "Join a server"
 msgstr "Unisciti ad un server"
 
@@ -174,14 +377,124 @@ msgstr "Inserisci l'URL di invito qui"
 msgid "_Join"
 msgstr "_Entra"
 
+#, c-format
+msgid "Are you sure you want to leave the server %s?"
+msgstr ""
+
+msgid "Leaving Server!"
+msgstr ""
+
+msgid "Buddy List Abbreviation"
+msgstr ""
+
+msgid "Effective Guild Size"
+msgstr ""
+
+msgid "Large"
+msgstr ""
+
+msgid "Small"
+msgstr ""
+
+msgid "Leave this server"
+msgstr ""
+
+msgid "Manage discord servers"
+msgstr ""
+
+msgid "Edit per-server settings"
+msgstr ""
+
 msgid "Join a server..."
 msgstr "Unisciti ad un server..."
 
-msgid "nick <new nickname>:  Changes nickname on a server"
+#, fuzzy
+msgid "Manage servers..."
+msgstr "Unisciti ad un server..."
+
+msgid "Warning"
+msgstr ""
+
+msgid ""
+"Fetching a channel's entire history can take a lot of memory and time to "
+"complete. Are you sure you want to continue?"
+msgstr ""
+
+#, c-format
+msgid "Server Name: %s"
+msgstr ""
+
+msgid "Can't Cancel Upload"
+msgstr ""
+
+msgid "Cannot Cancel Discord Upload After Start"
+msgstr ""
+
+#, fuzzy
+msgid "Connection Error"
+msgstr "Errore di Connessione: %s."
+
+msgid "Malformed Response"
+msgstr ""
+
+msgid "Check Debug Logs For More Info"
+msgstr ""
+
+msgid "Couldn't load file"
+msgstr ""
+
+msgid "Maximum file size is 25MB"
+msgstr ""
+
+msgid "Guessing file type is:"
+msgstr ""
+
+#, fuzzy
+msgid "DM Does Not Exist"
+msgstr "Non Disturbare"
+
+msgid "DM does not exist"
+msgstr ""
+
+msgid "Try Sending A Regular Message First"
+msgstr ""
+
+msgid "Couldn't find room id"
+msgstr ""
+
+msgid "Check debug messages for more info"
+msgstr ""
+
+msgid ""
+"reply &lt;timestamp&gt; &lt;message&gt;:  Replies to the message at &lt;"
+"timestamp&gt; with &lt;message&gt;<br />Accepted timestamp formats: YYYY-MM-"
+"DDthh:mm:ss, YYYY-MM-DDThh:mm:ss, hh:mm:ss"
+msgstr ""
+
+msgid ""
+"react &lt;timestamp&gt; &lt;emoji&gt;:  Reacts to the message at &lt;"
+"timestamp&gt; with &lt;emoji&gt;<br />Accepted timestamp formats: YYYY-MM-"
+"DDthh:mm:ss, YYYY-MM-DDThh:mm:ss, hh:mm:ss"
+msgstr ""
+
+msgid ""
+"unreact &lt;timestamp&gt; &lt;emoji&gt;:  Removes the reaction &lt;emoji&gt; "
+"from the message at &lt;timestamp&gt;<br />Accepted timestamp formats: YYYY-"
+"MM-DDthh:mm:ss, YYYY-MM-DDThh:mm:ss, hh:mm:ss"
+msgstr ""
+
+#, fuzzy
+msgid "nick &lt;new nickname&gt;:  Changes nickname on a server"
 msgstr "nick <nuovo nome>:  Cambia il nickname nel server"
 
-msgid "kick <username>:  Remove someone from channel"
+#, fuzzy
+msgid "kick &lt;username&gt;:  Remove someone from a server"
 msgstr "kick <nome>:  Espelli qualcuno dal canale"
+
+msgid ""
+"ban &lt;username&gt;:  Remove someone from a server and prevent them "
+"rejoining"
+msgstr ""
 
 msgid "leave:  Leave the channel"
 msgstr "leave: Esci dal canale"
@@ -191,6 +504,48 @@ msgstr "part: Esci dal canale"
 
 msgid "pinned:  Display pinned messages"
 msgstr "pinned: Mostra messaggi fissati"
+
+msgid "roles:  Display server roles"
+msgstr ""
+
+msgid ""
+"thread &lt;timestamp&gt; &lt;message&gt;:  Sends message to thread<br /"
+">Accepted timestamp formats: YYYY-MM-DDthh:mm:ss, YYYY-MM-DDThh:mm:ss, hh:mm:"
+"ss"
+msgstr ""
+
+msgid "threads:  Display active channel threads"
+msgstr ""
+
+msgid "threadhistory &lt;timestamp&gt;:  Retrieves full history of thread"
+msgstr ""
+
+msgid ""
+"thist &lt;timestamp&gt;:  Retrieves full history of thread.<br />Alias of "
+"threadhistory"
+msgstr ""
+
+msgid ""
+"grabhistory:  Retrieves full history of channel. Intended for rules channels "
+"and the like. Using this on old, highly active channels is not recommended"
+msgstr ""
+
+msgid ""
+"hist:  Retrieves full history of channel. Intended for rules channels and "
+"the like. Using this on old, highly active channels is not recommended.<br /"
+">Alias of grabhistory"
+msgstr ""
+
+msgid "servername:  Displays the name of the server for the current channel."
+msgstr ""
+
+msgid "server:  Displays the name of the server for the current channel."
+msgstr ""
+
+msgid ""
+"joinserver &lt;invite code/URL&gt;:   Joins a new server using the invite "
+"code or URL."
+msgstr ""
 
 msgid "mute <username>:  Mute someone in channel"
 msgstr "mute <nome>:  Silenzia qualcuno nel canale"
@@ -210,14 +565,29 @@ msgstr "Plug-in del Protocollo di Discord."
 msgid "Adds Discord protocol support to libpurple."
 msgstr "Aggiunge il supporto per il protocollo Discord a LibPurple"
 
+#~ msgid "Text"
+#~ msgstr "Testo"
+
+#~ msgid "Direct Message"
+#~ msgstr "Messaggio Diretto"
+
+#~ msgid "Group DM"
+#~ msgstr "Messaggio di Gruppo"
+
+#~ msgid "Guild Category"
+#~ msgstr "Categoria Gilda"
+
+#~ msgid "Unknown"
+#~ msgstr "Sconosciuto"
+
+#~ msgid "Room Type"
+#~ msgstr "Tipo di Stanza"
+
 #~ msgid "In-Game"
 #~ msgstr "In gioco"
 
 #~ msgid "Full Username"
 #~ msgstr "Nome utente completo"
-
-#~ msgid "Channel ID"
-#~ msgstr "Identificativo Canale"
 
 #~ msgid "Cancel"
 #~ msgstr "Annulla"

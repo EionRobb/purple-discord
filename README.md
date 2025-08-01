@@ -1,45 +1,37 @@
 # purple-discord
 A libpurple/Pidgin plugin for Discord
 
-( For free/libre software that allows you to create/manage your account with Discord, check out [Harmony](https://github.com/taylordotfish/harmony) )
-
 Windows
 -------
-Windows nightly builds from [here](https://eion.robbmob.com/libdiscord.dll)
+Windows nightly builds from [here](https://github.com/EionRobb/purple-discord/releases/latest)
 
 The plugin requires libjson-glib which can be downloaded [from github](https://github.com/EionRobb/skype4pidgin/raw/master/skypeweb/libjson-glib-1.0.dll) and copied to the Program Files\Pidgin folder (not the plugins subfolder).
 
 Linux/BSD
 ---------
+amd64 nightly builds from [here](https://github.com/EionRobb/purple-discord/releases/latest)
 
 The plugin is [available](https://repology.org/project/purple-discord/versions) in the main repositories of many Linux and BSD distros.
 Thanks to the maintainers of all these [packages](https://repology.org/project/purple-discord/packages).
 
-Gentoo
---------
+Login issues?
+-------------
+If you've compiled with QR Code auth support (nightly builds include this), leaving the
+password field empty will show a QR Code that you can scan from the Discord
+mobile app to login.
 
-Extract [purple-discord-9999.ebuild](https://github.com/EionRobb/purple-discord/files/994369/ebuild.zip) and copy it to `/usr/local/portage/x11-plugins/purple-discord` with folders created as necessary.
+If using spectrum2 or bitlbee:
+Discord doesn't like you trying to connect from remote IP addresses so
+you'll need to grab an auth token from your browsers local storage:
 
-```bash
-    mkdir -p /usr/local/portage/x11-plugins/purple-discord
-	cp purple-discord-9999.ebuild /usr/local/portage/x11-plugins/purple-discord
-	cd /usr/local/portage/x11-plugins/purple-discord
-	ebuild purple-discord-9999.ebuild manifest
-	eix-update; eix-diff # only if eix is installed
-	emerge purple-discord
-```
+* Chrome: Developer Tools -> Application -> Local Storage -> https://discordapp.com -> token
+* Firefox: Web Developer -> Storage Inspector -> Local Storage -> https://discordapp.com -> token
 
-Thank you to Penaz for this package.
+Bitlbee users can then set the token with `acc eionrobb-discord set token ......`.
 
-Compiling
----------
-Requires devel headers/libs for libpurple and libjson-glib [libglib2.0-dev, libjson-glib-dev and libpurple-dev], [libnss3-dev and libqrencode-dev] (for QR Code authentication), as well as ImageMagick [imagemagick] (to build icons) and [gettext] (for translations).
-```bash
-	git clone https://github.com/EionRobb/purple-discord.git
-	cd purple-discord
-	make
-	sudo make install
-```
+spectrum2 users will need to edit the accounts.xml file to add the token. `<setting name='token' type='string'>...</setting>`
+
+
 
 Slash Commands
 --------------
@@ -132,22 +124,13 @@ To mention a user in a chat room, you can either use tab-completion at the
 start of the message, or prefix their username with an @ eg,
 `SeriousEion: i am mentioning @SeriousEion`
 
-Bitlbee and spectrum2 users
----------------------------
-Discord doesn't like you trying to connect from remote IP addresses so
-you'll need to grab an auth token from your browsers local storage:
 
-* Chrome: Developer Tools -> Application -> Local Storage -> https://discordapp.com -> token
-* Firefox: Web Developer -> Storage Inspector -> Local Storage -> https://discordapp.com -> token
-
-Bitlbee users can then set the token with `acc eionrobb-discord set token ......`.
-
-spectrum2 users will need to edit the accounts.xml file to add the token. `<setting name='token' type='string'>...</setting>`
-
-Alternatively, if you've compiled with QR Code auth support, leaving the
-password field empty will show a QR Code that you can scan from the Discord
-mobile app to login.
-
-Show your appreciation
-----------------------
-Did this plugin make your life happier?  [Send me $1](https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=PZMBF2QVF69GA) to say thanks!
+Compiling
+---------
+Requires devel headers/libs for libpurple and libjson-glib [libglib2.0-dev, libjson-glib-dev and libpurple-dev], [libnss3-dev and libqrencode-dev] (for QR Code authentication), as well as ImageMagick [imagemagick] (to build icons) and [gettext] (for translations).
+```bash
+	git clone https://github.com/EionRobb/purple-discord.git
+	cd purple-discord
+	make
+	sudo make install
+```

@@ -1,11 +1,11 @@
-name: Linux
+name: Linux ARM64
 on:
   - push
   - pull_request
 jobs:
   build:
     name: build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     permissions:
       id-token: write
       contents: write
@@ -23,7 +23,9 @@ jobs:
           sudo dpkg --force-depends -i libpurple0t64*.deb libpurple-dev*.deb
 
       - name: make
-        run: make
+        run: |
+            make
+            mv libdiscord.so libdiscord-arm64.so
 
       - name: archive
         if: ${{ !env.ACT }}
