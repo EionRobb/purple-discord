@@ -1115,6 +1115,29 @@ discord_get_conv_from_channel_id(DiscordAccount *da, guint64 channel_id)
 	return conv;
 }
 
+static guint64
+discord_get_channel_id_from_conv(DiscordAccount *da, PurpleConversation *conv)
+{
+	g_return_val_if_fail(conv != NULL, 0);
+	guint64 *room_id_ptr = purple_conversation_get_data(conv, "id");
+	guint64 room_id = 0;
+
+	if (room_id_ptr != NULL) {
+		room_id = *(guint64 *) room_id_ptr;
+	}
+
+	if (!room_id) {
+		const gchar *name = purple_conversation_get_name(conv);
+		if (PURPLE_IS_CHAT_CONVERSATION(conv)) {
+			room_id = to_int(name);
+		} else {
+			room_id = to_int(g_hash_table_lookup(da->one_to_ones_rev, name));
+		}
+	}
+
+	return room_id;
+}
+
 /* debug */
 
 #define discord_print_append(L, B, R, M, D) \
@@ -2315,13 +2338,10 @@ discord_get_real_name(PurpleConnection *pc, gint id, const char *who)
 	PurpleChatConversation *chatconv;
 
 	chatconv = purple_conversations_find_chat(pc, id);
-	guint64 *room_id_ptr = purple_conversation_get_data(PURPLE_CONVERSATION(chatconv), "id");
-
-	if (!room_id_ptr) {
+	guint64 room_id = discord_get_channel_id_from_conv(da, PURPLE_CONVERSATION(chatconv));
+	if (!room_id) {
 		goto bail;
 	}
-
-	guint64 room_id = *room_id_ptr;
 
 	DiscordGuild *guild = NULL;
 	DiscordChannel *channel = discord_get_channel_global_int_guild(da, room_id, &guild);
@@ -6938,15 +6958,11 @@ discord_chat_pinned_by_room_id(PurpleConnection *pc, PurpleChatConversation *cha
 static void
 discord_chat_leave(PurpleConnection *pc, int id)
 {
+	DiscordAccount *da = purple_connection_get_protocol_data(pc);
 	PurpleChatConversation *chatconv;
 	/* TODO check source */
 	chatconv = purple_conversations_find_chat(pc, id);
-	guint64 room_id = *(guint64 *) purple_conversation_get_data(PURPLE_CONVERSATION(chatconv), "id");
-
-	if (!room_id) {
-		/* TODO FIXME? */
-		room_id = to_int(purple_conversation_get_name(PURPLE_CONVERSATION(chatconv)));
-	}
+	guint64 room_id = discord_get_channel_id_from_conv(da, PURPLE_CONVERSATION(chatconv));
 
 	discord_chat_leave_by_room_id(pc, room_id);
 }
@@ -6954,15 +6970,11 @@ discord_chat_leave(PurpleConnection *pc, int id)
 static void
 discord_chat_pinned(PurpleConnection *pc, int id)
 {
+	DiscordAccount *da = purple_connection_get_protocol_data(pc);
 	PurpleChatConversation *chatconv;
 	/* TODO check source */
 	chatconv = purple_conversations_find_chat(pc, id);
-	guint64 room_id = *(guint64 *) purple_conversation_get_data(PURPLE_CONVERSATION(chatconv), "id");
-
-	if (!room_id) {
-		/* TODO FIXME? */
-		room_id = to_int(purple_conversation_get_name(PURPLE_CONVERSATION(chatconv)));
-	}
+	guint64 room_id = discord_get_channel_id_from_conv(da, PURPLE_CONVERSATION(chatconv));
 
 	discord_chat_pinned_by_room_id(pc, chatconv, room_id);
 }
@@ -6973,12 +6985,7 @@ discord_chat_threads(PurpleConnection *pc, int id, const gchar *filter)
 	DiscordAccount *da = purple_connection_get_protocol_data(pc);
 	PurpleChatConversation *chatconv;
 	chatconv = purple_conversations_find_chat(pc, id);
-	guint64 room_id = *(guint64 *) purple_conversation_get_data(PURPLE_CONVERSATION(chatconv), "id");
-
-	if (!room_id) {
-		/* TODO FIXME? */
-		room_id = to_int(purple_conversation_get_name(PURPLE_CONVERSATION(chatconv)));
-	}
+	guint64 room_id = discord_get_channel_id_from_conv(da, PURPLE_CONVERSATION(chatconv));
 
 	DiscordGuild *guild = NULL;
 	DiscordChannel *channel = discord_get_channel_global_int_guild(da, room_id, &guild);
@@ -7034,12 +7041,7 @@ discord_chat_roles(PurpleConnection *pc, int id)
 	DiscordAccount *da = purple_connection_get_protocol_data(pc);
 	PurpleChatConversation *chatconv;
 	chatconv = purple_conversations_find_chat(pc, id);
-	guint64 room_id = *(guint64 *) purple_conversation_get_data(PURPLE_CONVERSATION(chatconv), "id");
-
-	if (!room_id) {
-		/* TODO FIXME? */
-		room_id = to_int(purple_conversation_get_name(PURPLE_CONVERSATION(chatconv)));
-	}
+	guint64 room_id = discord_get_channel_id_from_conv(da, PURPLE_CONVERSATION(chatconv));
 
 	DiscordGuild *guild = NULL;
 	discord_get_channel_global_int_guild(da, room_id, &guild);
@@ -7080,13 +7082,7 @@ discord_chat_invite(PurpleConnection *pc, int id, const char *message, const cha
 
 	da = purple_connection_get_protocol_data(pc);
 	chatconv = purple_conversations_find_chat(pc, id);
-	guint64 *room_id_ptr = purple_conversation_get_data(PURPLE_CONVERSATION(chatconv), "id");
-
-	if(!room_id_ptr) {
-		return;
-	}
-
-	room_id = *room_id_ptr;
+	room_id = discord_get_channel_id_from_conv(da, PURPLE_CONVERSATION(chatconv));
 	user = discord_get_user_fullname(da, who);
 
 	if (!user) {
@@ -7120,17 +7116,11 @@ discord_chat_invite(PurpleConnection *pc, int id, const char *message, const cha
 static void
 discord_chat_nick(PurpleConnection *pc, int id, const gchar *new_nick)
 {
+	DiscordAccount *da = purple_connection_get_protocol_data(pc);
 	PurpleChatConversation *chatconv;
 	/* TODO check source */
 	chatconv = purple_conversations_find_chat(pc, id);
-	guint64 room_id = *(guint64 *) purple_conversation_get_data(PURPLE_CONVERSATION(chatconv), "id");
-
-	if (!room_id) {
-		/* TODO FIXME? */
-		room_id = to_int(purple_conversation_get_name(PURPLE_CONVERSATION(chatconv)));
-	}
-
-	DiscordAccount *da = purple_connection_get_protocol_data(pc);
+	guint64 room_id = discord_get_channel_id_from_conv(da, PURPLE_CONVERSATION(chatconv));
 
 	DiscordGuild *guild = NULL;
 	discord_get_channel_global_int_guild(da, room_id, &guild);
@@ -7156,21 +7146,16 @@ discord_chat_nick(PurpleConnection *pc, int id, const gchar *new_nick)
 static void
 discord_chat_kick_username(PurpleConnection *pc, int id, const gchar *username)
 {
+	DiscordAccount *da = purple_connection_get_protocol_data(pc);
 	PurpleChatConversation *chatconv;
 
 	g_return_if_fail(username && *username);
 
 	/* TODO check source */
 	chatconv = purple_conversations_find_chat(pc, id);
-	guint64 room_id = *(guint64 *) purple_conversation_get_data(PURPLE_CONVERSATION(chatconv), "id");
-
-	if (!room_id) {
-		room_id = to_int(purple_conversation_get_name(PURPLE_CONVERSATION(chatconv)));
-	}
+	guint64 room_id = discord_get_channel_id_from_conv(da, PURPLE_CONVERSATION(chatconv));
 
 	g_return_if_fail(room_id);
-
-	DiscordAccount *da = purple_connection_get_protocol_data(pc);
 
 	DiscordGuild *guild = NULL;
 	discord_get_channel_global_int_guild(da, room_id, &guild);
@@ -7200,21 +7185,16 @@ discord_chat_kick_username(PurpleConnection *pc, int id, const gchar *username)
 static void
 discord_chat_ban_username(PurpleConnection *pc, int id, const gchar *username)
 {
+	DiscordAccount *da = purple_connection_get_protocol_data(pc);
 	PurpleChatConversation *chatconv;
 
 	g_return_if_fail(username && *username);
 
 	/* TODO check source */
 	chatconv = purple_conversations_find_chat(pc, id);
-	guint64 room_id = *(guint64 *) purple_conversation_get_data(PURPLE_CONVERSATION(chatconv), "id");
-
-	if (!room_id) {
-		room_id = to_int(purple_conversation_get_name(PURPLE_CONVERSATION(chatconv)));
-	}
+	guint64 room_id = discord_get_channel_id_from_conv(da, PURPLE_CONVERSATION(chatconv));
 
 	g_return_if_fail(room_id);
-
-	DiscordAccount *da = purple_connection_get_protocol_data(pc);
 
 	DiscordGuild *guild = NULL;
 	discord_get_channel_global_int_guild(da, room_id, &guild);
@@ -7897,7 +7877,7 @@ static void
 discord_mark_conv_seen(PurpleConversation *conv, PurpleConversationUpdateType type)
 {
 	PurpleConnection *pc;
-	DiscordAccount *ya;
+	DiscordAccount *da;
 
 	if (type != PURPLE_CONVERSATION_UPDATE_UNSEEN) {
 		return;
@@ -7913,19 +7893,11 @@ discord_mark_conv_seen(PurpleConversation *conv, PurpleConversationUpdateType ty
 		return;
 	}
 
-	ya = purple_connection_get_protocol_data(pc);
-
-	guint64 *room_id_ptr = purple_conversation_get_data(conv, "id");
-	guint64 room_id = 0;
-
-	if (room_id_ptr) {
-		room_id = *room_id_ptr;
-	} else {
-		room_id = to_int(g_hash_table_lookup(ya->one_to_ones_rev, purple_conversation_get_name(conv)));
-	}
+	da = purple_connection_get_protocol_data(pc);
+	guint64 room_id = discord_get_channel_id_from_conv(da, conv);
 
 	if (room_id != 0) {
-		discord_mark_room_messages_read(ya, room_id);
+		discord_mark_room_messages_read(da, room_id);
 	}
 
 }
@@ -7954,15 +7926,7 @@ discord_conv_send_typing(PurpleConversation *conv, PurpleIMTypingState state, Di
 		ya = purple_connection_get_protocol_data(pc);
 	}
 
-	guint64 *room_id_ptr = purple_conversation_get_data(conv, "id");
-	guint64 room_id = 0;
-
-	if (room_id_ptr) {
-		room_id = *room_id_ptr;
-	} else {
-		room_id = to_int(g_hash_table_lookup(ya->one_to_ones_rev, purple_conversation_get_name(conv)));
-	}
-
+	guint64 room_id = discord_get_channel_id_from_conv(ya, conv);
 	if (room_id == 0) {
 		return 0;
 	}
@@ -8150,9 +8114,7 @@ discord_chat_send(PurpleConnection *pc, gint id,
 
 	da = purple_connection_get_protocol_data(pc);
 	chatconv = purple_conversations_find_chat(pc, id);
-	guint64 *room_id_ptr = purple_conversation_get_data(PURPLE_CONVERSATION(chatconv), "id");
-	g_return_val_if_fail(room_id_ptr, -1);
-	guint64 room_id = *room_id_ptr;
+	guint64 room_id = discord_get_channel_id_from_conv(da, PURPLE_CONVERSATION(chatconv));
 
 	gchar *d_message = g_strdup(message);
 
@@ -9337,11 +9299,7 @@ discord_reply_cb(DiscordAccount *da, JsonNode *node, gpointer user_data)
 static gchar *
 discord_get_thread_id_from_timestamp(DiscordAccount *da, PurpleConversation *conv, const gchar *timestamp)
 {
-	guint64 *room_id_ptr = purple_conversation_get_data(conv, "id");
-	if (!room_id_ptr) {
-		return NULL;
-	}
-	guint64 room_id = *room_id_ptr;
+	guint64 room_id = discord_get_channel_id_from_conv(da, conv);
 	DiscordChannel *channel = discord_get_channel_global_int(da, room_id);
 	if (!channel) {
 		return NULL;
@@ -9508,7 +9466,7 @@ discord_chat_get_history(gpointer user_data, int action)
 	PurpleConversation *conv = user_data;
 	PurpleConnection *pc = purple_conversation_get_connection(conv);
 	DiscordAccount *da = purple_connection_get_protocol_data(pc);
-	guint64 room_id = *(guint64 *) purple_conversation_get_data(conv, "id");
+	guint64 room_id = discord_get_channel_id_from_conv(da, conv);
 
 	DiscordChannel *channel = discord_get_channel_global_int_guild(da, room_id, NULL);
 	if (channel == NULL) {
@@ -9677,7 +9635,7 @@ discord_cmd_reply(PurpleConversation *conv, const gchar *cmd, gchar **args, gcha
 {
 	PurpleConnection *pc = purple_conversation_get_connection(conv);
 	DiscordAccount *da = purple_connection_get_protocol_data(pc);
-	guint64 room_id = *(guint64 *) purple_conversation_get_data(conv, "id");
+	guint64 room_id = discord_get_channel_id_from_conv(da, conv);
 
 	if (pc == NULL || (int)room_id == -1) {
 		return PURPLE_CMD_RET_FAILED;
@@ -9702,7 +9660,7 @@ discord_cmd_react(PurpleConversation *conv, const gchar *cmd, gchar **args, gcha
 {
 	PurpleConnection *pc = purple_conversation_get_connection(conv);
 	DiscordAccount *da = purple_connection_get_protocol_data(pc);
-	guint64 id = *(guint64 *) purple_conversation_get_data(conv, "id");
+	guint64 id = discord_get_channel_id_from_conv(da, conv);
 
 	if (pc == NULL || (int)id == -1) {
 		return PURPLE_CMD_RET_FAILED;
@@ -9722,7 +9680,7 @@ discord_cmd_unreact(PurpleConversation *conv, const gchar *cmd, gchar **args, gc
 {
 	PurpleConnection *pc = purple_conversation_get_connection(conv);
 	DiscordAccount *da = purple_connection_get_protocol_data(pc);
-	guint64 id = *(guint64 *) purple_conversation_get_data(conv, "id");
+	guint64 id = discord_get_channel_id_from_conv(da, conv);
 
 	if (pc == NULL || (int)id == -1) {
 		return PURPLE_CMD_RET_FAILED;
@@ -9847,7 +9805,7 @@ discord_cmd_thread(PurpleConversation *conv, const gchar *cmd, gchar **args, gch
 {
 	PurpleConnection *pc = purple_conversation_get_connection(conv);
 	DiscordAccount *da = purple_connection_get_protocol_data(pc);
-	guint64 room_id = *(guint64 *) purple_conversation_get_data(conv, "id");
+	guint64 room_id = discord_get_channel_id_from_conv(da, conv);
 
 	if (pc == NULL || (int)room_id == -1) {
 		return PURPLE_CMD_RET_FAILED;
@@ -9872,7 +9830,7 @@ discord_cmd_thread_history(PurpleConversation *conv, const gchar *cmd, gchar **a
 {
 	PurpleConnection *pc = purple_conversation_get_connection(conv);
 	DiscordAccount *da = purple_connection_get_protocol_data(pc);
-	guint64 room_id = *(guint64 *) purple_conversation_get_data(conv, "id");
+	guint64 room_id = discord_get_channel_id_from_conv(da, conv);
 
 	if (pc == NULL || (int)room_id == -1) {
 		return PURPLE_CMD_RET_FAILED;
@@ -9891,7 +9849,7 @@ discord_cmd_get_history(PurpleConversation *conv, const gchar *cmd, gchar **args
 {
 	PurpleConnection *pc = purple_conversation_get_connection(conv);
 	DiscordAccount *da = purple_connection_get_protocol_data(pc);
-	guint64 room_id = *(guint64 *) purple_conversation_get_data(conv, "id");
+	guint64 room_id = discord_get_channel_id_from_conv(da, conv);
 
 	if (pc == NULL || (int)room_id == -1) {
 		return PURPLE_CMD_RET_FAILED;
@@ -9916,7 +9874,7 @@ discord_cmd_get_server_name(PurpleConversation *conv, const gchar *cmd, gchar **
 {
 	PurpleConnection *pc = purple_conversation_get_connection(conv);
 	DiscordAccount *da = purple_connection_get_protocol_data(pc);
-	guint64 room_id = *(guint64 *) purple_conversation_get_data(conv, "id");
+	guint64 room_id = discord_get_channel_id_from_conv(da, conv);
 
 	if (pc == NULL || (int)room_id == -1) {
 		return PURPLE_CMD_RET_FAILED;
@@ -10179,16 +10137,16 @@ discord_chat_send_file(PurpleConnection *pc, int id, const gchar *filename) {
 	DiscordAccount *da = purple_connection_get_protocol_data(pc);
 	PurpleConvChat *chatconv = purple_conversations_find_chat(pc, id);
 	PurpleConversation *conv = PURPLE_CONVERSATION(chatconv);
-	guint64 *room_id_ptr = purple_conversation_get_data(conv, "id");
+	guint64 room_id = discord_get_channel_id_from_conv(da, conv);
 
-	if (room_id_ptr == NULL) {
+	if (room_id == 0) {
 			purple_debug_error("discord", "Couldn't find room id of chat: %s\n", conv->name);
 			purple_notify_error(da, conv->name, _("Couldn't find room id"), _("Check debug messages for more info"), 
 				purple_request_cpar_from_connection(pc));
 			return;
 	}
 
-	PurpleXfer *xfer = discord_create_xfer(pc, *room_id_ptr, conv->name);
+	PurpleXfer *xfer = discord_create_xfer(pc, room_id, conv->name);
 
 	// Pidgin itself doesn't actually let you drag and drop files into
 	// conversations, but this is in case any other client does (or Pidgin
