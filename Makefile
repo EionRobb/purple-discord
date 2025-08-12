@@ -149,13 +149,13 @@ install: $(DISCORD_TARGET) install-icons install-locales
 	install -m $(LIB_PERM) -p $(DISCORD_TARGET) $(DISCORD_DEST)
 
 discord16.png: discord-alt-logo.svg
-	convert -strip -background none discord-alt-logo.svg -resize 16x16 discord16.png
+	magick convert -strip -background none discord-alt-logo.svg -resize 16x16 discord16.png
 
 discord22.png: discord-alt-logo.svg
-	convert -strip -background none discord-alt-logo.svg -resize 22x22 discord22.png
+	magick convert -strip -background none discord-alt-logo.svg -resize 22x22 discord22.png
 
 discord48.png: discord-alt-logo.svg
-	convert -strip -background none discord-alt-logo.svg -resize 48x48 discord48.png
+	magick convert -strip -background none discord-alt-logo.svg -resize 48x48 discord48.png
 
 build-icons: discord16.png discord22.png discord48.png
 
