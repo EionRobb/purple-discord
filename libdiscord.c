@@ -1413,6 +1413,7 @@ discord_get_display_name_or_unk(DiscordAccount *da, DiscordGuild *guild, Discord
 
 static gchar * discord_truncate_message(const gchar *msg_txt, guint count);
 static gchar * discord_parse_timestamp(time_t timestamp);
+static gchar * discord_replace_mentions_bare(DiscordAccount *da, DiscordGuild *g, gchar *message);
 
 static gchar *
 discord_get_reply_text(DiscordAccount *da, DiscordGuild *guild, DiscordChannel *channel, JsonObject *referenced_message)
@@ -1426,7 +1427,9 @@ discord_get_reply_text(DiscordAccount *da, DiscordGuild *guild, DiscordChannel *
 	gchar *prev_text = NULL;
 	const gchar *msg_txt = json_object_get_string_member(referenced_message, "content");
 	if (msg_txt && *msg_txt) {
-		prev_text = discord_truncate_message(msg_txt, 32);
+		gchar *msg_txt_parsed = discord_replace_mentions_bare(da, guild, g_strdup(msg_txt));
+		prev_text = discord_truncate_message(msg_txt_parsed, 32);
+		g_free(msg_txt_parsed);
 	} else {
 		const gchar *msg_id = json_object_get_string_member(referenced_message, "id");
 		time_t msg_timestamp = discord_time_from_snowflake(to_int(msg_id));
