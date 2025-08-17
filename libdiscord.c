@@ -3262,7 +3262,11 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 			(mentioned && purple_account_get_bool(da->account, "open-chat-on-mention", TRUE)) ||
 			discord_treat_room_as_small(da, channel_id, guild)
 		) {
-			//discord_open_chat(da, channel_id, mentioned);
+			// Save the latest msg_id to the channel to help with history download
+			if (channel != NULL && msg_id > channel->last_message_id && !thread) {
+				channel->last_message_id = msg_id;
+			}
+
 			gboolean fetched_history = discord_join_chat_by_id(da, channel_id, mentioned);
 			if (fetched_history) {
 				g_free(escaped_content);
