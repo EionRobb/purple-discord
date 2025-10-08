@@ -10043,8 +10043,8 @@ discord_xfer_send_init(PurpleXfer *xfer)
 	g_free(load_error);
 
 	goffset file_len = g_mapped_file_get_length(file);
-	if (file_len > 25000000) {
-		purple_xfer_error(PURPLE_XFER_SEND, acct, purple_xfer_get_remote_user(xfer), _("Maximum file size is 25MB"));
+	if (file_len > 10000000) {
+		purple_xfer_error(PURPLE_XFER_SEND, acct, purple_xfer_get_remote_user(xfer), _("Maximum file size is 10MB"));
 		// "just for show"
 		purple_xfer_cancel_local(xfer);
 		g_mapped_file_unref(file);
