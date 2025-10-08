@@ -346,6 +346,7 @@ typedef struct {
 	GHashTable *guild_memberships;
 	gboolean bot;
 	gchar *custom_status;
+	gchar *global_name;
 } DiscordUser;
 
 typedef struct {
@@ -506,6 +507,7 @@ discord_new_user(JsonObject *json)
 	user->discriminator = to_int(json_object_get_string_member(json, "discriminator"));
 	user->bot = json_object_get_boolean_member(json, "bot");
 	user->avatar = g_strdup(json_object_get_string_member(json, "avatar"));
+	user->global_name = g_strdup(json_object_get_string_member(json, "global_name"));
 
 	user->guild_memberships = g_hash_table_new_full(g_int64_hash, g_int64_equal, NULL, discord_free_guild_membership);
 	user->status = user->bot ? USER_ONLINE : USER_OFFLINE; /* Is offline the best assumption on a new user? */
@@ -666,6 +668,7 @@ discord_free_user(gpointer data)
 	g_free(user->game);
 	g_free(user->avatar);
 	g_free(user->custom_status);
+	g_free(user->global_name);
 
 	g_hash_table_unref(user->guild_memberships);
 	g_free(user);
@@ -2397,6 +2400,18 @@ bail:
 	return g_strdup(who);
 }
 
+static gchar *
+discord_get_cb_alias(PurpleConnection *pc, int id, const char *who)
+{
+	DiscordAccount *da = purple_connection_get_protocol_data(pc);
+	DiscordUser *user = discord_get_user_fullname(da, who);
+	if (user && user->global_name) {
+		return g_strdup(user->global_name);
+	}
+
+	return discord_get_real_name(pc, id, who);
+}
+
 static time_t
 discord_parse_timestring(const gchar *timestring)
 {
@@ -3919,6 +3934,14 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 				discord_get_avatar(da, user, TRUE);
 			}
 
+			// Handle global name change
+			const gchar *new_global_name = json_object_get_string_member(userdata, "global_name");
+			if (!purple_strequal(user->global_name, new_global_name)) {
+				g_free(user->global_name);
+				user->global_name = g_strdup(new_global_name);
+				purple_serv_got_alias(da->pc, username, user->global_name);
+			}
+
 			// Handle a user being renamed
 			const gchar *new_username = json_object_get_string_member(userdata, "username");
 			const gchar *new_discriminator = json_object_get_string_member(userdata, "discriminator");
@@ -5199,6 +5222,9 @@ discord_create_relationship(DiscordAccount *da, JsonObject *json)
 		}
 
 		discord_get_avatar(da, user, TRUE);
+		if (user->global_name && *user->global_name) {
+			purple_serv_got_alias(da->pc, merged_username, user->global_name);
+		}
 
 	} else if (type == RELATIONSHIP_BLOCKED) {
 		/* blocked buddy */
@@ -10421,6 +10447,20 @@ typedef struct
 {
 	PurplePluginProtocolInfo parent;
 
+	GHashTable *(* 	get_account_text_table)(PurpleAccount *account);
+	#if !PURPLE_VERSION_CHECK(2, 6, 0)
+		gboolean (*initiate_media)(PurpleAccount *account, const char *who, PurpleMediaSessionType type);
+		PurpleMediaCaps (*get_media_caps)(PurpleAccount *account, const char *who);
+	#endif
+	#if !PURPLE_VERSION_CHECK(2, 7, 0)
+		PurpleMood *(*get_moods)(PurpleAccount *account);
+		void (*set_public_alias)(PurpleConnection *gc, const char *alias, PurpleSetPublicAliasSuccessCallback success_cb, PurpleSetPublicAliasFailureCallback failure_cb);
+		void (*get_public_alias)(PurpleConnection *gc, PurpleGetPublicAliasSuccessCallback success_cb, PurpleGetPublicAliasFailureCallback failure_cb);
+	#endif
+	#if !PURPLE_VERSION_CHECK(2, 8, 0)
+		void (*add_buddy_with_invite)(PurpleConnection *pc, PurpleBuddy *buddy, PurpleGroup *group, const char *message);
+		void (*add_buddies_with_invite)(PurpleConnection *pc, GList *buddies, GList *groups, const char *message);
+	#endif
 	#if !PURPLE_VERSION_CHECK(2, 14, 0)
 		char *(*get_cb_alias)(PurpleConnection *gc, int id, const char *who);
 		gboolean (*chat_can_receive_file)(PurpleConnection *, int id);
@@ -10450,7 +10490,7 @@ plugin_init(PurplePlugin *plugin)
 
 	info->extra_info = prpl_info;
 #if PURPLE_MINOR_VERSION >= 5
-	prpl_info->struct_size = sizeof(PurplePluginProtocolInfo);
+	prpl_info->struct_size = sizeof(PurplePluginProtocolInfoExt);
 #endif
 #if PURPLE_MINOR_VERSION >= 8
 /* prpl_info->add_buddy_with_invite = discord_add_buddy_with_invite; */
@@ -10504,6 +10544,11 @@ plugin_init(PurplePlugin *plugin)
 	#else
 		prpl_info_ext->chat_send_file = discord_chat_send_file;
 		prpl_info_ext->chat_can_receive_file = discord_chat_can_receive_file;
+	#endif
+	#if PURPLE_VERSION_CHECK(2, 14, 0)
+		prpl_info->get_cb_alias = discord_get_cb_alias;
+	#else
+		prpl_info_ext->get_cb_alias = discord_get_cb_alias;
 	#endif
 
 	prpl_info->roomlist_get_list = discord_roomlist_get_list;
