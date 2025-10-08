@@ -5008,13 +5008,15 @@ discord_set_status(PurpleAccount *account, PurpleStatus *status)
 	data = json_object_new();
 	json_object_set_string_member(data, "status", status_id);
 
-	if (message && *message) {
-		JsonObject *custom_status = json_object_new();
-		json_object_set_string_member(custom_status, "text", message);
-		json_object_set_object_member(data, "custom_status", custom_status);
+	if (purple_account_get_bool(account, "use-status-as-global-status", FALSE)) {
+		if (message && *message) {
+			JsonObject *custom_status = json_object_new();
+			json_object_set_string_member(custom_status, "text", message);
+			json_object_set_object_member(data, "custom_status", custom_status);
 
-	} else {
-		json_object_set_null_member(data, "custom_status");
+		} else {
+			json_object_set_null_member(data, "custom_status");
+		}
 	}
 
 	postdata = json_object_to_string(data);
@@ -8887,6 +8889,9 @@ discord_add_account_options(GList *account_options)
 	account_options = g_list_append(account_options, option);
 
 	option = purple_account_option_bool_new(_("Use status message as in-game info"), "use-status-as-game", FALSE);
+	account_options = g_list_append(account_options, option);
+
+	option = purple_account_option_bool_new(_("Override global custom status message"), "use-status-as-global-status", FALSE);
 	account_options = g_list_append(account_options, option);
 
 	option = purple_account_option_bool_new(_("Auto-create rooms on buddy list"), "populate-blist", TRUE);
