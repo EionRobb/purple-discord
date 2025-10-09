@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-06-29 22:12+0100\n"
+"POT-Creation-Date: 2025-10-08 11:21+0100\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -353,6 +353,9 @@ msgstr ""
 msgid "Use status message as in-game info"
 msgstr ""
 
+msgid "Override global custom status message"
+msgstr ""
+
 msgid "Auto-create rooms on buddy list"
 msgstr ""
 
@@ -480,7 +483,7 @@ msgstr ""
 msgid "Couldn't load file"
 msgstr ""
 
-msgid "Maximum file size is 25MB"
+msgid "Maximum file size is 10MB"
 msgstr ""
 
 msgid "Guessing file type is:"

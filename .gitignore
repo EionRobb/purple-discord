@@ -5,3 +5,4 @@ libdiscord.dll
 libdiscord.so
 libdiscord3.so
 po/*.mo
+*.deb

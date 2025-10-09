@@ -271,6 +271,17 @@ typedef enum {
 	PERM_SEND_MESSAGES_IN_THREADS = 0x4000000000,   //1 << 38
 	PERM_START_EMBEDDED_ACTIVITIES = 0x8000000000,  //1 << 39
 	PERM_MODERATE_MEMBERS = 0x10000000000,          //1 << 40
+	PERM_VIEW_CREATOR_MONETIZATION_ANALYTICS = 0x20000000000, //1 << 41
+	PERM_USE_SOUNDBOARD = 0x40000000000,            //1 << 42
+	PERM_CREATE_GUILD_EXPRESSIONS = 0x80000000000,  //1 << 43
+	PERM_CREATE_EVENTS = 0x100000000000,            //1 << 44
+	PERM_USE_EXTERNAL_SOUNDS = 0x200000000000,      //1 << 45
+	PERM_SEND_VOICE_MESSAGES = 0x400000000000,      //1 << 46
+	PERM_USE_CLYDE_AI = 0x800000000000,             //1 << 47
+	PERM_SET_VOICE_CHANNEL_STATUS = 0x1000000000000,//1 << 48
+	PERM_SEND_POLLS = 0x2000000000000,              //1 << 49
+	PERM_USE_EXTERNAL_APPS = 0x4000000000000,       //1 << 50
+	PERM_PIN_MESSAGES = 0x8000000000000,            //1 << 51
 } DiscordPermissionFlags;
 
 typedef struct {
@@ -358,6 +369,7 @@ typedef struct {
 	GHashTable *guild_memberships;
 	gboolean bot;
 	gchar *custom_status;
+	gchar *global_name;
 } DiscordUser;
 
 typedef struct {
@@ -518,6 +530,7 @@ discord_new_user(JsonObject *json)
 	user->discriminator = to_int(json_object_get_string_member(json, "discriminator"));
 	user->bot = json_object_get_boolean_member(json, "bot");
 	user->avatar = g_strdup(json_object_get_string_member(json, "avatar"));
+	user->global_name = g_strdup(json_object_get_string_member(json, "global_name"));
 
 	user->guild_memberships = g_hash_table_new_full(g_int64_hash, g_int64_equal, NULL, discord_free_guild_membership);
 	user->status = user->bot ? USER_ONLINE : USER_OFFLINE; /* Is offline the best assumption on a new user? */
@@ -678,6 +691,7 @@ discord_free_user(gpointer data)
 	g_free(user->game);
 	g_free(user->avatar);
 	g_free(user->custom_status);
+	g_free(user->global_name);
 
 	g_hash_table_unref(user->guild_memberships);
 	g_free(user);
@@ -1138,6 +1152,29 @@ discord_get_conv_from_channel_id(DiscordAccount *da, guint64 channel_id)
 	return conv;
 }
 
+static guint64
+discord_get_channel_id_from_conv(DiscordAccount *da, PurpleConversation *conv)
+{
+	g_return_val_if_fail(conv != NULL, 0);
+	guint64 *room_id_ptr = purple_conversation_get_data(conv, "id");
+	guint64 room_id = 0;
+
+	if (room_id_ptr != NULL) {
+		room_id = *(guint64 *) room_id_ptr;
+	}
+
+	if (!room_id) {
+		const gchar *name = purple_conversation_get_name(conv);
+		if (PURPLE_IS_CHAT_CONVERSATION(conv)) {
+			room_id = to_int(name);
+		} else {
+			room_id = to_int(g_hash_table_lookup(da->one_to_ones_rev, name));
+		}
+	}
+
+	return room_id;
+}
+
 /* debug */
 
 #define discord_print_append(L, B, R, M, D) \
@@ -1413,6 +1450,7 @@ discord_get_display_name_or_unk(DiscordAccount *da, DiscordGuild *guild, Discord
 
 static gchar * discord_truncate_message(const gchar *msg_txt, guint count);
 static gchar * discord_parse_timestamp(time_t timestamp);
+static gchar * discord_replace_mentions_bare(DiscordAccount *da, DiscordGuild *g, gchar *message);
 
 static gchar *
 discord_get_reply_text(DiscordAccount *da, DiscordGuild *guild, DiscordChannel *channel, JsonObject *referenced_message)
@@ -1426,7 +1464,9 @@ discord_get_reply_text(DiscordAccount *da, DiscordGuild *guild, DiscordChannel *
 	gchar *prev_text = NULL;
 	const gchar *msg_txt = json_object_get_string_member(referenced_message, "content");
 	if (msg_txt && *msg_txt) {
-		prev_text = discord_truncate_message(msg_txt, 32);
+		gchar *msg_txt_parsed = discord_replace_mentions_bare(da, guild, g_strdup(msg_txt));
+		prev_text = discord_truncate_message(msg_txt_parsed, 32);
+		g_free(msg_txt_parsed);
 	} else {
 		const gchar *msg_id = json_object_get_string_member(referenced_message, "id");
 		time_t msg_timestamp = discord_time_from_snowflake(to_int(msg_id));
@@ -2372,13 +2412,10 @@ discord_get_real_name(PurpleConnection *pc, gint id, const char *who)
 	PurpleChatConversation *chatconv;
 
 	chatconv = purple_conversations_find_chat(pc, id);
-	guint64 *room_id_ptr = purple_conversation_get_data(PURPLE_CONVERSATION(chatconv), "id");
-
-	if (!room_id_ptr) {
+	guint64 room_id = discord_get_channel_id_from_conv(da, PURPLE_CONVERSATION(chatconv));
+	if (!room_id) {
 		goto bail;
 	}
-
-	guint64 room_id = *room_id_ptr;
 
 	DiscordGuild *guild = NULL;
 	DiscordChannel *channel = discord_get_channel_global_int_guild(da, room_id, &guild);
@@ -2418,6 +2455,18 @@ discord_get_real_name(PurpleConnection *pc, gint id, const char *who)
 /* Probably a fullname already, bail out */
 bail:
 	return g_strdup(who);
+}
+
+static gchar *
+discord_get_cb_alias(PurpleConnection *pc, int id, const char *who)
+{
+	DiscordAccount *da = purple_connection_get_protocol_data(pc);
+	DiscordUser *user = discord_get_user_fullname(da, who);
+	if (user && user->global_name) {
+		return g_strdup(user->global_name);
+	}
+
+	return discord_get_real_name(pc, id, who);
 }
 
 static time_t
@@ -3296,7 +3345,11 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 			(mentioned && purple_account_get_bool(da->account, "open-chat-on-mention", TRUE)) ||
 			discord_treat_room_as_small(da, channel_id, guild)
 		) {
-			//discord_open_chat(da, channel_id, mentioned);
+			// Save the latest msg_id to the channel to help with history download
+			if (channel != NULL && msg_id > channel->last_message_id && !thread) {
+				channel->last_message_id = msg_id;
+			}
+
 			gboolean fetched_history = discord_join_chat_by_id(da, channel_id, mentioned);
 			if (fetched_history) {
 				g_free(escaped_content);
@@ -3936,6 +3989,14 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 				g_free(user->avatar);
 				user->avatar = g_strdup(new_avatar);
 				discord_get_avatar(da, user, TRUE);
+			}
+
+			// Handle global name change
+			const gchar *new_global_name = json_object_get_string_member(userdata, "global_name");
+			if (!purple_strequal(user->global_name, new_global_name)) {
+				g_free(user->global_name);
+				user->global_name = g_strdup(new_global_name);
+				purple_serv_got_alias(da->pc, username, user->global_name);
 			}
 
 			// Handle a user being renamed
@@ -5027,13 +5088,15 @@ discord_set_status(PurpleAccount *account, PurpleStatus *status)
 	data = json_object_new();
 	json_object_set_string_member(data, "status", status_id);
 
-	if (message && *message) {
-		JsonObject *custom_status = json_object_new();
-		json_object_set_string_member(custom_status, "text", message);
-		json_object_set_object_member(data, "custom_status", custom_status);
+	if (purple_account_get_bool(account, "use-status-as-global-status", FALSE)) {
+		if (message && *message) {
+			JsonObject *custom_status = json_object_new();
+			json_object_set_string_member(custom_status, "text", message);
+			json_object_set_object_member(data, "custom_status", custom_status);
 
-	} else {
-		json_object_set_null_member(data, "custom_status");
+		} else {
+			json_object_set_null_member(data, "custom_status");
+		}
 	}
 
 	postdata = json_object_to_string(data);
@@ -5216,6 +5279,9 @@ discord_create_relationship(DiscordAccount *da, JsonObject *json)
 		}
 
 		discord_get_avatar(da, user, TRUE);
+		if (user->global_name && *user->global_name) {
+			purple_serv_got_alias(da->pc, merged_username, user->global_name);
+		}
 
 	} else if (type == RELATIONSHIP_BLOCKED) {
 		/* blocked buddy */
@@ -6995,15 +7061,11 @@ discord_chat_pinned_by_room_id(PurpleConnection *pc, PurpleChatConversation *cha
 static void
 discord_chat_leave(PurpleConnection *pc, int id)
 {
+	DiscordAccount *da = purple_connection_get_protocol_data(pc);
 	PurpleChatConversation *chatconv;
 	/* TODO check source */
 	chatconv = purple_conversations_find_chat(pc, id);
-	guint64 room_id = *(guint64 *) purple_conversation_get_data(PURPLE_CONVERSATION(chatconv), "id");
-
-	if (!room_id) {
-		/* TODO FIXME? */
-		room_id = to_int(purple_conversation_get_name(PURPLE_CONVERSATION(chatconv)));
-	}
+	guint64 room_id = discord_get_channel_id_from_conv(da, PURPLE_CONVERSATION(chatconv));
 
 	discord_chat_leave_by_room_id(pc, room_id);
 }
@@ -7011,15 +7073,11 @@ discord_chat_leave(PurpleConnection *pc, int id)
 static void
 discord_chat_pinned(PurpleConnection *pc, int id)
 {
+	DiscordAccount *da = purple_connection_get_protocol_data(pc);
 	PurpleChatConversation *chatconv;
 	/* TODO check source */
 	chatconv = purple_conversations_find_chat(pc, id);
-	guint64 room_id = *(guint64 *) purple_conversation_get_data(PURPLE_CONVERSATION(chatconv), "id");
-
-	if (!room_id) {
-		/* TODO FIXME? */
-		room_id = to_int(purple_conversation_get_name(PURPLE_CONVERSATION(chatconv)));
-	}
+	guint64 room_id = discord_get_channel_id_from_conv(da, PURPLE_CONVERSATION(chatconv));
 
 	discord_chat_pinned_by_room_id(pc, chatconv, room_id);
 }
@@ -7030,12 +7088,7 @@ discord_chat_threads(PurpleConnection *pc, int id, const gchar *filter)
 	DiscordAccount *da = purple_connection_get_protocol_data(pc);
 	PurpleChatConversation *chatconv;
 	chatconv = purple_conversations_find_chat(pc, id);
-	guint64 room_id = *(guint64 *) purple_conversation_get_data(PURPLE_CONVERSATION(chatconv), "id");
-
-	if (!room_id) {
-		/* TODO FIXME? */
-		room_id = to_int(purple_conversation_get_name(PURPLE_CONVERSATION(chatconv)));
-	}
+	guint64 room_id = discord_get_channel_id_from_conv(da, PURPLE_CONVERSATION(chatconv));
 
 	DiscordGuild *guild = NULL;
 	DiscordChannel *channel = discord_get_channel_global_int_guild(da, room_id, &guild);
@@ -7091,12 +7144,7 @@ discord_chat_roles(PurpleConnection *pc, int id)
 	DiscordAccount *da = purple_connection_get_protocol_data(pc);
 	PurpleChatConversation *chatconv;
 	chatconv = purple_conversations_find_chat(pc, id);
-	guint64 room_id = *(guint64 *) purple_conversation_get_data(PURPLE_CONVERSATION(chatconv), "id");
-
-	if (!room_id) {
-		/* TODO FIXME? */
-		room_id = to_int(purple_conversation_get_name(PURPLE_CONVERSATION(chatconv)));
-	}
+	guint64 room_id = discord_get_channel_id_from_conv(da, PURPLE_CONVERSATION(chatconv));
 
 	DiscordGuild *guild = NULL;
 	discord_get_channel_global_int_guild(da, room_id, &guild);
@@ -7137,13 +7185,7 @@ discord_chat_invite(PurpleConnection *pc, int id, const char *message, const cha
 
 	da = purple_connection_get_protocol_data(pc);
 	chatconv = purple_conversations_find_chat(pc, id);
-	guint64 *room_id_ptr = purple_conversation_get_data(PURPLE_CONVERSATION(chatconv), "id");
-
-	if(!room_id_ptr) {
-		return;
-	}
-
-	room_id = *room_id_ptr;
+	room_id = discord_get_channel_id_from_conv(da, PURPLE_CONVERSATION(chatconv));
 	user = discord_get_user_fullname(da, who);
 
 	if (!user) {
@@ -7177,17 +7219,11 @@ discord_chat_invite(PurpleConnection *pc, int id, const char *message, const cha
 static void
 discord_chat_nick(PurpleConnection *pc, int id, const gchar *new_nick)
 {
+	DiscordAccount *da = purple_connection_get_protocol_data(pc);
 	PurpleChatConversation *chatconv;
 	/* TODO check source */
 	chatconv = purple_conversations_find_chat(pc, id);
-	guint64 room_id = *(guint64 *) purple_conversation_get_data(PURPLE_CONVERSATION(chatconv), "id");
-
-	if (!room_id) {
-		/* TODO FIXME? */
-		room_id = to_int(purple_conversation_get_name(PURPLE_CONVERSATION(chatconv)));
-	}
-
-	DiscordAccount *da = purple_connection_get_protocol_data(pc);
+	guint64 room_id = discord_get_channel_id_from_conv(da, PURPLE_CONVERSATION(chatconv));
 
 	DiscordGuild *guild = NULL;
 	discord_get_channel_global_int_guild(da, room_id, &guild);
@@ -7213,21 +7249,16 @@ discord_chat_nick(PurpleConnection *pc, int id, const gchar *new_nick)
 static void
 discord_chat_kick_username(PurpleConnection *pc, int id, const gchar *username)
 {
+	DiscordAccount *da = purple_connection_get_protocol_data(pc);
 	PurpleChatConversation *chatconv;
 
 	g_return_if_fail(username && *username);
 
 	/* TODO check source */
 	chatconv = purple_conversations_find_chat(pc, id);
-	guint64 room_id = *(guint64 *) purple_conversation_get_data(PURPLE_CONVERSATION(chatconv), "id");
-
-	if (!room_id) {
-		room_id = to_int(purple_conversation_get_name(PURPLE_CONVERSATION(chatconv)));
-	}
+	guint64 room_id = discord_get_channel_id_from_conv(da, PURPLE_CONVERSATION(chatconv));
 
 	g_return_if_fail(room_id);
-
-	DiscordAccount *da = purple_connection_get_protocol_data(pc);
 
 	DiscordGuild *guild = NULL;
 	discord_get_channel_global_int_guild(da, room_id, &guild);
@@ -7257,21 +7288,16 @@ discord_chat_kick_username(PurpleConnection *pc, int id, const gchar *username)
 static void
 discord_chat_ban_username(PurpleConnection *pc, int id, const gchar *username)
 {
+	DiscordAccount *da = purple_connection_get_protocol_data(pc);
 	PurpleChatConversation *chatconv;
 
 	g_return_if_fail(username && *username);
 
 	/* TODO check source */
 	chatconv = purple_conversations_find_chat(pc, id);
-	guint64 room_id = *(guint64 *) purple_conversation_get_data(PURPLE_CONVERSATION(chatconv), "id");
-
-	if (!room_id) {
-		room_id = to_int(purple_conversation_get_name(PURPLE_CONVERSATION(chatconv)));
-	}
+	guint64 room_id = discord_get_channel_id_from_conv(da, PURPLE_CONVERSATION(chatconv));
 
 	g_return_if_fail(room_id);
-
-	DiscordAccount *da = purple_connection_get_protocol_data(pc);
 
 	DiscordGuild *guild = NULL;
 	discord_get_channel_global_int_guild(da, room_id, &guild);
@@ -7954,7 +7980,7 @@ static void
 discord_mark_conv_seen(PurpleConversation *conv, PurpleConversationUpdateType type)
 {
 	PurpleConnection *pc;
-	DiscordAccount *ya;
+	DiscordAccount *da;
 
 	if (type != PURPLE_CONVERSATION_UPDATE_UNSEEN) {
 		return;
@@ -7970,19 +7996,11 @@ discord_mark_conv_seen(PurpleConversation *conv, PurpleConversationUpdateType ty
 		return;
 	}
 
-	ya = purple_connection_get_protocol_data(pc);
-
-	guint64 *room_id_ptr = purple_conversation_get_data(conv, "id");
-	guint64 room_id = 0;
-
-	if (room_id_ptr) {
-		room_id = *room_id_ptr;
-	} else {
-		room_id = to_int(g_hash_table_lookup(ya->one_to_ones_rev, purple_conversation_get_name(conv)));
-	}
+	da = purple_connection_get_protocol_data(pc);
+	guint64 room_id = discord_get_channel_id_from_conv(da, conv);
 
 	if (room_id != 0) {
-		discord_mark_room_messages_read(ya, room_id);
+		discord_mark_room_messages_read(da, room_id);
 	}
 
 }
@@ -8011,15 +8029,7 @@ discord_conv_send_typing(PurpleConversation *conv, PurpleIMTypingState state, Di
 		ya = purple_connection_get_protocol_data(pc);
 	}
 
-	guint64 *room_id_ptr = purple_conversation_get_data(conv, "id");
-	guint64 room_id = 0;
-
-	if (room_id_ptr) {
-		room_id = *room_id_ptr;
-	} else {
-		room_id = to_int(g_hash_table_lookup(ya->one_to_ones_rev, purple_conversation_get_name(conv)));
-	}
-
+	guint64 room_id = discord_get_channel_id_from_conv(ya, conv);
 	if (room_id == 0) {
 		return 0;
 	}
@@ -8207,9 +8217,7 @@ discord_chat_send(PurpleConnection *pc, gint id,
 
 	da = purple_connection_get_protocol_data(pc);
 	chatconv = purple_conversations_find_chat(pc, id);
-	guint64 *room_id_ptr = purple_conversation_get_data(PURPLE_CONVERSATION(chatconv), "id");
-	g_return_val_if_fail(room_id_ptr, -1);
-	guint64 room_id = *room_id_ptr;
+	guint64 room_id = discord_get_channel_id_from_conv(da, PURPLE_CONVERSATION(chatconv));
 
 	gchar *d_message = g_strdup(message);
 
@@ -8966,6 +8974,9 @@ discord_add_account_options(GList *account_options)
 	option = purple_account_option_bool_new(_("Use status message as in-game info"), "use-status-as-game", FALSE);
 	account_options = g_list_append(account_options, option);
 
+	option = purple_account_option_bool_new(_("Override global custom status message"), "use-status-as-global-status", FALSE);
+	account_options = g_list_append(account_options, option);
+
 	option = purple_account_option_bool_new(_("Auto-create rooms on buddy list"), "populate-blist", TRUE);
 	account_options = g_list_append(account_options, option);
 
@@ -9394,11 +9405,7 @@ discord_reply_cb(DiscordAccount *da, JsonNode *node, gpointer user_data)
 static gchar *
 discord_get_thread_id_from_timestamp(DiscordAccount *da, PurpleConversation *conv, const gchar *timestamp)
 {
-	guint64 *room_id_ptr = purple_conversation_get_data(conv, "id");
-	if (!room_id_ptr) {
-		return NULL;
-	}
-	guint64 room_id = *room_id_ptr;
+	guint64 room_id = discord_get_channel_id_from_conv(da, conv);
 	DiscordChannel *channel = discord_get_channel_global_int(da, room_id);
 	if (!channel) {
 		return NULL;
@@ -9565,7 +9572,7 @@ discord_chat_get_history(gpointer user_data, int action)
 	PurpleConversation *conv = user_data;
 	PurpleConnection *pc = purple_conversation_get_connection(conv);
 	DiscordAccount *da = purple_connection_get_protocol_data(pc);
-	guint64 room_id = *(guint64 *) purple_conversation_get_data(conv, "id");
+	guint64 room_id = discord_get_channel_id_from_conv(da, conv);
 
 	DiscordChannel *channel = discord_get_channel_global_int_guild(da, room_id, NULL);
 	if (channel == NULL) {
@@ -9734,7 +9741,7 @@ discord_cmd_reply(PurpleConversation *conv, const gchar *cmd, gchar **args, gcha
 {
 	PurpleConnection *pc = purple_conversation_get_connection(conv);
 	DiscordAccount *da = purple_connection_get_protocol_data(pc);
-	guint64 room_id = *(guint64 *) purple_conversation_get_data(conv, "id");
+	guint64 room_id = discord_get_channel_id_from_conv(da, conv);
 
 	if (pc == NULL || (int)room_id == -1) {
 		return PURPLE_CMD_RET_FAILED;
@@ -9759,7 +9766,7 @@ discord_cmd_react(PurpleConversation *conv, const gchar *cmd, gchar **args, gcha
 {
 	PurpleConnection *pc = purple_conversation_get_connection(conv);
 	DiscordAccount *da = purple_connection_get_protocol_data(pc);
-	guint64 id = *(guint64 *) purple_conversation_get_data(conv, "id");
+	guint64 id = discord_get_channel_id_from_conv(da, conv);
 
 	if (pc == NULL || (int)id == -1) {
 		return PURPLE_CMD_RET_FAILED;
@@ -9779,7 +9786,7 @@ discord_cmd_unreact(PurpleConversation *conv, const gchar *cmd, gchar **args, gc
 {
 	PurpleConnection *pc = purple_conversation_get_connection(conv);
 	DiscordAccount *da = purple_connection_get_protocol_data(pc);
-	guint64 id = *(guint64 *) purple_conversation_get_data(conv, "id");
+	guint64 id = discord_get_channel_id_from_conv(da, conv);
 
 	if (pc == NULL || (int)id == -1) {
 		return PURPLE_CMD_RET_FAILED;
@@ -9904,7 +9911,7 @@ discord_cmd_thread(PurpleConversation *conv, const gchar *cmd, gchar **args, gch
 {
 	PurpleConnection *pc = purple_conversation_get_connection(conv);
 	DiscordAccount *da = purple_connection_get_protocol_data(pc);
-	guint64 room_id = *(guint64 *) purple_conversation_get_data(conv, "id");
+	guint64 room_id = discord_get_channel_id_from_conv(da, conv);
 
 	if (pc == NULL || (int)room_id == -1) {
 		return PURPLE_CMD_RET_FAILED;
@@ -9929,7 +9936,7 @@ discord_cmd_thread_history(PurpleConversation *conv, const gchar *cmd, gchar **a
 {
 	PurpleConnection *pc = purple_conversation_get_connection(conv);
 	DiscordAccount *da = purple_connection_get_protocol_data(pc);
-	guint64 room_id = *(guint64 *) purple_conversation_get_data(conv, "id");
+	guint64 room_id = discord_get_channel_id_from_conv(da, conv);
 
 	if (pc == NULL || (int)room_id == -1) {
 		return PURPLE_CMD_RET_FAILED;
@@ -9948,7 +9955,7 @@ discord_cmd_get_history(PurpleConversation *conv, const gchar *cmd, gchar **args
 {
 	PurpleConnection *pc = purple_conversation_get_connection(conv);
 	DiscordAccount *da = purple_connection_get_protocol_data(pc);
-	guint64 room_id = *(guint64 *) purple_conversation_get_data(conv, "id");
+	guint64 room_id = discord_get_channel_id_from_conv(da, conv);
 
 	if (pc == NULL || (int)room_id == -1) {
 		return PURPLE_CMD_RET_FAILED;
@@ -9973,7 +9980,7 @@ discord_cmd_get_server_name(PurpleConversation *conv, const gchar *cmd, gchar **
 {
 	PurpleConnection *pc = purple_conversation_get_connection(conv);
 	DiscordAccount *da = purple_connection_get_protocol_data(pc);
-	guint64 room_id = *(guint64 *) purple_conversation_get_data(conv, "id");
+	guint64 room_id = discord_get_channel_id_from_conv(da, conv);
 
 	if (pc == NULL || (int)room_id == -1) {
 		return PURPLE_CMD_RET_FAILED;
@@ -10135,8 +10142,8 @@ discord_xfer_send_init(PurpleXfer *xfer)
 	g_free(load_error);
 
 	goffset file_len = g_mapped_file_get_length(file);
-	if (file_len > 25000000) {
-		purple_xfer_error(PURPLE_XFER_SEND, acct, purple_xfer_get_remote_user(xfer), _("Maximum file size is 25MB"));
+	if (file_len > 10000000) {
+		purple_xfer_error(PURPLE_XFER_SEND, acct, purple_xfer_get_remote_user(xfer), _("Maximum file size is 10MB"));
 		// "just for show"
 		purple_xfer_cancel_local(xfer);
 		g_mapped_file_unref(file);
@@ -10236,16 +10243,16 @@ discord_chat_send_file(PurpleConnection *pc, int id, const gchar *filename) {
 	DiscordAccount *da = purple_connection_get_protocol_data(pc);
 	PurpleConvChat *chatconv = purple_conversations_find_chat(pc, id);
 	PurpleConversation *conv = PURPLE_CONVERSATION(chatconv);
-	guint64 *room_id_ptr = purple_conversation_get_data(conv, "id");
+	guint64 room_id = discord_get_channel_id_from_conv(da, conv);
 
-	if (room_id_ptr == NULL) {
+	if (room_id == 0) {
 			purple_debug_error("discord", "Couldn't find room id of chat: %s\n", conv->name);
 			purple_notify_error(da, conv->name, _("Couldn't find room id"), _("Check debug messages for more info"), 
 				purple_request_cpar_from_connection(pc));
 			return;
 	}
 
-	PurpleXfer *xfer = discord_create_xfer(pc, *room_id_ptr, conv->name);
+	PurpleXfer *xfer = discord_create_xfer(pc, room_id, conv->name);
 
 	// Pidgin itself doesn't actually let you drag and drop files into
 	// conversations, but this is in case any other client does (or Pidgin
@@ -10497,6 +10504,20 @@ typedef struct
 {
 	PurplePluginProtocolInfo parent;
 
+	GHashTable *(* 	get_account_text_table)(PurpleAccount *account);
+	#if !PURPLE_VERSION_CHECK(2, 6, 0)
+		gboolean (*initiate_media)(PurpleAccount *account, const char *who, PurpleMediaSessionType type);
+		PurpleMediaCaps (*get_media_caps)(PurpleAccount *account, const char *who);
+	#endif
+	#if !PURPLE_VERSION_CHECK(2, 7, 0)
+		PurpleMood *(*get_moods)(PurpleAccount *account);
+		void (*set_public_alias)(PurpleConnection *gc, const char *alias, PurpleSetPublicAliasSuccessCallback success_cb, PurpleSetPublicAliasFailureCallback failure_cb);
+		void (*get_public_alias)(PurpleConnection *gc, PurpleGetPublicAliasSuccessCallback success_cb, PurpleGetPublicAliasFailureCallback failure_cb);
+	#endif
+	#if !PURPLE_VERSION_CHECK(2, 8, 0)
+		void (*add_buddy_with_invite)(PurpleConnection *pc, PurpleBuddy *buddy, PurpleGroup *group, const char *message);
+		void (*add_buddies_with_invite)(PurpleConnection *pc, GList *buddies, GList *groups, const char *message);
+	#endif
 	#if !PURPLE_VERSION_CHECK(2, 14, 0)
 		char *(*get_cb_alias)(PurpleConnection *gc, int id, const char *who);
 		gboolean (*chat_can_receive_file)(PurpleConnection *, int id);
@@ -10526,7 +10547,7 @@ plugin_init(PurplePlugin *plugin)
 
 	info->extra_info = prpl_info;
 #if PURPLE_MINOR_VERSION >= 5
-	prpl_info->struct_size = sizeof(PurplePluginProtocolInfo);
+	prpl_info->struct_size = sizeof(PurplePluginProtocolInfoExt);
 #endif
 #if PURPLE_MINOR_VERSION >= 8
 /* prpl_info->add_buddy_with_invite = discord_add_buddy_with_invite; */
@@ -10580,6 +10601,11 @@ plugin_init(PurplePlugin *plugin)
 	#else
 		prpl_info_ext->chat_send_file = discord_chat_send_file;
 		prpl_info_ext->chat_can_receive_file = discord_chat_can_receive_file;
+	#endif
+	#if PURPLE_VERSION_CHECK(2, 14, 0)
+		prpl_info->get_cb_alias = discord_get_cb_alias;
+	#else
+		prpl_info_ext->get_cb_alias = discord_get_cb_alias;
 	#endif
 
 	prpl_info->roomlist_get_list = discord_roomlist_get_list;
