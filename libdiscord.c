@@ -10447,7 +10447,6 @@ typedef struct
 {
 	PurplePluginProtocolInfo parent;
 
-	GHashTable *(* 	get_account_text_table)(PurpleAccount *account);
 	#if !PURPLE_VERSION_CHECK(2, 6, 0)
 		gboolean (*initiate_media)(PurpleAccount *account, const char *who, PurpleMediaSessionType type);
 		PurpleMediaCaps (*get_media_caps)(PurpleAccount *account, const char *who);
@@ -10489,12 +10488,7 @@ plugin_init(PurplePlugin *plugin)
 	}
 
 	info->extra_info = prpl_info;
-#if PURPLE_MINOR_VERSION >= 5
 	prpl_info->struct_size = sizeof(PurplePluginProtocolInfoExt);
-#endif
-#if PURPLE_MINOR_VERSION >= 8
-/* prpl_info->add_buddy_with_invite = discord_add_buddy_with_invite; */
-#endif
 
 	prpl_info->options = OPT_PROTO_CHAT_TOPIC | OPT_PROTO_SLASH_COMMANDS_NATIVE | OPT_PROTO_UNIQUE_CHATNAME | OPT_PROTO_IM_IMAGE | OPT_PROTO_PASSWORD_OPTIONAL;
 	prpl_info->protocol_options = discord_add_account_options(prpl_info->protocol_options);
@@ -10562,7 +10556,7 @@ static PurplePluginInfo info = {
 	/*	PURPLE_MAJOR_VERSION,
 		PURPLE_MINOR_VERSION,
 	*/
-	2, 1,
+	2, 5,
 	PURPLE_PLUGIN_PROTOCOL,			/* type */
 	NULL,							/* ui_requirement */
 	0,								/* flags */
