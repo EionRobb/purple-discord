@@ -4657,27 +4657,33 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		if (!guild) {
 			return;
 		}
-		const gchar *status = json_object_get_string_member(data, "status");
-		if (purple_strequal(status, "APPROVED")) {
-			info = g_strdup_printf(_("Your request to join the server %s has been approved!"), guild->name);
-		} else {
-			JsonObject *request = json_object_get_object_member(data, "request");
-			const gchar *rejection_reason = json_object_get_string_member(request, "rejection_reason");
-			if (rejection_reason == NULL) {
-				// Probably pending
-				info = g_strdup_printf(_("Your request to join the server %s is currently pending. You will be notified of any updates regarding your request."), guild->name);
+		JsonObject *request = json_object_get_object_member(data, "request");
+		guint64 user_id = json_object_get_int_member(request, "user_id");
+		if (user_id == da->self_user_id) {
+			// We only care about our own requests
+			const gchar *status = json_object_get_string_member(data, "status");
+			if (purple_strequal(status, "APPROVED")) {
+					info = g_strdup_printf(_("Your request to join the server %s has been approved!"), guild->name);
 			} else {
-				info = g_strdup_printf(_("Your request to join the server %s was rejected. The reason given was:\n\n%s"), guild->name, rejection_reason);
+				const gchar *rejection_reason = json_object_get_string_member(request, "rejection_reason");
+				if (rejection_reason == NULL) {
+					// Probably pending
+					info = g_strdup_printf(_("Your request to join the server %s is currently pending. You will be notified of any updates regarding your request."), guild->name);
+				} else {
+					info = g_strdup_printf(_("Your request to join the server %s was rejected. The reason given was:\n\n%s"), guild->name, rejection_reason);
+				}
 			}
 		}
 
-		purple_notify_info(
-			da->pc,
-			_("Server Join Request Update"),
-			guild->name,
-			info
-		);
-		g_free(info);
+		if (info != NULL) {
+			purple_notify_info(
+				da->pc,
+				_("Server Join Request Update"),
+				guild->name,
+				info
+			);
+			g_free(info);
+		}
 
 	} else if (purple_strequal(type, "CHANNEL_RECIPIENT_ADD") || purple_strequal(type, "CHANNEL_RECIPIENT_REMOVE")) {
 		DiscordUser *user = discord_upsert_user(da->new_users, json_object_get_object_member(data, "user"));
