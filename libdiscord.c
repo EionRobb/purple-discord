@@ -4282,7 +4282,7 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 			}
 		}
 
-	} else if (purple_strequal(type, "RELATIONSHIP_ADD")) {
+	} else if (purple_strequal(type, "RELATIONSHIP_ADD") || purple_strequal(type, "RELATIONSHIP_UPDATE")) {
 		discord_create_relationship(da, data);
 	} else if (purple_strequal(type, "RELATIONSHIP_REMOVE")) {
 		guint64 user_id = to_int(json_object_get_string_member(data, "id"));
@@ -5157,11 +5157,21 @@ discord_friends_auth_accept(
 	DiscordUserInviteResponseStore *store = userdata;
 	DiscordUser *user = store->user;
 	DiscordAccount *da = store->da;
+	gchar *postdata;
+	JsonObject *data = json_object_new();
+
+	json_object_set_int_member(data, "type", 1);
+	//TODO do we need one of these too?
+	//json_object_set_boolean_member(data, "from_friend_suggestion", TRUE);
+	//json_object_set_boolean_member(data, "confirm_stranger_request", TRUE);
+	postdata = json_object_to_string(data);
 
 	gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/users/@me/relationships/%" G_GUINT64_FORMAT, user->id);
-	discord_fetch_url_with_method(da, "PUT", url, NULL, NULL, NULL);
+	discord_fetch_url_with_method(da, "PUT", url, postdata, NULL, NULL);
 	g_free(url);
 
+	g_free(postdata);
+	json_object_unref(data);
 	g_free(store);
 }
 
@@ -5176,8 +5186,8 @@ discord_friends_auth_reject(
 	DiscordUser *user = store->user;
 	DiscordAccount *da = store->da;
 
-	gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/users/@me/relationships/%" G_GUINT64_FORMAT, user->id);
-	discord_fetch_url_with_method(da, "DELETE", url, NULL, NULL, NULL);
+	gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/users/@me/relationships/%" G_GUINT64_FORMAT "/ignore", user->id);
+	discord_fetch_url_with_method(da, "PUT", url, NULL, NULL, NULL);
 	g_free(url);
 
 	g_free(store);
@@ -5198,13 +5208,15 @@ discord_create_relationship(DiscordAccount *da, JsonObject *json)
 	gchar *merged_username = discord_create_fullname(user);
 
 	if (type == RELATIONSHIP_PENDING_INCOMING) {
-		/* request add */
-		DiscordUserInviteResponseStore *store = g_new0(DiscordUserInviteResponseStore, 1);
+		if (!json_object_has_member(json, "should_notify") || json_object_get_boolean_member(json, "should_notify")) {
+			/* request add */
+			DiscordUserInviteResponseStore *store = g_new0(DiscordUserInviteResponseStore, 1);
 
-		store->da = da;
-		store->user = user;
+			store->da = da;
+			store->user = user;
 
-		purple_account_request_authorization(da->account, merged_username, NULL, NULL, NULL, FALSE, discord_friends_auth_accept, discord_friends_auth_reject, store);
+			purple_account_request_authorization(da->account, merged_username, NULL, user->global_name, NULL, TRUE, discord_friends_auth_accept, discord_friends_auth_reject, store);
+		}
 	} else if (type == RELATIONSHIP_FRIEND) {
 		/* buddy on list */
 		PurpleBuddy *buddy = purple_blist_find_buddy(da->account, merged_username);
@@ -8420,15 +8432,16 @@ discord_add_buddy(PurpleConnection *pc, PurpleBuddy *buddy, PurpleGroup *group
 	usersplit = g_strsplit_set(buddy_name, "#", 2);
 	data = json_object_new();
 	json_object_set_string_member(data, "username", g_strstrip(usersplit[0]));
-	if (usersplit[1] && *usersplit[1]) {
-		json_object_set_string_member(data, "discriminator", g_strstrip(usersplit[1]));
+	if (usersplit[1] && *usersplit[1] && !purple_strequal(g_strstrip(usersplit[1]), "0000")) {
+		json_object_set_string_member(data, "discriminator", usersplit[1]);
 	} else {
 		json_object_set_null_member(data, "discriminator");
 	}
 
 	postdata = json_object_to_string(data);
 
-	discord_fetch_url(da, "https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/users/@me/relationships", postdata, discord_add_buddy_cb, buddy);
+	const gchar *url = "https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/users/@me/relationships";
+	discord_fetch_url_with_method(da, "POST", url, postdata, discord_add_buddy_cb, buddy);
 
 	g_free(postdata);
 	g_strfreev(usersplit);
@@ -8838,7 +8851,7 @@ discord_unblock_user(PurpleConnection *pc, const char *who)
 	}
 
 	url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/users/@me/relationships/%" G_GUINT64_FORMAT, user->id);
-	discord_fetch_url_with_method(da, "DELETE", url, NULL, NULL, NULL);
+	discord_fetch_url_with_method(da, "PUT", url, "{\"type\":1}", NULL, NULL);
 	g_free(url);
 }
 
