@@ -52,6 +52,7 @@
 #include "purple_compat.h"
 
 #include "markdown.h"
+#include "ratelimiter.h"
 
 // Prevent segfault in libpurple ssl plugins
 #define purple_ssl_read(a, b, c)  ((a) && (a)->private_data ? purple_ssl_read((a), (b), (c)) : 0)
@@ -104,6 +105,28 @@ static GRegex *natural_mention_regex = NULL;
 static GRegex *discord_mention_regex = NULL;
 static GRegex *discord_spaced_mention_regex = NULL;
 static GRegex *discord_timestamp_regex = NULL;
+
+/*
+ 	xRateAllowedPerSecond = (int)( (double)xrateRemaining / (double)xrateResetAfter );
+	xRateAllowedRemaining = xRateAllowedPerSecond;
+	xRateDelayPerRequest =  (int)((1.0 / (double)xRateAllowedPerSecond) * 1000.0);
+ */
+
+const int init_xrateLimit=40;
+const int init_xrateRemaining=10;
+const double init_xrateReset=55;
+const double init_xrateResetAfter=1;
+const int init_xRateAllowedPerSecond=15;
+const int init_xRateDelayPerRequest=(int)((1.0 / (double)init_xRateAllowedPerSecond) * 1000.0);
+const int init_xRateAllowedRemaining=10;
+
+static int xrateLimit=init_xrateLimit;
+static int xrateRemaining=init_xrateRemaining;
+static double xrateReset=init_xrateReset;
+static double xrateResetAfter=init_xrateResetAfter;
+static int xRateAllowedPerSecond=init_xRateAllowedPerSecond;
+static int xRateDelayPerRequest=init_xRateDelayPerRequest;
+static int xRateAllowedRemaining=init_xRateAllowedRemaining;
 
 typedef enum {
 	OP_DISPATCH = 0,
@@ -1511,6 +1534,39 @@ discord_cookies_to_string(DiscordAccount *ya)
 }
 
 static void discord_fetch_url_with_method_delay(DiscordAccount *da, const gchar *method, const gchar *url, const gchar *postdata, DiscordProxyCallbackFunc callback, gpointer user_data, guint delay);
+static void UpdateRateLimits(const gchar *xrateLimitS, const gchar *xrateRemainingS, const gchar *xRateReset, const gchar *xRateResetAfter)
+{
+	if(!xrateLimitS || !xrateRemainingS || !xRateReset || !xRateResetAfter) return;
+	xrateLimit=atoi(xrateLimitS);
+	purple_debug_info("discord", "X-RateLimit-Limit: %s\n", xrateLimitS);
+	xrateRemaining=atoi(xrateRemainingS);
+	purple_debug_info("discord", "X-RateLimit-Remaining: %s\n", xrateRemainingS);
+	xrateReset=atof(xRateReset);
+	purple_debug_info("discord", "X-RateLimit-Reset: %s\n", xRateReset);
+	xrateResetAfter=atof(xRateResetAfter) * 4.0;
+	purple_debug_info("discord", "X-RateLimit-Reset-After: %s\n", xRateResetAfter);
+	if (xrateResetAfter > 0) {
+		xRateAllowedPerSecond = (int)( (double)xrateRemaining / (double)xrateResetAfter );
+		xRateAllowedRemaining = xRateAllowedPerSecond;
+		xRateDelayPerRequest = xRateAllowedPerSecond > 0 ? 
+			(int)((1.0 / (double)xRateAllowedPerSecond) * 1000.0) : 1000;
+		purple_debug_info("discord", "Rate limits calculated: %d requests/sec, %d ms delay\n", 
+			xRateAllowedPerSecond, xRateDelayPerRequest);
+		initialize_rate_limiter(xRateDelayPerRequest);
+	} else {
+		purple_debug_warning("discord", "Invalid rate limit reset value\n");
+		xRateAllowedPerSecond = 1;
+		xRateAllowedRemaining = 1; 
+		xRateDelayPerRequest = 1000;
+	}
+}
+static void parse_rate_limit_headers(PurpleHttpResponse *response) {
+    const gchar *xrateLimitS = purple_http_response_get_header(response,"X-RateLimit-Limit");
+    const gchar *xrateRemainingS = purple_http_response_get_header(response,"X-RateLimit-Remaining");  
+    const gchar *xRateReset = purple_http_response_get_header(response,"X-RateLimit-Reset");
+    const gchar *xRateResetAfter = purple_http_response_get_header(response,"X-RateLimit-Reset-After");
+    UpdateRateLimits(xrateLimitS, xrateRemainingS, xRateReset, xRateResetAfter);
+}
 
 static void
 discord_response_callback(PurpleHttpConnection *http_conn,
@@ -1519,6 +1575,7 @@ discord_response_callback(PurpleHttpConnection *http_conn,
 	gsize len;
 	const gchar *url_text = purple_http_response_get_data(response, &len);
 	const gchar *error_message = purple_http_response_get_error(response);
+	parse_rate_limit_headers(response);
 	const gchar *body;
 	gsize body_len;
 	DiscordProxyConnection *conn = user_data;
@@ -1698,7 +1755,7 @@ discord_fetch_url_with_method_delay(DiscordAccount *da, const gchar *method, con
 		request->url = g_strdup(url);
 		request->contents = postdata ? g_strdup(postdata) : NULL;
 
-		purple_timeout_add(delay + 30, discord_fetch_url_with_method_delay_cb, request);
+		rlimited_timeout_add(delay + MAX(65,xRateDelayPerRequest), discord_fetch_url_with_method_delay_cb, request);
 }
 
 static void
@@ -6427,7 +6484,7 @@ discord_socket_delay_write_data(DiscordAccount *ya, guchar *data, gsize data_len
 	info->type = type;
 
 	// Set timer for when to check the bucket again. Could probably make this more intelligent.
-	purple_timeout_add(1000, discord_socket_write_data_delay_cb, info);
+	rlimited_timeout_add(1000, discord_socket_write_data_delay_cb, info);
 }
 
 static void
@@ -10735,6 +10792,7 @@ PURPLE_DEFINE_TYPE_EXTENDED(
 static gboolean
 libpurple3_plugin_load(PurplePlugin *plugin, GError **error)
 {
+	initialize_rate_limiter(83);
 	discord_protocol_register_type(plugin);
 	discord_protocol = purple_protocols_add(DISCORD_TYPE_PROTOCOL, error);
 
@@ -10748,6 +10806,7 @@ libpurple3_plugin_load(PurplePlugin *plugin, GError **error)
 static gboolean
 libpurple3_plugin_unload(PurplePlugin *plugin, GError **error)
 {
+	stop_rate_limiter();
 	if (!plugin_unload(plugin, error)) {
 		return FALSE;
 	}
