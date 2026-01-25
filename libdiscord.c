@@ -4339,7 +4339,7 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 			}
 		}
 
-	} else if (purple_strequal(type, "RELATIONSHIP_ADD")) {
+	} else if (purple_strequal(type, "RELATIONSHIP_ADD") || purple_strequal(type, "RELATIONSHIP_UPDATE")) {
 		discord_create_relationship(da, data);
 	} else if (purple_strequal(type, "RELATIONSHIP_REMOVE")) {
 		guint64 user_id = to_int(json_object_get_string_member(data, "id"));
@@ -4714,27 +4714,33 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		if (!guild) {
 			return;
 		}
-		const gchar *status = json_object_get_string_member(data, "status");
-		if (purple_strequal(status, "APPROVED")) {
-			info = g_strdup_printf(_("Your request to join the server %s has been approved!"), guild->name);
-		} else {
-			JsonObject *request = json_object_get_object_member(data, "request");
-			const gchar *rejection_reason = json_object_get_string_member(request, "rejection_reason");
-			if (rejection_reason == NULL) {
-				// Probably pending
-				info = g_strdup_printf(_("Your request to join the server %s is currently pending. You will be notified of any updates regarding your request."), guild->name);
+		JsonObject *request = json_object_get_object_member(data, "request");
+		guint64 user_id = json_object_get_int_member(request, "user_id");
+		if (user_id == da->self_user_id) {
+			// We only care about our own requests
+			const gchar *status = json_object_get_string_member(data, "status");
+			if (purple_strequal(status, "APPROVED")) {
+					info = g_strdup_printf(_("Your request to join the server %s has been approved!"), guild->name);
 			} else {
-				info = g_strdup_printf(_("Your request to join the server %s was rejected. The reason given was:\n\n%s"), guild->name, rejection_reason);
+				const gchar *rejection_reason = json_object_get_string_member(request, "rejection_reason");
+				if (rejection_reason == NULL) {
+					// Probably pending
+					info = g_strdup_printf(_("Your request to join the server %s is currently pending. You will be notified of any updates regarding your request."), guild->name);
+				} else {
+					info = g_strdup_printf(_("Your request to join the server %s was rejected. The reason given was:\n\n%s"), guild->name, rejection_reason);
+				}
 			}
 		}
 
-		purple_notify_info(
-			da->pc,
-			_("Server Join Request Update"),
-			guild->name,
-			info
-		);
-		g_free(info);
+		if (info != NULL) {
+			purple_notify_info(
+				da->pc,
+				_("Server Join Request Update"),
+				guild->name,
+				info
+			);
+			g_free(info);
+		}
 
 	} else if (purple_strequal(type, "CHANNEL_RECIPIENT_ADD") || purple_strequal(type, "CHANNEL_RECIPIENT_REMOVE")) {
 		DiscordUser *user = discord_upsert_user(da->new_users, json_object_get_object_member(data, "user"));
@@ -5208,11 +5214,21 @@ discord_friends_auth_accept(
 	DiscordUserInviteResponseStore *store = userdata;
 	DiscordUser *user = store->user;
 	DiscordAccount *da = store->da;
+	gchar *postdata;
+	JsonObject *data = json_object_new();
+
+	json_object_set_int_member(data, "type", 1);
+	//TODO do we need one of these too?
+	//json_object_set_boolean_member(data, "from_friend_suggestion", TRUE);
+	//json_object_set_boolean_member(data, "confirm_stranger_request", TRUE);
+	postdata = json_object_to_string(data);
 
 	gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/users/@me/relationships/%" G_GUINT64_FORMAT, user->id);
-	discord_fetch_url_with_method(da, "PUT", url, NULL, NULL, NULL);
+	discord_fetch_url_with_method(da, "PUT", url, postdata, NULL, NULL);
 	g_free(url);
 
+	g_free(postdata);
+	json_object_unref(data);
 	g_free(store);
 }
 
@@ -5227,8 +5243,8 @@ discord_friends_auth_reject(
 	DiscordUser *user = store->user;
 	DiscordAccount *da = store->da;
 
-	gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/users/@me/relationships/%" G_GUINT64_FORMAT, user->id);
-	discord_fetch_url_with_method(da, "DELETE", url, NULL, NULL, NULL);
+	gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/users/@me/relationships/%" G_GUINT64_FORMAT "/ignore", user->id);
+	discord_fetch_url_with_method(da, "PUT", url, NULL, NULL, NULL);
 	g_free(url);
 
 	g_free(store);
@@ -5249,13 +5265,15 @@ discord_create_relationship(DiscordAccount *da, JsonObject *json)
 	gchar *merged_username = discord_create_fullname(user);
 
 	if (type == RELATIONSHIP_PENDING_INCOMING) {
-		/* request add */
-		DiscordUserInviteResponseStore *store = g_new0(DiscordUserInviteResponseStore, 1);
+		if (!json_object_has_member(json, "should_notify") || json_object_get_boolean_member(json, "should_notify")) {
+			/* request add */
+			DiscordUserInviteResponseStore *store = g_new0(DiscordUserInviteResponseStore, 1);
 
-		store->da = da;
-		store->user = user;
+			store->da = da;
+			store->user = user;
 
-		purple_account_request_authorization(da->account, merged_username, NULL, NULL, NULL, FALSE, discord_friends_auth_accept, discord_friends_auth_reject, store);
+			purple_account_request_authorization(da->account, merged_username, NULL, user->global_name, NULL, TRUE, discord_friends_auth_accept, discord_friends_auth_reject, store);
+		}
 	} else if (type == RELATIONSHIP_FRIEND) {
 		/* buddy on list */
 		PurpleBuddy *buddy = purple_blist_find_buddy(da->account, merged_username);
@@ -8471,15 +8489,16 @@ discord_add_buddy(PurpleConnection *pc, PurpleBuddy *buddy, PurpleGroup *group
 	usersplit = g_strsplit_set(buddy_name, "#", 2);
 	data = json_object_new();
 	json_object_set_string_member(data, "username", g_strstrip(usersplit[0]));
-	if (usersplit[1] && *usersplit[1]) {
-		json_object_set_string_member(data, "discriminator", g_strstrip(usersplit[1]));
+	if (usersplit[1] && *usersplit[1] && !purple_strequal(g_strstrip(usersplit[1]), "0000")) {
+		json_object_set_string_member(data, "discriminator", usersplit[1]);
 	} else {
 		json_object_set_null_member(data, "discriminator");
 	}
 
 	postdata = json_object_to_string(data);
 
-	discord_fetch_url(da, "https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/users/@me/relationships", postdata, discord_add_buddy_cb, buddy);
+	const gchar *url = "https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/users/@me/relationships";
+	discord_fetch_url_with_method(da, "POST", url, postdata, discord_add_buddy_cb, buddy);
 
 	g_free(postdata);
 	g_strfreev(usersplit);
@@ -8889,7 +8908,7 @@ discord_unblock_user(PurpleConnection *pc, const char *who)
 	}
 
 	url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/users/@me/relationships/%" G_GUINT64_FORMAT, user->id);
-	discord_fetch_url_with_method(da, "DELETE", url, NULL, NULL, NULL);
+	discord_fetch_url_with_method(da, "PUT", url, "{\"type\":1}", NULL, NULL);
 	g_free(url);
 }
 
@@ -10504,7 +10523,6 @@ typedef struct
 {
 	PurplePluginProtocolInfo parent;
 
-	GHashTable *(* 	get_account_text_table)(PurpleAccount *account);
 	#if !PURPLE_VERSION_CHECK(2, 6, 0)
 		gboolean (*initiate_media)(PurpleAccount *account, const char *who, PurpleMediaSessionType type);
 		PurpleMediaCaps (*get_media_caps)(PurpleAccount *account, const char *who);
@@ -10546,12 +10564,7 @@ plugin_init(PurplePlugin *plugin)
 	}
 
 	info->extra_info = prpl_info;
-#if PURPLE_MINOR_VERSION >= 5
 	prpl_info->struct_size = sizeof(PurplePluginProtocolInfoExt);
-#endif
-#if PURPLE_MINOR_VERSION >= 8
-/* prpl_info->add_buddy_with_invite = discord_add_buddy_with_invite; */
-#endif
 
 	prpl_info->options = OPT_PROTO_CHAT_TOPIC | OPT_PROTO_SLASH_COMMANDS_NATIVE | OPT_PROTO_UNIQUE_CHATNAME | OPT_PROTO_IM_IMAGE | OPT_PROTO_PASSWORD_OPTIONAL;
 	prpl_info->protocol_options = discord_add_account_options(prpl_info->protocol_options);
@@ -10619,7 +10632,7 @@ static PurplePluginInfo info = {
 	/*	PURPLE_MAJOR_VERSION,
 		PURPLE_MINOR_VERSION,
 	*/
-	2, 1,
+	2, 5,
 	PURPLE_PLUGIN_PROTOCOL,			/* type */
 	NULL,							/* ui_requirement */
 	0,								/* flags */
