@@ -29,10 +29,10 @@ jobs:
       - name: Download Pidgin
         if: steps.pidgin-cache.outputs.cache-hit != 'true'
         run: |
-          curl -L https://sourceforge.net/projects/pidgin/files/Pidgin/2.14.1/pidgin-2.14.1.tar.bz2/download -o pidgin.tar.bz2
+          curl --http1.1 -L https://sourceforge.net/projects/pidgin/files/Pidgin/2.14.1/pidgin-2.14.1.tar.bz2/download -o pidgin.tar.bz2
           tar -xf pidgin.tar.bz2
           mv pidgin-2.14.1 pidgin
-          curl -L https://sourceforge.net/projects/pidgin/files/Pidgin/2.14.1/pidgin-2.14.1-win32-bin.zip/download -o pidgin-win32bin.zip
+          curl --http1.1 -L https://sourceforge.net/projects/pidgin/files/Pidgin/2.14.1/pidgin-2.14.1-win32-bin.zip/download -o pidgin-win32bin.zip
           unzip pidgin-win32bin.zip
           cp pidgin-2.14.1-win32bin/libpurple.dll pidgin/libpurple/
       
@@ -47,19 +47,19 @@ jobs:
         if: steps.win32-cache.outputs.cache-hit != 'true'
         run: |
           mkdir win32-dev
-          curl -L http://ftp.gnome.org/pub/gnome/binaries/win32/glib/2.28/glib-dev_2.28.8-1_win32.zip -o glib-dev.zip
+          curl --http1.1 -L http://ftp.gnome.org/pub/gnome/binaries/win32/glib/2.28/glib-dev_2.28.8-1_win32.zip -o glib-dev.zip
           unzip glib-dev.zip -d win32-dev/glib-2.28.8
-          curl -L http://ftp.gnome.org/pub/gnome/binaries/win32/dependencies/gettext-runtime-dev_0.18.1.1-2_win32.zip -o gettext-runtime.zip
+          curl --http1.1 -L http://ftp.gnome.org/pub/gnome/binaries/win32/dependencies/gettext-runtime-dev_0.18.1.1-2_win32.zip -o gettext-runtime.zip
           unzip gettext-runtime.zip -d win32-dev/glib-2.28.8
-          curl -L http://ftp.gnome.org/pub/gnome/binaries/win32/dependencies/zlib-dev_1.2.5-2_win32.zip -o zlib-dev.zip
+          curl --http1.1 -L http://ftp.gnome.org/pub/gnome/binaries/win32/dependencies/zlib-dev_1.2.5-2_win32.zip -o zlib-dev.zip
           unzip zlib-dev.zip -d win32-dev/glib-2.28.8
 
           cd win32-dev
-          curl -L https://data.imfreedom.org/pidgin/win32/nss-3.24-nspr-4.12.tar.gz -o nss-3.24-nspr-4.12.tar.gz
+          curl --http1.1 -L https://data.imfreedom.org/pidgin/win32/nss-3.24-nspr-4.12.tar.gz -o nss-3.24-nspr-4.12.tar.gz
           tar -xf nss-3.24-nspr-4.12.tar.gz
-          curl -L https://github.com/jgeboski/purple-facebook/releases/download/downloads/json-glib-0.14.tar.gz -o json-glib.tar.gz
+          curl --http1.1 -L https://github.com/jgeboski/purple-facebook/releases/download/downloads/json-glib-0.14.tar.gz -o json-glib.tar.gz
           tar -xf json-glib.tar.gz
-          curl -L https://github.com/EionRobb/purple-discord/files/13785079/qrencode-4.1.1.zip -o qrencode.zip
+          curl --http1.1 -L https://github.com/EionRobb/purple-discord/files/13785079/qrencode-4.1.1.zip -o qrencode.zip
           unzip qrencode.zip
           cd ..
 
@@ -73,24 +73,28 @@ jobs:
           make libdiscord.dll
 
       - name: archive
-        if: ${{ !env.ACT }}
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master' && !env.ACT
         uses: actions/upload-artifact@v4
         with: 
             name: plugin 
             path: lib*.dll
 
+      - name: Set date
+        id: date
+        run: echo "DATE=$(date +%Y-%m-%d)" >> $GITHUB_OUTPUT
+
       - name: release
-        if: ${{ !env.ACT }}
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master' && !env.ACT
         uses: ncipollo/release-action@v1
         with:
           artifacts: lib*.dll
-          tag: nightly-${{ github.sha }}
-          name: Nightly ${{ github.sha }}
+          tag: daily-${{ steps.date.outputs.DATE }}
+          name: Daily ${{ steps.date.outputs.DATE }}
           allowUpdates: true
           makeLatest: true
 
       - name: attest
-        if: ${{ !env.ACT }}
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master' && !env.ACT
         uses: actions/attest-build-provenance@v1
         with:
           subject-path: lib*.dll
