@@ -267,6 +267,9 @@ msgstr ""
 msgid "Username"
 msgstr ""
 
+msgid "Display Name"
+msgstr ""
+
 msgid "Online"
 msgstr ""
 

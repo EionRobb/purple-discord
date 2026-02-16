@@ -2334,6 +2334,10 @@ discord_create_nickname(DiscordUser *author, DiscordGuild *guild, DiscordChannel
 				return g_strdup(author->name);
 		}
 
+		if (author->global_name) {
+			return g_strdup(author->global_name);
+		}
+
 		return discord_create_fullname(author);
 	}
 
@@ -3269,7 +3273,8 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 					g_free(emoji_str);
 					g_free(url);
 				} else {
-					gchar *reaction_str = discord_get_react_text(da, NULL, username, reaction_data);
+					DiscordUser *user = discord_get_user_fullname(da, username);
+					gchar *reaction_str = discord_get_react_text(da, NULL, user->global_name ? user->global_name : (user->name ? user->name : username), reaction_data);
 					discord_free_reaction(reaction_data);
 
 					if (reaction_str != NULL && conv != NULL) {
@@ -5186,6 +5191,7 @@ discord_friends_auth_reject(
 	DiscordUser *user = store->user;
 	DiscordAccount *da = store->da;
 
+	//TODO should this be a DELETE without the /ignore ?
 	gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/users/@me/relationships/%" G_GUINT64_FORMAT "/ignore", user->id);
 	discord_fetch_url_with_method(da, "PUT", url, NULL, NULL, NULL);
 	g_free(url);
@@ -8486,6 +8492,8 @@ discord_got_info(DiscordAccount *da, JsonNode *node, gpointer user_data)
 	JsonObject *info = json_node_get_object(node);
 	JsonArray *connected_accounts = json_object_get_array_member(info, "connected_accounts");
 	JsonArray *mutual_guilds = json_object_get_array_member(info, "mutual_guilds");
+	JsonArray *badges = json_object_get_array_member(info, "badges");
+	JsonObject *user_profile = json_object_get_object_member(info, "user_profile");
 	gint i;
 
 	user_info = purple_notify_user_info_new();
@@ -8495,6 +8503,10 @@ discord_got_info(DiscordAccount *da, JsonNode *node, gpointer user_data)
 	g_free(id_str);
 
 	purple_notify_user_info_add_pair_html(user_info, _("Username"), user->name);
+
+	if (user->global_name && *user->global_name) {
+		purple_notify_user_info_add_pair_html(user_info, _("Display Name"), user->global_name);
+	}
 
 	/* Display other non-profile info that we know about this buddy */
 	gchar *status_strings[8] = {
@@ -8515,6 +8527,18 @@ discord_got_info(DiscordAccount *da, JsonNode *node, gpointer user_data)
 	}
 	if (user->custom_status != NULL) {
 		purple_notify_user_info_add_pair_html(user_info, _("Custom Status"), user->custom_status);
+	}
+
+	if (user_profile) {
+		const gchar *bio = json_object_get_string_member(user_profile, "bio");
+		if (bio && *bio) {
+			purple_notify_user_info_add_pair_html(user_info, _("Bio"), bio);
+		}
+
+		const gchar *pronouns = json_object_get_string_member(user_profile, "pronouns");
+		if (pronouns && *pronouns) {
+			purple_notify_user_info_add_pair_html(user_info, _("Pronouns"), pronouns);
+		}
 	}
 
 	if (json_array_get_length(connected_accounts)) {
@@ -8565,6 +8589,18 @@ discord_got_info(DiscordAccount *da, JsonNode *node, gpointer user_data)
 			purple_notify_user_info_add_pair_html(user_info, guild->name, role_str->str);
 			g_string_free(role_str, TRUE);
 		}
+	}
+
+	if (json_array_get_length(badges)) {
+		purple_notify_user_info_add_section_break(user_info);
+		purple_notify_user_info_add_pair_html(user_info, _("Badges"), NULL);
+	}
+
+	for (i = json_array_get_length(badges) - 1; i >= 0; i--) {
+		JsonObject *badge = json_array_get_object_element(badges, i);
+		const gchar *name = json_object_get_string_member(badge, "description");
+
+		purple_notify_user_info_add_pair_plaintext(user_info, NULL, name);
 	}
 
 	gchar *username = discord_create_fullname(user);
