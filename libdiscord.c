@@ -8548,13 +8548,55 @@ discord_got_info(DiscordAccount *da, JsonNode *node, gpointer user_data)
 
 	for (i = json_array_get_length(connected_accounts) - 1; i >= 0; i--) {
 		JsonObject *account = json_array_get_object_element(connected_accounts, i);
+		const gchar *id = json_object_get_string_member(account, "id");
 		const gchar *type = json_object_get_string_member(account, "type");
 		const gchar *name = json_object_get_string_member(account, "name");
+		gchar *link = NULL, *type_alloc = NULL;
+		gchar *escaped_name = purple_markup_escape_text(name, -1);
 
-		/* const gchar *id = json_object_get_string_member(account, "id"); */
-		/* TODO href link to account? */
+		if (purple_strequal(type, "spotify")) {
+			link = g_strdup_printf("https://open.spotify.com/user/%s", purple_url_encode(id));
+		} else if (purple_strequal(type, "youtube")) {
+			type = "YouTube";
+			link = g_strdup_printf("https://www.youtube.com/channel/%s", purple_url_encode(id));
+		} else if (purple_strequal(type, "twitch")) {
+			link = g_strdup_printf("https://www.twitch.tv/%s", purple_url_encode(name));
+		} else if (purple_strequal(type, "twitter")) {
+			link = g_strdup_printf("https://x.com/%s", purple_url_encode(name));
+		} else if (purple_strequal(type, "instagram")) {
+			link = g_strdup_printf("https://www.instagram.com/%s", purple_url_encode(name));
+		} else if (purple_strequal(type, "steam")) {
+			link = g_strdup_printf("https://steamcommunity.com/profiles/%s", purple_url_encode(id));
+		} else if (purple_strequal(type, "reddit")) {
+			link = g_strdup_printf("https://www.reddit.com/u/%s", purple_url_encode(name));
+		} else if (purple_strequal(type, "github")) {
+			link = g_strdup_printf("https://www.github.com/%s", purple_url_encode(name));
+		} else if (purple_strequal(type, "roblox")) {
+			link = g_strdup_printf("https://www.roblox.com/users/%s/profile", purple_url_encode(id));
+		} else if (purple_strequal(type, "bluesky")) {
+			link = g_strdup_printf("https://bsky.app/profile/%s", purple_url_encode(name)); //TODO replace %3A with :
+		} else if (purple_strequal(type, "tiktok")) {
+			link = g_strdup_printf("https://www.tiktok.com/@%s", purple_url_encode(name));
+		} else if (purple_strequal(type, "domain")) {
+			link = g_strdup_printf("https://%s/", purple_url_encode(id));
+		} else if (purple_strequal(type, "battlenet")) {
+			type = "Battle.net";
+		}
 
-		purple_notify_user_info_add_pair_plaintext(user_info, type, name);
+		//Uppercase first letter of 'type'
+		if (type && *type) {
+			type_alloc = g_strdup(type);
+			type_alloc[0] = g_ascii_toupper(type_alloc[0]);
+			type = type_alloc;
+		}
+
+		gchar *display = link ? g_strdup_printf("<a href=\"%s\">%s</a>", link, escaped_name) : g_strdup(escaped_name);
+		purple_notify_user_info_add_pair_html(user_info, type, display);
+
+		g_free(display);
+		g_free(link);
+		g_free(escaped_name);
+		g_free(type_alloc);
 	}
 
 	if (json_array_get_length(mutual_guilds)) {
@@ -8613,19 +8655,26 @@ discord_get_info(PurpleConnection *pc, const gchar *username)
 {
 	DiscordAccount *da = purple_connection_get_protocol_data(pc);
 	gchar *url;
+	guint64 user_id;
 	DiscordUser *user = discord_get_user_fullname(da, username);
 
 	if (!user) {
-		PurpleNotifyUserInfo *user_info = purple_notify_user_info_new();
-		purple_notify_user_info_add_pair_html(user_info, _("Unknown user"), username);
-		purple_notify_userinfo(pc, username, user_info, NULL, NULL);
-		return;
+		user_id = to_int(username);
+		if (user_id == 0) {
+			PurpleNotifyUserInfo *user_info = purple_notify_user_info_new();
+			purple_notify_user_info_add_pair_html(user_info, _("Unknown user"), username);
+			purple_notify_userinfo(pc, username, user_info, NULL, NULL);
+			return;
+		}
+	} else {
+		user_id = user->id;
 	}
 
-	/* TODO string format fix */
-	url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/users/%" G_GUINT64_FORMAT "/profile", user->id);
+	url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/users/%" G_GUINT64_FORMAT "/profile", user_id);
 	discord_fetch_url(da, url, NULL, discord_got_info, user);
 	g_free(url);
+
+	// TODO "https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/users/@me/notes/%" G_GUINT64_FORMAT
 }
 
 static const char *
