@@ -1152,6 +1152,49 @@ discord_get_channel_id_from_conv(DiscordAccount *da, PurpleConversation *conv)
 	return room_id;
 }
 
+static JsonObject *
+discord_get_auth_properties(DiscordAccount *da)
+{
+	JsonObject *properties = json_object_new();
+
+	json_object_set_string_member(properties, "os", "Windows");
+	json_object_set_string_member(properties, "browser", "Chrome");
+	json_object_set_string_member(properties, "device", "");
+	json_object_set_string_member(properties, "browser_user_agent", DISCORD_USERAGENT);
+	json_object_set_string_member(properties, "browser_version", DISCORD_USERAGENT_VERSION);
+	json_object_set_string_member(properties, "os_version", "10");
+
+	json_object_set_string_member(properties, "referrer", "https://discord.com/channels/@me");
+	json_object_set_string_member(properties, "referring_domain", "discord.com");
+	json_object_set_string_member(properties, "referrer_current", "");
+	json_object_set_string_member(properties, "referring_domain_current", "");
+	json_object_set_string_member(properties, "release_channel", "stable");
+	json_object_set_int_member(properties, "client_build_number", 96355);
+	json_object_set_null_member(properties, "client_event_source");
+
+	return properties;
+}
+
+static const gchar *
+discord_build_x_super_properties_header(DiscordAccount *da)
+{
+	static gchar *cached_header = NULL;
+
+	if (cached_header) {
+		return cached_header;
+	}
+
+	JsonObject *obj = discord_get_auth_properties(da);
+	gchar *json_str = json_object_to_string(obj);
+
+	g_object_unref(obj);
+
+	cached_header = g_base64_encode((const guchar *)json_str, strlen(json_str));
+	g_free(json_str);
+
+	return cached_header;
+}
+
 /* debug */
 
 #define discord_print_append(L, B, R, M, D) \
@@ -1625,6 +1668,7 @@ discord_fetch_url_with_method_len(DiscordAccount *ya, const gchar *method, const
 	purple_http_request_header_set(request, "Accept", "*/*");
 	purple_http_request_header_set(request, "User-Agent", DISCORD_USERAGENT);
 	purple_http_request_header_set(request, "Cookie", cookies);
+	purple_http_request_header_set(request, "X-Super-Properties", discord_build_x_super_properties_header(ya));
 	purple_http_request_set_keepalive_pool(request, ya->http_keepalive_pool);
 
 	if (ya->token) {
@@ -1738,28 +1782,13 @@ discord_send_auth(DiscordAccount *da)
 		json_object_set_string_member(data, "session_id", da->session_id);
 		json_object_set_int_member(data, "seq", da->seq);
 	} else {
-		JsonObject *properties = json_object_new();
+		JsonObject *properties = discord_get_auth_properties(da);
 		JsonObject *presence = json_object_new();
 		JsonObject *client_state = json_object_new();
 
 		json_object_set_int_member(obj, "op", OP_IDENTIFY);
 
 		json_object_set_int_member(data, "capabilities", 509);
-
-		json_object_set_string_member(properties, "os", "Windows");
-		json_object_set_string_member(properties, "browser", "Chrome");
-		json_object_set_string_member(properties, "device", "");
-		json_object_set_string_member(properties, "browser_user_agent", DISCORD_USERAGENT);
-		json_object_set_string_member(properties, "browser_version", DISCORD_USERAGENT_VERSION);
-		json_object_set_string_member(properties, "os_version", "10");
-
-		json_object_set_string_member(properties, "referrer", "https://discord.com/channels/@me");
-		json_object_set_string_member(properties, "referring_domain", "discord.com");
-		json_object_set_string_member(properties, "referrer_current", "");
-		json_object_set_string_member(properties, "referring_domain_current", "");
-		json_object_set_string_member(properties, "release_channel", "stable");
-		json_object_set_int_member(properties, "client_build_number", 96355);
-		json_object_set_null_member(properties, "client_event_source");
 
 		json_object_set_object_member(data, "properties", properties);
 
