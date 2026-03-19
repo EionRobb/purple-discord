@@ -1187,7 +1187,7 @@ discord_build_x_super_properties_header(DiscordAccount *da)
 	JsonObject *obj = discord_get_auth_properties(da);
 	gchar *json_str = json_object_to_string(obj);
 
-	g_object_unref(obj);
+	json_object_unref(obj);
 
 	cached_header = g_base64_encode((const guchar *)json_str, strlen(json_str));
 	g_free(json_str);
