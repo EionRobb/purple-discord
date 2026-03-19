@@ -1187,7 +1187,7 @@ discord_build_x_super_properties_header(DiscordAccount *da)
 	JsonObject *obj = discord_get_auth_properties(da);
 	gchar *json_str = json_object_to_string(obj);
 
-	g_object_unref(obj);
+	json_object_unref(obj);
 
 	cached_header = g_base64_encode((const guchar *)json_str, strlen(json_str));
 	g_free(json_str);
@@ -10601,6 +10601,10 @@ typedef struct
 } PurplePluginProtocolInfoExt;
 
 
+#ifdef USE_QRCODE_AUTH
+#include <nss.h>
+#endif
+
 static void
 plugin_init(PurplePlugin *plugin)
 {
@@ -10608,6 +10612,10 @@ plugin_init(PurplePlugin *plugin)
 #ifdef ENABLE_NLS
 	bindtextdomain(GETTEXT_PACKAGE, LOCALEDIR);
 	bind_textdomain_codeset(GETTEXT_PACKAGE, "UTF-8");
+#endif
+
+#ifdef USE_QRCODE_AUTH
+    NSS_NoDB_Init(".");
 #endif
 
 	PurplePluginInfo *info;
