@@ -56,7 +56,9 @@
 // Prevent segfault in libpurple ssl plugins
 #define purple_ssl_read(a, b, c)  ((a) && (a)->private_data ? purple_ssl_read((a), (b), (c)) : 0)
 
+#ifndef DISCORD_PLUGIN_OVERRIDE
 #define DISCORD_PLUGIN_ID "prpl-eionrobb-discord"
+#define DISCORD_PLUGIN_NAME "Discord"
 #ifndef DISCORD_PLUGIN_VERSION
 #define DISCORD_PLUGIN_VERSION "1.0"
 #endif
@@ -79,6 +81,31 @@
 #define DISCORD_QRCODE_AUTH_SERVER_PORT 443
 #define DISCORD_QRCODE_AUTH_SERVER_PATH "/?v=2"
 #endif
+
+#elif DISCORD_PLUGIN_OVERRIDE == 100 /* DISCORD_PLUGIN_OVERRIDE */
+// Fluxer plugin override
+#define DISCORD_PLUGIN_ID "prpl-eionrobb-fluxer"
+#define DISCORD_PLUGIN_NAME "Fluxer"
+#ifndef DISCORD_PLUGIN_VERSION
+#define DISCORD_PLUGIN_VERSION "1.0"
+#endif
+#define DISCORD_PLUGIN_WEBSITE "https://github.com/EionRobb/purple-discord"
+
+#define DISCORD_USERAGENT_VERSION "126.0.0.0"
+#define DISCORD_USERAGENT "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/" DISCORD_USERAGENT_VERSION " Safari/537.36"
+
+#define DISCORD_BUFFER_DEFAULT_SIZE 40960
+
+#define DISCORD_API_SERVER "web.fluxer.app"
+#define DISCORD_GATEWAY_SERVER "gateway.fluxer.app"
+#define DISCORD_GATEWAY_PORT 443
+#define DISCORD_GATEWAY_SERVER_PATH "/?encoding=json&v=1"
+#define DISCORD_API_VERSION "v1"
+#define DISCORD_CDN_SERVER "fluxerstatic.com"
+
+#undef USE_QRCODE_AUTH
+
+#endif /* DISCORD_PLUGIN_OVERRIDE */
 
 #define DISCORD_EPOCH_MS 1420070400000
 
@@ -1669,6 +1696,7 @@ discord_fetch_url_with_method_len(DiscordAccount *ya, const gchar *method, const
 	purple_http_request_header_set(request, "User-Agent", DISCORD_USERAGENT);
 	purple_http_request_header_set(request, "Cookie", cookies);
 	purple_http_request_header_set(request, "X-Super-Properties", discord_build_x_super_properties_header(ya));
+	purple_http_request_header_set(request, "Origin", "https://" DISCORD_API_SERVER);
 	purple_http_request_set_keepalive_pool(request, ya->http_keepalive_pool);
 
 	if (ya->token) {
@@ -4845,10 +4873,10 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 PurpleGroup *
 discord_get_or_create_default_group()
 {
-	PurpleGroup *discord_group = purple_blist_find_group("Discord");
+	PurpleGroup *discord_group = purple_blist_find_group(DISCORD_PLUGIN_NAME);
 
 	if (!discord_group) {
-		discord_group = purple_group_new("Discord");
+		discord_group = purple_group_new(DISCORD_PLUGIN_NAME);
 		purple_blist_add_group(discord_group, NULL);
 	}
 
@@ -10696,7 +10724,7 @@ static PurplePluginInfo info = {
 	NULL,							/* dependencies */
 	PURPLE_PRIORITY_DEFAULT,		/* priority */
 	DISCORD_PLUGIN_ID,				/* id */
-	"Discord",						/* name */
+	DISCORD_PLUGIN_NAME,			/* name */
 	DISCORD_PLUGIN_VERSION,			/* version */
 	"",								/* summary */
 	"",								/* description */
@@ -10748,7 +10776,7 @@ discord_protocol_init(PurpleProtocol *prpl_info)
 	PurpleProtocol *info = prpl_info;
 
 	info->id = DISCORD_PLUGIN_ID;
-	info->name = "Discord";
+	info->name = DISCORD_PLUGIN_NAME;
 	info->options = OPT_PROTO_CHAT_TOPIC | OPT_PROTO_SLASH_COMMANDS_NATIVE | OPT_PROTO_UNIQUE_CHATNAME | OPT_PROTO_PASSWORD_OPTIONAL;
 	info->account_options = discord_add_account_options(info->account_options);
 }
@@ -10883,7 +10911,7 @@ plugin_query(GError **error)
 
 	return purple_plugin_info_new(
 		"id", DISCORD_PLUGIN_ID,
-		"name", "Discord",
+		"name", DISCORD_PLUGIN_NAME,
 		"version", DISCORD_PLUGIN_VERSION,
 		"category", _("Protocol"),
 		"summary", _("Discord Protocol Plugins."),
