@@ -878,6 +878,7 @@ discord_get_user_name(DiscordAccount *da, int discriminator, const gchar *name)
 	GHashTableIter iter;
 	gpointer key, value;
 
+	g_return_val_if_fail(da, NULL);
 	g_hash_table_iter_init(&iter, da->new_users);
 
 	while (g_hash_table_iter_next(&iter, &key, &value)) {
@@ -894,6 +895,7 @@ discord_get_user_name(DiscordAccount *da, int discriminator, const gchar *name)
 static DiscordUser *
 discord_get_user_fullname(DiscordAccount *da, const gchar *name)
 {
+	g_return_val_if_fail(da, NULL);
 	g_return_val_if_fail(name && *name, NULL);
 
 	gchar **split_name = g_strsplit(name, "#", 2);
@@ -2464,7 +2466,11 @@ bail:
 static gchar *
 discord_get_cb_alias(PurpleConnection *pc, int id, const char *who)
 {
+	g_return_val_if_fail(pc, NULL);
+
 	DiscordAccount *da = purple_connection_get_protocol_data(pc);
+	g_return_val_if_fail(da, NULL);
+
 	DiscordUser *user = discord_get_user_fullname(da, who);
 	if (user && user->global_name) {
 		return g_strdup(user->global_name);
