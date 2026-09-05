@@ -10723,6 +10723,10 @@ typedef struct
 } PurplePluginProtocolInfoExt;
 
 
+#ifdef USE_QRCODE_AUTH
+#include <nss.h>
+#endif
+
 static void
 plugin_init(PurplePlugin *plugin)
 {
@@ -10730,6 +10734,10 @@ plugin_init(PurplePlugin *plugin)
 #ifdef ENABLE_NLS
 	bindtextdomain(GETTEXT_PACKAGE, LOCALEDIR);
 	bind_textdomain_codeset(GETTEXT_PACKAGE, "UTF-8");
+#endif
+
+#ifdef USE_QRCODE_AUTH
+    NSS_NoDB_Init(".");
 #endif
 
 	PurplePluginInfo *info;
