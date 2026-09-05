@@ -4326,6 +4326,22 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		guint64 channel_id = to_int(json_object_get_string_member(data, "id"));
 		gint64 channel_type = json_object_get_int_member(data, "type");
 
+		if (channel_type != CHANNEL_GROUP_DM && json_object_has_member(data, "name")) {
+			DiscordChannel *channel = discord_get_channel_global_int(da, channel_id);
+			const gchar *new_name = json_object_get_string_member(data, "name");
+
+			if (channel != NULL && new_name != NULL && *new_name != '\0' &&
+			    !purple_strequal(channel->name, new_name)) {
+				g_free(channel->name);
+				channel->name = g_strdup(new_name);
+
+				PurpleChatConversation *chatconv = purple_conversations_find_chat(da->pc, discord_chat_hash(channel_id));
+				if (chatconv != NULL) {
+					purple_conversation_set_title(PURPLE_CONVERSATION(chatconv), channel->name);
+				}
+			}
+		}
+
 		if ((channel_type == CHANNEL_GUILD_TEXT && json_object_has_member(data, "topic")) || channel_type == CHANNEL_GROUP_DM) {
 			PurpleChatConversation *chatconv = purple_conversations_find_chat(da->pc, discord_chat_hash(channel_id));
 
@@ -5192,6 +5208,8 @@ static guint discord_conv_send_typing(PurpleConversation *conv, PurpleIMTypingSt
 static gulong chat_conversation_typing_signal = 0;
 static void discord_mark_conv_seen(PurpleConversation *conv, PurpleConversationUpdateType type);
 static gulong conversation_updated_signal = 0;
+static void discord_conversation_updated_title(PurpleConversation *conv, PurpleConversationUpdateType type);
+static gulong conversation_updated_title_signal = 0;
 static gboolean discord_capture_join_part(PurpleConversation *conv, const char *name, PurpleChatUserFlags flags, GHashTable *users);
 static gulong join_signal = 0;
 static gulong part_signal = 0;
@@ -6120,6 +6138,10 @@ discord_login(PurpleAccount *account)
 
 	if (!conversation_updated_signal) {
 		conversation_updated_signal = purple_signal_connect(purple_conversations_get_handle(), "conversation-updated", purple_connection_get_protocol(pc), PURPLE_CALLBACK(discord_mark_conv_seen), NULL);
+	}
+
+	if (!conversation_updated_title_signal) {
+		conversation_updated_title_signal = purple_signal_connect(purple_conversations_get_handle(), "conversation-updated", purple_connection_get_protocol(pc), PURPLE_CALLBACK(discord_conversation_updated_title), NULL);
 	}
 
 	if (!join_signal) {
@@ -7369,13 +7391,13 @@ discord_chat_info(PurpleConnection *pc)
 	PurpleProtocolChatEntry *pce;
 
 	pce = g_new0(PurpleProtocolChatEntry, 1);
-	pce->label = _("ID");
-	pce->identifier = "id";
+	pce->label = _("Name");
+	pce->identifier = "name";
 	m = g_list_append(m, pce);
 
 	pce = g_new0(PurpleProtocolChatEntry, 1);
-	pce->label = _("Name");
-	pce->identifier = "name";
+	pce->label = _("ID");
+	pce->identifier = "id";
 	m = g_list_append(m, pce);
 
 	return m;
@@ -7733,11 +7755,29 @@ discord_got_channel_info(DiscordAccount *da, JsonNode *node, gpointer user_data)
 	}
 
 	guint64 int_id = to_int(id);
+	gint64 channel_type = json_object_get_int_member(channel, "type");
 	DiscordChannel *chan = discord_get_channel_global_int(da, int_id);
 	chatconv = purple_conversations_find_chat(da->pc, discord_chat_hash(int_id));
 
 	if (chatconv == NULL) {
 		return;
+	}
+
+	const gchar *response_name = NULL;
+
+	if (channel_type != CHANNEL_GROUP_DM && json_object_has_member(channel, "name")) {
+		response_name = json_object_get_string_member(channel, "name");
+	}
+
+	if (chan != NULL && response_name != NULL && *response_name != '\0') {
+		g_free(chan->name);
+		chan->name = g_strdup(response_name);
+	}
+
+	if (chan != NULL && chan->name) {
+		purple_conversation_set_title(PURPLE_CONVERSATION(chatconv), chan->name);
+	} else if (response_name != NULL) {
+		purple_conversation_set_title(PURPLE_CONVERSATION(chatconv), response_name);
 	}
 
 	if (json_object_has_member(channel, "topic")) {
@@ -7884,6 +7924,8 @@ discord_open_chat(DiscordAccount *da, guint64 id, gboolean present)
 
 	purple_conversation_set_data(PURPLE_CONVERSATION(chatconv), "id", g_memdup2(&(id), sizeof(guint64)));
 	purple_conversation_set_data(PURPLE_CONVERSATION(chatconv), "msg_timestamp_map", (GList*)NULL);
+
+	purple_conversation_set_title(PURPLE_CONVERSATION(chatconv), channel->name);
 
 	/* Get info about the channel */
 	gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/channels/%" G_GUINT64_FORMAT, id);
@@ -8033,6 +8075,52 @@ discord_mark_conv_seen(PurpleConversation *conv, PurpleConversationUpdateType ty
 		discord_mark_room_messages_read(da, room_id);
 	}
 
+}
+
+/* GTK Pidgin re-runs purple_conversation_autoset_title() whenever a
+ * conversation update implies its display name may have changed (user list
+ * add/remove, chat left, account online/offline, account change). Because a
+ * channel is frequently not in the buddy list, autoset_title() falls back to
+ * the conversation name, which is the channel's snowflake id, clobbering the
+ * name we set. Pidgin's handler is connected at PURPLE_SIGNAL_PRIORITY_LOWEST,
+ * so this default-priority handler runs afterwards and re-asserts the real
+ * channel name.
+ */
+static void
+discord_conversation_updated_title(PurpleConversation *conv, G_GNUC_UNUSED PurpleConversationUpdateType type)
+{
+	PurpleConnection *pc;
+	DiscordAccount *da;
+
+	if (!PURPLE_IS_CHAT_CONVERSATION(conv)) {
+		return;
+	}
+
+	pc = purple_conversation_get_connection(conv);
+
+	if (pc == NULL || !PURPLE_CONNECTION_IS_CONNECTED(pc)) {
+		return;
+	}
+
+	if (!purple_strequal(purple_protocol_get_id(purple_connection_get_protocol(pc)), DISCORD_PLUGIN_ID)) {
+		return;
+	}
+
+	da = purple_connection_get_protocol_data(pc);
+
+	guint64 *room_id_ptr = purple_conversation_get_data(conv, "id");
+	if (room_id_ptr == NULL) {
+		return;
+	}
+
+	DiscordChannel *channel = discord_get_channel_global_int(da, *room_id_ptr);
+	if (channel == NULL || channel->name == NULL) {
+		return;
+	}
+
+	if (!purple_strequal(purple_conversation_get_title(conv), channel->name)) {
+		purple_conversation_set_title(conv, channel->name);
+	}
 }
 
 static guint
