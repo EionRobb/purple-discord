@@ -55,7 +55,10 @@ jobs:
           unzip zlib-dev.zip -d win32-dev/glib-2.28.8
 
           cd win32-dev
-          curl --http1.1 -L https://data.imfreedom.org/pidgin/win32/nss-3.24-nspr-4.12.tar.gz -o nss-3.24-nspr-4.12.tar.gz
+          curl --http1.1 -f -L https://data.imfreedom.org/pidgin/win32/nss-3.24-nspr-4.12.tar.gz -o nss-3.24-nspr-4.12.tar.gz || rm -f nss-3.24-nspr-4.12.tar.gz
+          if [ ! -s nss-3.24-nspr-4.12.tar.gz ]; then
+            curl --http1.1 -L https://developer.pidgin.im/static/win32/nss-3.24-nspr-4.12.tar.gz -o nss-3.24-nspr-4.12.tar.gz
+          fi
           tar -xf nss-3.24-nspr-4.12.tar.gz
           curl --http1.1 -L https://github.com/jgeboski/purple-facebook/releases/download/downloads/json-glib-0.14.tar.gz -o json-glib.tar.gz
           tar -xf json-glib.tar.gz
