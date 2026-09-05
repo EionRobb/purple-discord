@@ -4326,6 +4326,22 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		guint64 channel_id = to_int(json_object_get_string_member(data, "id"));
 		gint64 channel_type = json_object_get_int_member(data, "type");
 
+		if (channel_type != CHANNEL_GROUP_DM && json_object_has_member(data, "name")) {
+			DiscordChannel *channel = discord_get_channel_global_int(da, channel_id);
+			const gchar *new_name = json_object_get_string_member(data, "name");
+
+			if (channel != NULL && new_name != NULL && *new_name != '\0' &&
+			    !purple_strequal(channel->name, new_name)) {
+				g_free(channel->name);
+				channel->name = g_strdup(new_name);
+
+				PurpleChatConversation *chatconv = purple_conversations_find_chat(da->pc, discord_chat_hash(channel_id));
+				if (chatconv != NULL) {
+					purple_conversation_set_title(PURPLE_CONVERSATION(chatconv), channel->name);
+				}
+			}
+		}
+
 		if ((channel_type == CHANNEL_GUILD_TEXT && json_object_has_member(data, "topic")) || channel_type == CHANNEL_GROUP_DM) {
 			PurpleChatConversation *chatconv = purple_conversations_find_chat(da->pc, discord_chat_hash(channel_id));
 
@@ -7739,6 +7755,7 @@ discord_got_channel_info(DiscordAccount *da, JsonNode *node, gpointer user_data)
 	}
 
 	guint64 int_id = to_int(id);
+	gint64 channel_type = json_object_get_int_member(channel, "type");
 	DiscordChannel *chan = discord_get_channel_global_int(da, int_id);
 	chatconv = purple_conversations_find_chat(da->pc, discord_chat_hash(int_id));
 
@@ -7746,8 +7763,21 @@ discord_got_channel_info(DiscordAccount *da, JsonNode *node, gpointer user_data)
 		return;
 	}
 
+	const gchar *response_name = NULL;
+
+	if (channel_type != CHANNEL_GROUP_DM && json_object_has_member(channel, "name")) {
+		response_name = json_object_get_string_member(channel, "name");
+	}
+
+	if (chan != NULL && response_name != NULL && *response_name != '\0') {
+		g_free(chan->name);
+		chan->name = g_strdup(response_name);
+	}
+
 	if (chan != NULL && chan->name) {
 		purple_conversation_set_title(PURPLE_CONVERSATION(chatconv), chan->name);
+	} else if (response_name != NULL) {
+		purple_conversation_set_title(PURPLE_CONVERSATION(chatconv), response_name);
 	}
 
 	if (json_object_has_member(channel, "topic")) {
