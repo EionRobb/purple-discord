@@ -3735,6 +3735,31 @@ discord_find_chat_from_node(const PurpleAccount *account, const char *id, Purple
 		}
 	}
 
+	for (
+		node = root;
+		node != NULL;
+		node = purple_blist_node_next(node, TRUE)
+	) {
+		if (PURPLE_IS_CHAT(node)) {
+			PurpleChat *chat = PURPLE_CHAT(node);
+
+			if (purple_chat_get_account(chat) != account) {
+				continue;
+			}
+
+			GHashTable *components = purple_chat_get_components(chat);
+			const gchar *chat_name = g_hash_table_lookup(components, "name");
+
+			if (purple_strequal(chat_name, id)) {
+				return chat;
+			}
+
+			if (purple_strequal(purple_chat_get_name(chat), id)) {
+				return chat;
+			}
+		}
+	}
+
 	return NULL;
 }
 
@@ -3753,6 +3778,55 @@ discord_find_chat_in_group(PurpleAccount *account, const char *id, PurpleGroup *
 	return discord_find_chat_from_node(account, id, PURPLE_BLIST_NODE(group));
 }
 
+static const gchar *
+discord_get_chat_alias(PurpleChat *chat)
+{
+#if !PURPLE_VERSION_CHECK(3, 0, 0)
+	if (chat != NULL && chat->alias != NULL && *chat->alias != '\0') {
+		return chat->alias;
+	}
+	return NULL;
+#else
+	if (chat != NULL) {
+		const gchar *name = purple_chat_get_name(chat);
+		const gchar *only = purple_chat_get_name_only(chat);
+		if (!purple_strequal(name, only)) {
+			return name;
+		}
+	}
+	return NULL;
+#endif
+}
+
+static const gchar *
+discord_get_chat_display_name(DiscordAccount *da, guint64 channel_id)
+{
+	gchar *channel_id_str = from_int(channel_id);
+	PurpleChat *chat = discord_find_chat(da->account, channel_id_str);
+	g_free(channel_id_str);
+
+	if (chat != NULL) {
+		const gchar *alias = discord_get_chat_alias(chat);
+		if (alias != NULL && *alias != '\0') {
+			return alias;
+		}
+	}
+
+	DiscordChannel *channel = discord_get_channel_global_int(da, channel_id);
+	if (channel != NULL && channel->name != NULL && *channel->name != '\0') {
+		return channel->name;
+	}
+
+	if (chat != NULL) {
+		const gchar *chat_name = purple_chat_get_name(chat);
+		if (chat_name != NULL && *chat_name != '\0') {
+			return chat_name;
+		}
+	}
+
+	return NULL;
+}
+
 
 static void
 discord_add_channel_to_blist(DiscordAccount *da, DiscordChannel *channel, PurpleGroup *group)
@@ -3769,7 +3843,7 @@ discord_add_channel_to_blist(DiscordAccount *da, DiscordChannel *channel, Purple
 
 	/* Don't re-add the channel to the same group */
 	if (discord_find_chat_in_group(da->account, id, group) == NULL) {
-		PurpleChat *chat = purple_chat_new(da->account, channel->name, components);
+		PurpleChat *chat = purple_chat_new(da->account, NULL, components);
 		purple_blist_add_chat(chat, group, NULL);
 	} else {
 		g_hash_table_unref(components);
@@ -4332,12 +4406,31 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 
 			if (channel != NULL && new_name != NULL && *new_name != '\0' &&
 			    !purple_strequal(channel->name, new_name)) {
+				const gchar *old_name = channel->name;
+				gchar *channel_id_str = from_int(channel_id);
+				PurpleChat *chat = discord_find_chat(da->account, channel_id_str);
+				g_free(channel_id_str);
+
+				if (chat != NULL) {
+					GHashTable *components = purple_chat_get_components(chat);
+					g_hash_table_replace(components, g_strdup("name"), g_strdup(new_name));
+
+#if !PURPLE_VERSION_CHECK(3, 0, 0)
+					if (purple_strequal(chat->alias, old_name)) {
+						purple_blist_alias_chat(chat, new_name);
+					}
+#endif
+				}
+
 				g_free(channel->name);
 				channel->name = g_strdup(new_name);
 
 				PurpleChatConversation *chatconv = purple_conversations_find_chat(da->pc, discord_chat_hash(channel_id));
 				if (chatconv != NULL) {
-					purple_conversation_set_title(PURPLE_CONVERSATION(chatconv), channel->name);
+					const gchar *display_name = discord_get_chat_display_name(da, channel_id);
+					if (display_name != NULL) {
+						purple_conversation_set_title(PURPLE_CONVERSATION(chatconv), display_name);
+					}
 				}
 			}
 		}
@@ -5210,6 +5303,8 @@ static void discord_mark_conv_seen(PurpleConversation *conv, PurpleConversationU
 static gulong conversation_updated_signal = 0;
 static void discord_conversation_updated_title(PurpleConversation *conv, PurpleConversationUpdateType type);
 static gulong conversation_updated_title_signal = 0;
+static void discord_blist_node_aliased(PurpleBlistNode *node, const char *old_alias);
+static gulong blist_node_aliased_signal = 0;
 static gboolean discord_capture_join_part(PurpleConversation *conv, const char *name, PurpleChatUserFlags flags, GHashTable *users);
 static gulong join_signal = 0;
 static gulong part_signal = 0;
@@ -6150,6 +6245,10 @@ discord_login(PurpleAccount *account)
 
 	if (!part_signal) {
 		part_signal = purple_signal_connect(purple_conversations_get_handle(), "chat-buddy-leaving", purple_connection_get_protocol(pc), PURPLE_CALLBACK(discord_capture_join_part), NULL);
+	}
+
+	if (!blist_node_aliased_signal) {
+		blist_node_aliased_signal = purple_signal_connect(purple_blist_get_handle(), "blist-node-aliased", purple_connection_get_protocol(pc), PURPLE_CALLBACK(discord_blist_node_aliased), NULL);
 	}
 }
 
@@ -7769,13 +7868,31 @@ discord_got_channel_info(DiscordAccount *da, JsonNode *node, gpointer user_data)
 		response_name = json_object_get_string_member(channel, "name");
 	}
 
-	if (chan != NULL && response_name != NULL && *response_name != '\0') {
-		g_free(chan->name);
-		chan->name = g_strdup(response_name);
+	if (response_name != NULL && *response_name != '\0') {
+		gchar *int_id_str = from_int(int_id);
+		PurpleChat *blist_chat = discord_find_chat(da->account, int_id_str);
+		g_free(int_id_str);
+
+		if (blist_chat != NULL) {
+			GHashTable *components = purple_chat_get_components(blist_chat);
+			g_hash_table_replace(components, g_strdup("name"), g_strdup(response_name));
+
+#if !PURPLE_VERSION_CHECK(3, 0, 0)
+			if (chan != NULL && purple_strequal(blist_chat->alias, chan->name)) {
+				purple_blist_alias_chat(blist_chat, response_name);
+			}
+#endif
+		}
+
+		if (chan != NULL && !purple_strequal(chan->name, response_name)) {
+			g_free(chan->name);
+			chan->name = g_strdup(response_name);
+		}
 	}
 
-	if (chan != NULL && chan->name) {
-		purple_conversation_set_title(PURPLE_CONVERSATION(chatconv), chan->name);
+	const gchar *display_name = discord_get_chat_display_name(da, int_id);
+	if (display_name != NULL) {
+		purple_conversation_set_title(PURPLE_CONVERSATION(chatconv), display_name);
 	} else if (response_name != NULL) {
 		purple_conversation_set_title(PURPLE_CONVERSATION(chatconv), response_name);
 	}
@@ -7925,7 +8042,12 @@ discord_open_chat(DiscordAccount *da, guint64 id, gboolean present)
 	purple_conversation_set_data(PURPLE_CONVERSATION(chatconv), "id", g_memdup2(&(id), sizeof(guint64)));
 	purple_conversation_set_data(PURPLE_CONVERSATION(chatconv), "msg_timestamp_map", (GList*)NULL);
 
-	purple_conversation_set_title(PURPLE_CONVERSATION(chatconv), channel->name);
+	const gchar *display_name = discord_get_chat_display_name(da, id);
+	if (display_name != NULL) {
+		purple_conversation_set_title(PURPLE_CONVERSATION(chatconv), display_name);
+	} else {
+		purple_conversation_set_title(PURPLE_CONVERSATION(chatconv), channel->name);
+	}
 
 	/* Get info about the channel */
 	gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/channels/%" G_GUINT64_FORMAT, id);
@@ -8113,13 +8235,64 @@ discord_conversation_updated_title(PurpleConversation *conv, G_GNUC_UNUSED Purpl
 		return;
 	}
 
-	DiscordChannel *channel = discord_get_channel_global_int(da, *room_id_ptr);
-	if (channel == NULL || channel->name == NULL) {
+	const gchar *display_name = discord_get_chat_display_name(da, *room_id_ptr);
+	if (display_name == NULL || *display_name == '\0') {
 		return;
 	}
 
-	if (!purple_strequal(purple_conversation_get_title(conv), channel->name)) {
-		purple_conversation_set_title(conv, channel->name);
+	if (!purple_strequal(purple_conversation_get_title(conv), display_name)) {
+		purple_conversation_set_title(conv, display_name);
+	}
+}
+
+static void
+discord_blist_node_aliased(PurpleBlistNode *node, G_GNUC_UNUSED const char *old_alias)
+{
+	PurpleChat *chat;
+	PurpleAccount *account;
+	PurpleConnection *pc;
+	DiscordAccount *da;
+	GHashTable *components;
+	const gchar *chat_id;
+	guint64 id;
+	PurpleChatConversation *chatconv;
+	const gchar *display_name;
+
+	if (!PURPLE_IS_CHAT(node)) {
+		return;
+	}
+
+	chat = PURPLE_CHAT(node);
+	account = purple_chat_get_account(chat);
+	if (account == NULL) {
+		return;
+	}
+
+	pc = purple_account_get_connection(account);
+	if (pc == NULL || !PURPLE_CONNECTION_IS_CONNECTED(pc)) {
+		return;
+	}
+
+	if (!purple_strequal(purple_protocol_get_id(purple_connection_get_protocol(pc)), DISCORD_PLUGIN_ID)) {
+		return;
+	}
+
+	da = purple_connection_get_protocol_data(pc);
+	components = purple_chat_get_components(chat);
+	chat_id = g_hash_table_lookup(components, "id");
+	if (chat_id == NULL) {
+		return;
+	}
+
+	id = to_int(chat_id);
+	chatconv = purple_conversations_find_chat(da->pc, discord_chat_hash(id));
+	if (chatconv == NULL) {
+		return;
+	}
+
+	display_name = discord_get_chat_display_name(da, id);
+	if (display_name != NULL && !purple_strequal(purple_conversation_get_title(PURPLE_CONVERSATION(chatconv)), display_name)) {
+		purple_conversation_set_title(PURPLE_CONVERSATION(chatconv), display_name);
 	}
 }
 
