@@ -8130,7 +8130,7 @@ discord_join_chat_by_id(DiscordAccount *da, guint64 id, gboolean present)
 	}
 
 	if (is_limited) {
-		gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/channels/%" G_GUINT64_FORMAT "/messages?limit=100&before=%" G_GUINT64_FORMAT, id, channel->last_message_id);
+		gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/channels/%" G_GUINT64_FORMAT "/messages?limit=100&before=%" G_GUINT64_FORMAT, id, channel->last_message_id + 1);
 		discord_fetch_url(da, url, NULL, discord_got_history_static, channel);
 		g_free(url);
 		return TRUE;
