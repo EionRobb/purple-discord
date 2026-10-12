@@ -3828,6 +3828,20 @@ discord_get_chat_display_name(DiscordAccount *da, guint64 channel_id)
 }
 
 static void
+discord_rename_blist_chat(PurpleChat *chat, const gchar *old_name, const gchar *new_name)
+{
+#if !PURPLE_VERSION_CHECK(3, 0, 0)
+	/* An alias that just mirrors the old name follows the rename */
+	if (old_name != NULL && *old_name != '\0' && purple_strequal(chat->alias, old_name)) {
+		purple_blist_alias_chat(chat, new_name);
+	}
+#endif
+
+	/* May free old_name if it came from the components */
+	g_hash_table_replace(purple_chat_get_components(chat), g_strdup("name"), g_strdup(new_name));
+}
+
+static void
 discord_set_channel_name(DiscordAccount *da, DiscordChannel *channel, const gchar *new_name)
 {
 	if (new_name == NULL || *new_name == '\0' || purple_strequal(channel->name, new_name)) {
@@ -3839,14 +3853,7 @@ discord_set_channel_name(DiscordAccount *da, DiscordChannel *channel, const gcha
 	g_free(channel_id_str);
 
 	if (chat != NULL) {
-		GHashTable *components = purple_chat_get_components(chat);
-		g_hash_table_replace(components, g_strdup("name"), g_strdup(new_name));
-
-#if !PURPLE_VERSION_CHECK(3, 0, 0)
-		if (purple_strequal(chat->alias, channel->name)) {
-			purple_blist_alias_chat(chat, new_name);
-		}
-#endif
+		discord_rename_blist_chat(chat, channel->name, new_name);
 	}
 
 	g_free(channel->name);
@@ -3972,8 +3979,11 @@ discord_got_group_dm(DiscordAccount *da, JsonObject *data)
 	PurpleChat *chat = discord_find_chat(da->account, id);
 
 	if (chat != NULL) {
-		if (channel->name != NULL && *channel->name != '\0') {
-			g_hash_table_replace(purple_chat_get_components(chat), g_strdup("name"), g_strdup(channel->name));
+		/* channel is new, so the previous name is the one stored in the blist */
+		const gchar *old_name = g_hash_table_lookup(purple_chat_get_components(chat), "name");
+
+		if (channel->name != NULL && *channel->name != '\0' && !purple_strequal(old_name, channel->name)) {
+			discord_rename_blist_chat(chat, old_name, channel->name);
 		}
 	} else if (purple_account_is_connected(da->account)
 		&& purple_account_get_bool(da->account, "populate-blist", TRUE)) {
