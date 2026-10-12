@@ -3827,6 +3827,47 @@ discord_get_chat_display_name(DiscordAccount *da, guint64 channel_id)
 	return NULL;
 }
 
+static void
+discord_rename_blist_chat(PurpleChat *chat, const gchar *old_name, const gchar *new_name)
+{
+#if !PURPLE_VERSION_CHECK(3, 0, 0)
+	/* An alias that just mirrors the old name follows the rename */
+	if (old_name != NULL && *old_name != '\0' && purple_strequal(chat->alias, old_name)) {
+		purple_blist_alias_chat(chat, new_name);
+	}
+#endif
+
+	/* May free old_name if it came from the components */
+	g_hash_table_replace(purple_chat_get_components(chat), g_strdup("name"), g_strdup(new_name));
+}
+
+static void
+discord_set_channel_name(DiscordAccount *da, DiscordChannel *channel, const gchar *new_name)
+{
+	if (new_name == NULL || *new_name == '\0' || purple_strequal(channel->name, new_name)) {
+		return;
+	}
+
+	gchar *channel_id_str = from_int(channel->id);
+	PurpleChat *chat = discord_find_chat(da->account, channel_id_str);
+	g_free(channel_id_str);
+
+	if (chat != NULL) {
+		discord_rename_blist_chat(chat, channel->name, new_name);
+	}
+
+	g_free(channel->name);
+	channel->name = g_strdup(new_name);
+
+	PurpleChatConversation *chatconv = purple_conversations_find_chat(da->pc, discord_chat_hash(channel->id));
+	if (chatconv != NULL) {
+		const gchar *display_name = discord_get_chat_display_name(da, channel->id);
+		if (display_name != NULL) {
+			purple_conversation_set_title(PURPLE_CONVERSATION(chatconv), display_name);
+		}
+	}
+}
+
 
 static void
 discord_add_channel_to_blist(DiscordAccount *da, DiscordChannel *channel, PurpleGroup *group)
@@ -3893,6 +3934,7 @@ discord_got_group_dm(DiscordAccount *da, JsonObject *data)
 {
 	DiscordChannel *channel = discord_new_channel(data);
 	JsonArray *recipients = json_object_get_array_member(data, "recipients");
+	JsonArray *recipient_ids = json_object_get_array_member(data, "recipient_ids");
 
 	/* In order to efficiently strip discriminators, we need to maintain a
 	 * set of names, so we can check in constant-time whether there would
@@ -3912,15 +3954,39 @@ discord_got_group_dm(DiscordAccount *da, JsonObject *data)
 		discord_got_group_dm_name(channel, recipient, TRUE);
 	}
 
+	/* New API: READY only sends the ids, the users were already loaded */
+	for (int i = json_array_get_length(recipient_ids) - 1; i >= 0; i--) {
+		DiscordUser *recipient = discord_get_user(da, to_int(json_array_get_string_element(recipient_ids, i)));
+
+		if (recipient == NULL) {
+			continue;
+		}
+
+		channel->recipients = g_list_prepend(channel->recipients, g_memdup2(&(recipient->id), sizeof(guint64)));
+
+		discord_got_group_dm_name(channel, recipient, TRUE);
+	}
+
 	g_hash_table_replace_int64(da->group_dms, channel->id, channel);
 
-	channel->name = discord_name_group_dm(da, channel);
+	/* Keep the custom name if the group DM has one, otherwise name it after the recipients */
+	if (channel->name == NULL || *channel->name == '\0') {
+		g_free(channel->name);
+		channel->name = discord_name_group_dm(da, channel);
+	}
 
 	gchar *id = from_int(channel->id);
+	PurpleChat *chat = discord_find_chat(da->account, id);
 
-	if (purple_account_is_connected(da->account)
-		&& purple_account_get_bool(da->account, "populate-blist", TRUE)
-		&& purple_blist_find_chat(da->account, id) == NULL) {
+	if (chat != NULL) {
+		/* channel is new, so the previous name is the one stored in the blist */
+		const gchar *old_name = g_hash_table_lookup(purple_chat_get_components(chat), "name");
+
+		if (channel->name != NULL && *channel->name != '\0' && !purple_strequal(old_name, channel->name)) {
+			discord_rename_blist_chat(chat, old_name, channel->name);
+		}
+	} else if (purple_account_is_connected(da->account)
+		&& purple_account_get_bool(da->account, "populate-blist", TRUE)) {
 
 		discord_add_channel_to_blist(da, channel, NULL);
 	}
@@ -4400,39 +4466,18 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 		guint64 channel_id = to_int(json_object_get_string_member(data, "id"));
 		gint64 channel_type = json_object_get_int_member(data, "type");
 
-		if (channel_type != CHANNEL_GROUP_DM && json_object_has_member(data, "name")) {
-			DiscordChannel *channel = discord_get_channel_global_int(da, channel_id);
-			const gchar *new_name = json_object_get_string_member(data, "name");
+		DiscordChannel *channel = discord_get_channel_global_int(da, channel_id);
 
-			if (channel != NULL && new_name != NULL && *new_name != '\0' &&
-			    !purple_strequal(channel->name, new_name)) {
-				const gchar *old_name = channel->name;
-				gchar *channel_id_str = from_int(channel_id);
-				PurpleChat *chat = discord_find_chat(da->account, channel_id_str);
-				g_free(channel_id_str);
+		if (channel != NULL && channel_type == CHANNEL_GROUP_DM) {
+			/* An unnamed group DM is named after its recipients */
+			const gchar *custom_name = json_object_get_string_member(data, "name");
+			gchar *new_name = (custom_name != NULL && *custom_name != '\0') ?
+				g_strdup(custom_name) : discord_name_group_dm(da, channel);
 
-				if (chat != NULL) {
-					GHashTable *components = purple_chat_get_components(chat);
-					g_hash_table_replace(components, g_strdup("name"), g_strdup(new_name));
-
-#if !PURPLE_VERSION_CHECK(3, 0, 0)
-					if (purple_strequal(chat->alias, old_name)) {
-						purple_blist_alias_chat(chat, new_name);
-					}
-#endif
-				}
-
-				g_free(channel->name);
-				channel->name = g_strdup(new_name);
-
-				PurpleChatConversation *chatconv = purple_conversations_find_chat(da->pc, discord_chat_hash(channel_id));
-				if (chatconv != NULL) {
-					const gchar *display_name = discord_get_chat_display_name(da, channel_id);
-					if (display_name != NULL) {
-						purple_conversation_set_title(PURPLE_CONVERSATION(chatconv), display_name);
-					}
-				}
-			}
+			discord_set_channel_name(da, channel, new_name);
+			g_free(new_name);
+		} else if (channel != NULL && json_object_has_member(data, "name")) {
+			discord_set_channel_name(da, channel, json_object_get_string_member(data, "name"));
 		}
 
 		if ((channel_type == CHANNEL_GUILD_TEXT && json_object_has_member(data, "topic")) || channel_type == CHANNEL_GROUP_DM) {
