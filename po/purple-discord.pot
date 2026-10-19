@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-03-11 10:36+0100\n"
+"POT-Creation-Date: 2026-10-19 05:54+0100\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -106,6 +106,9 @@ msgid ", "
 msgstr ""
 
 msgid " "
+msgstr ""
+
+msgid "(link)"
 msgstr ""
 
 #, c-format
@@ -386,6 +389,9 @@ msgstr ""
 msgid "Display custom emoji as inline images"
 msgstr ""
 
+msgid "Display stickers in conversations"
+msgstr ""
+
 msgid ""
 "Approximate max number of users to keep track of, per server (0 disables)"
 msgstr ""
@@ -594,6 +600,9 @@ msgstr ""
 msgid ""
 "joinserver &lt;invite code/URL&gt;:   Joins a new server using the invite "
 "code or URL."
+msgstr ""
+
+msgid "sticker &lt;sticker_id&gt;:  Sends a sticker with the given sticker ID"
 msgstr ""
 
 msgid "mute <username>:  Mute someone in channel"

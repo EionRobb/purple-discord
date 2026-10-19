@@ -453,6 +453,7 @@ typedef struct _DiscordImgMsgContext {
 	gint conv_id;
 	gchar *from;
 	gchar *url;
+	gchar *label;
 	PurpleMessageFlags flags;
 	time_t timestamp;
 } DiscordImgMsgContext;
@@ -748,6 +749,7 @@ discord_free_image_context(gpointer data)
 	DiscordImgMsgContext *img_context = data;
 	g_free(img_context->from);
 	g_free(img_context->url);
+	g_free(img_context->label);
 	g_free(img_context);
 }
 
@@ -2762,9 +2764,13 @@ discord_download_image_cb(DiscordAccount *da, JsonNode *node, gpointer user_data
 		gsize img_data_len = json_object_get_int_member(response, "len");
 		gpointer img_data = g_memdup2(img_data_s, img_data_len);
 		int img_id = purple_imgstore_add_with_id(img_data, img_data_len, NULL);
+		const gchar *alt = img_context->label ? img_context->label : img_context->url;
+		const gchar *link_text = img_context->label ? img_context->label : _("(link)");
 
 		if (img_id >= 0) {
-			attachment_show = g_strdup_printf("<img id=\"%u\" alt=\"%s\"/><br /><a href=\"%s\">(link)</a>", img_id, img_context->url, img_context->url);
+			attachment_show = g_strdup_printf("<img id=\"%u\" alt=\"%s\"/><br /><a href=\"%s\">%s</a>", img_id, alt, img_context->url, link_text);
+		} else if (img_context->label) {
+			attachment_show = g_strdup_printf("%s <a href=\"%s\">%s</a>", alt, img_context->url, _("(link)"));
 		} else {
 			attachment_show = g_strdup(img_context->url);
 		}
@@ -2772,17 +2778,46 @@ discord_download_image_cb(DiscordAccount *da, JsonNode *node, gpointer user_data
 		if (img_context->conv_id >= 0) {
 			purple_serv_got_chat_in(da->pc, img_context->conv_id, img_context->from, img_context->flags, attachment_show, img_context->timestamp);
 		} else {
-			purple_serv_got_im(da->pc, img_context->from, attachment_show, img_context->flags, img_context->timestamp);
+			if (img_context->flags & PURPLE_MESSAGE_SEND) {
+				PurpleIMConversation *imconv = purple_conversations_find_im_with_account(img_context->from, da->account);
+				if (imconv) {
+					PurpleMessage *msg = purple_message_new_outgoing(img_context->from, attachment_show, img_context->flags);
+					purple_message_set_time(msg, img_context->timestamp);
+					purple_conversation_write_message(PURPLE_CONVERSATION(imconv), msg);
+					purple_message_destroy(msg);
+				} else {
+					purple_serv_got_im(da->pc, img_context->from, attachment_show, img_context->flags, img_context->timestamp);
+				}
+			} else {
+				purple_serv_got_im(da->pc, img_context->from, attachment_show, img_context->flags, img_context->timestamp);
+			}
 		}
 		g_free(attachment_show);
 
 	} else {
 		purple_debug_error("discord", "Image response node is null!\n");
+		gchar *fallback = img_context->label ?
+			g_strdup_printf("%s <a href=\"%s\">%s</a>", img_context->label, img_context->url, _("(link)")) :
+			g_strdup(img_context->url);
+
 		if (img_context->conv_id >= 0) {
-			purple_serv_got_chat_in(da->pc, img_context->conv_id, img_context->from, img_context->flags, img_context->url, img_context->timestamp);
+			purple_serv_got_chat_in(da->pc, img_context->conv_id, img_context->from, img_context->flags, fallback, img_context->timestamp);
 		} else {
-			purple_serv_got_im(da->pc, img_context->from, img_context->url, img_context->flags, img_context->timestamp);
+			if (img_context->flags & PURPLE_MESSAGE_SEND) {
+				PurpleIMConversation *imconv = purple_conversations_find_im_with_account(img_context->from, da->account);
+				if (imconv) {
+					PurpleMessage *msg = purple_message_new_outgoing(img_context->from, fallback, img_context->flags);
+					purple_message_set_time(msg, img_context->timestamp);
+					purple_conversation_write_message(PURPLE_CONVERSATION(imconv), msg);
+					purple_message_destroy(msg);
+				} else {
+					purple_serv_got_im(da->pc, img_context->from, fallback, img_context->flags, img_context->timestamp);
+				}
+			} else {
+				purple_serv_got_im(da->pc, img_context->from, fallback, img_context->flags, img_context->timestamp);
+			}
 		}
+		g_free(fallback);
 	}
 
 	discord_free_image_context(img_context);
@@ -2834,6 +2869,151 @@ discord_treat_room_as_small(DiscordAccount *da, guint64 room_id, DiscordGuild *g
 	return FALSE;
 }
 
+static gchar *
+discord_get_sticker_url(const gchar *sticker_id, gint64 format_type)
+{
+	if (!sticker_id)
+		return NULL;
+
+	if (format_type == 4) {
+		return g_strdup_printf("https://media.discordapp.net/stickers/%s.gif", sticker_id);
+	} else if (format_type == 3) {
+		return g_strdup_printf("https://" DISCORD_CDN_SERVER "/stickers/%s.json", sticker_id);
+	} else {
+		return g_strdup_printf("https://" DISCORD_CDN_SERVER "/stickers/%s.png", sticker_id);
+	}
+}
+
+typedef struct {
+	gint conv_id;
+	gchar *from;
+	gchar *shortcut;
+	gint64 format_type;
+} DiscordStickerData;
+
+static void
+discord_fetch_sticker_cb(DiscordAccount *da, JsonNode *node, gpointer user_data)
+{
+	DiscordStickerData *data = user_data;
+
+	if (node != NULL) {
+		JsonObject *response = json_node_get_object(node);
+		const gchar *response_str;
+		gsize response_len;
+		PurpleSmiley *smiley = NULL;
+
+		response_str = g_dataset_get_data(node, "raw_body");
+		response_len = json_object_get_int_member(response, "len");
+
+		if (response_str && response_len > 0) {
+			smiley = purple_smiley_new_from_data(data->shortcut, (const guchar *) response_str, response_len);
+			if (smiley != NULL) {
+				PurpleConversation *conv = NULL;
+				if (data->conv_id >= 0) {
+					PurpleChatConversation *chatconv = purple_conversations_find_chat(da->pc, data->conv_id);
+					if (chatconv)
+						conv = PURPLE_CONVERSATION(chatconv);
+				} else if (data->from) {
+					PurpleIMConversation *imconv = purple_conversations_find_im_with_account(data->from, da->account);
+					if (imconv)
+						conv = PURPLE_CONVERSATION(imconv);
+				}
+
+				if (conv != NULL) {
+					purple_conversation_add_smiley(conv, smiley);
+				}
+				g_object_unref(G_OBJECT(smiley));
+			}
+		}
+	}
+
+	g_free(data->shortcut);
+	g_free(data->from);
+	g_free(data);
+}
+
+static void
+discord_process_stickers(DiscordAccount *da, JsonArray *stickers, PurpleConversation *conv,
+                         gint conv_id, const gchar *from, PurpleMessageFlags flags,
+                         time_t timestamp, DiscordGuild *guild, guint64 channel_id)
+{
+	if (stickers == NULL || from == NULL)
+		return;
+
+	guint stickers_len = json_array_get_length(stickers);
+	for (guint n = 0; n < stickers_len; n++) {
+		JsonObject *sticker = json_array_get_object_element(stickers, n);
+		if (sticker == NULL)
+			continue;
+
+		const gchar *sticker_id = json_object_get_string_member(sticker, "id");
+		gint64 format_type = json_object_get_int_member(sticker, "format_type");
+
+		if (!sticker_id)
+			continue;
+
+		gchar *url = discord_get_sticker_url(sticker_id, format_type);
+
+		if (conv == NULL) {
+			if (conv_id >= 0) {
+				PurpleChatConversation *chatconv = purple_conversations_find_chat(da->pc, conv_id);
+				if (chatconv)
+					conv = PURPLE_CONVERSATION(chatconv);
+			} else {
+				PurpleIMConversation *imconv = purple_conversations_find_im_with_account(from, da->account);
+				if (imconv == NULL)
+					imconv = purple_im_conversation_new(da->account, from);
+				conv = PURPLE_CONVERSATION(imconv);
+			}
+		}
+
+		if (conv_id >= 0) {
+			purple_serv_got_chat_in(da->pc, conv_id, from, flags | PURPLE_MESSAGE_NO_LINKIFY, url, timestamp);
+		} else {
+			if (flags & PURPLE_MESSAGE_SEND) {
+				PurpleMessage *msg = purple_message_new_outgoing(from, url, flags | PURPLE_MESSAGE_NO_LINKIFY);
+				purple_message_set_time(msg, timestamp);
+				purple_conversation_write_message(conv, msg);
+				purple_message_destroy(msg);
+			} else {
+				purple_serv_got_im(da->pc, from, url, flags | PURPLE_MESSAGE_NO_LINKIFY, timestamp);
+			}
+		}
+
+		if (conv != NULL) {
+			GList *l = conv->logs;
+			if (l != NULL) {
+				PurpleLog *log = l->data;
+				purple_log_write(log, flags | PURPLE_MESSAGE_INVISIBLE, from, timestamp, url);
+			}
+		}
+
+		gboolean is_image = (format_type == 1 || format_type == 2 || format_type == 4);
+		gboolean should_download = is_image && purple_account_get_bool(da->account, "display-stickers", purple_strequal(purple_core_get_ui(), "gtk-gaim"));
+
+		if (conv_id >= 0 && should_download) {
+			if (!discord_treat_room_as_small(da, channel_id, guild) &&
+			    !purple_account_get_bool(da->account, "display-images-large-servers", FALSE)) {
+				should_download = FALSE;
+			}
+		}
+
+		if (should_download) {
+			if (conv == NULL || !purple_conversation_get_smiley(conv, url)) {
+				DiscordStickerData *sticker_data = g_new0(DiscordStickerData, 1);
+				sticker_data->conv_id = conv_id;
+				sticker_data->from = g_strdup(from);
+				sticker_data->shortcut = g_strdup(url);
+				sticker_data->format_type = format_type;
+
+				discord_fetch_url(da, url, NULL, discord_fetch_sticker_cb, sticker_data);
+			}
+		}
+
+		g_free(url);
+	}
+}
+
 static void discord_thread_parent_cb(DiscordAccount *da, JsonNode *node, gpointer user_data);
 
 static guint64
@@ -2867,6 +3047,9 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 	JsonArray *attachments = json_object_get_array_member(data, "attachments");
 	JsonArray *embeds = json_object_get_array_member(data, "embeds");
 	JsonArray *stickers = json_object_get_array_member(data, "sticker_items");
+	if (stickers == NULL) {
+		stickers = json_object_get_array_member(data, "stickers");
+	}
 	JsonArray *reactions = json_object_get_array_member(data, "reactions");
 	JsonArray *mentions = json_object_get_array_member(data, "mentions");
 	JsonArray *mention_roles = json_object_get_array_member(data, "mention_roles");
@@ -3033,19 +3216,7 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 		g_free(thread_ts);
 	}
 
-	if (stickers != NULL) {
-		guint stickers_len = json_array_get_length(stickers);
 
-		for (guint n = 0; n < stickers_len; n++) {
-			JsonObject *sticker = json_array_get_object_element(stickers, n);
-			const gchar *sticker_id = json_object_get_string_member(sticker, "id");
-			const gchar *sticker_format = json_object_get_int_member(sticker, "format_type") == 3 ? "json" : "png";
-
-			tmp = g_strdup_printf("%s\nhttps://" DISCORD_CDN_SERVER "/stickers/%s.%s", escaped_content, sticker_id, sticker_format);
-			g_free(escaped_content);
-			escaped_content = tmp;
-		}
-	}
 
 	if (embeds != NULL) {
 		GString *embed_str = g_string_new(NULL);
@@ -3230,6 +3401,10 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 						purple_message_destroy(msg);
 					}
 				}
+
+				if (stickers) {
+					discord_process_stickers(da, stickers, conv, -1, username, flags, timestamp, guild, channel_id);
+				}
 			}
 		} else {
 			DiscordUser *author = discord_upsert_user(da->new_users, author_obj);
@@ -3301,6 +3476,10 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 					}
 
 				}
+			}
+
+			if (stickers) {
+				discord_process_stickers(da, stickers, conv, -1, merged_username, flags, timestamp, guild, channel_id);
 			}
 
 			g_free(merged_username);
@@ -3523,6 +3702,10 @@ discord_process_message(DiscordAccount *da, JsonObject *data, unsigned special_t
 					purple_serv_got_chat_in(da->pc, discord_chat_hash(channel_id), name, flags, url_log, timestamp);
 				}
 			}
+		}
+
+		if (stickers) {
+			discord_process_stickers(da, stickers, conv, discord_chat_hash(channel_id), name, flags, timestamp, guild, channel_id);
 		}
 
 		if (reactions != NULL && purple_account_get_bool(da->account, "show-reactions", TRUE)) {
@@ -9411,6 +9594,9 @@ discord_add_account_options(GList *account_options)
 	option = purple_account_option_bool_new(_("Display custom emoji as inline images"), "show-custom-emojis", TRUE);
 	account_options = g_list_append(account_options, option);
 
+	option = purple_account_option_bool_new(_("Display stickers in conversations"), "display-stickers", purple_strequal(purple_core_get_ui(), "gtk-gaim"));
+	account_options = g_list_append(account_options, option);
+
 	option = purple_account_option_int_new(_("Approximate max number of users to keep track of, per server (0 disables)"), "max-guild-presences", 200);
 	account_options = g_list_append(account_options, option);
 
@@ -10263,6 +10449,40 @@ discord_cmd_roles(PurpleConversation *conv, const gchar *cmd, gchar **args, gcha
 }
 
 static PurpleCmdRet
+discord_cmd_sticker(PurpleConversation *conv, const gchar *cmd, gchar **args, gchar **error, gpointer data)
+{
+	PurpleConnection *pc = purple_conversation_get_connection(conv);
+	DiscordAccount *da = purple_connection_get_protocol_data(pc);
+	guint64 room_id = discord_get_channel_id_from_conv(da, conv);
+
+	if (pc == NULL || (int)room_id == -1 || args == NULL || args[0] == NULL) {
+		return PURPLE_CMD_RET_FAILED;
+	}
+
+	JsonObject *msg_data = json_object_new();
+	JsonArray *sticker_ids = json_array_new();
+	json_array_add_string_element(sticker_ids, args[0]);
+	json_object_set_array_member(msg_data, "sticker_ids", sticker_ids);
+	json_object_set_string_member(msg_data, "content", "");
+
+	gchar *nonce = g_strdup_printf("%" G_GUINT32_FORMAT, g_random_int());
+	json_object_set_string_member(msg_data, "nonce", nonce);
+	json_object_set_boolean_member(msg_data, "tts", FALSE);
+	g_hash_table_insert(da->sent_message_ids, nonce, nonce);
+
+	gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/channels/%" G_GUINT64_FORMAT "/messages", room_id);
+	gchar *postdata = json_object_to_string(msg_data);
+
+	discord_fetch_url(da, url, postdata, NULL, NULL);
+
+	g_free(postdata);
+	g_free(url);
+	json_object_unref(msg_data);
+
+	return PURPLE_CMD_RET_OK;
+}
+
+static PurpleCmdRet
 discord_cmd_nick(PurpleConversation *conv, const gchar *cmd, gchar **args, gchar **error, gpointer data)
 {
 	PurpleConnection *pc = purple_conversation_get_connection(conv);
@@ -10842,6 +11062,13 @@ plugin_load(PurplePlugin *plugin, GError **error)
 			PURPLE_CMD_FLAG_CHAT | PURPLE_CMD_FLAG_IM | PURPLE_CMD_FLAG_PROTOCOL_ONLY,
 						DISCORD_PLUGIN_ID, discord_cmd_join_server,
 						_("joinserver &lt;invite code/URL&gt;:   Joins a new server using the invite code or URL."), NULL
+	);
+
+	purple_cmd_register(
+		"sticker", "w", PURPLE_CMD_P_PLUGIN,
+		PURPLE_CMD_FLAG_CHAT | PURPLE_CMD_FLAG_IM | PURPLE_CMD_FLAG_PROTOCOL_ONLY,
+		DISCORD_PLUGIN_ID, discord_cmd_sticker,
+		_("sticker &lt;sticker_id&gt;:  Sends a sticker with the given sticker ID"), NULL
 	);
 
 #if 0
