@@ -52,6 +52,7 @@
 #include "purple_compat.h"
 
 #include "markdown.h"
+#include "discord_lottie.h"
 
 // Prevent segfault in libpurple ssl plugins
 #define purple_ssl_read(a, b, c)  ((a) && (a)->private_data ? purple_ssl_read((a), (b), (c)) : 0)
@@ -2906,7 +2907,17 @@ discord_fetch_sticker_cb(DiscordAccount *da, JsonNode *node, gpointer user_data)
 		response_len = json_object_get_int_member(response, "len");
 
 		if (response_str && response_len > 0) {
-			smiley = purple_smiley_new_from_data(data->shortcut, (const guchar *) response_str, response_len);
+			if (data->format_type == 3) {
+				gsize gif_len = 0;
+				gpointer gif_data = discord_lottie_render_to_gif(response_str, 160, 160, 30, &gif_len);
+				if (gif_data != NULL) {
+					smiley = purple_smiley_new_from_data(data->shortcut, (const guchar *) gif_data, gif_len);
+					g_free(gif_data);
+				}
+			} else {
+				smiley = purple_smiley_new_from_data(data->shortcut, (const guchar *) response_str, response_len);
+			}
+
 			if (smiley != NULL) {
 				PurpleConversation *conv = NULL;
 				if (data->conv_id >= 0) {
@@ -2988,7 +2999,8 @@ discord_process_stickers(DiscordAccount *da, JsonArray *stickers, PurpleConversa
 			}
 		}
 
-		gboolean is_image = (format_type == 1 || format_type == 2 || format_type == 4);
+		gboolean is_image = (format_type == 1 || format_type == 2 || format_type == 4 ||
+		                     (format_type == 3 && discord_lottie_is_available()));
 		gboolean should_download = is_image && purple_account_get_bool(da->account, "display-stickers", purple_strequal(purple_core_get_ui(), "gtk-gaim"));
 
 		if (conv_id >= 0 && should_download) {

@@ -17,7 +17,7 @@ jobs:
       - name: Set up MinGW
         run: |
           sudo apt update
-          sudo apt install -y gcc-mingw-w64-i686-win32
+          sudo apt install -y gcc-mingw-w64-i686-win32 g++-mingw-w64-i686-win32
 
       - name: Load Pidgin from cache
         id: pidgin-cache
@@ -41,12 +41,12 @@ jobs:
         uses: actions/cache@v4
         with:
           path: win32-dev
-          key: win32-dev
+          key: win32-dev-v2
 
       - name: Setup WinPidgin build
         if: steps.win32-cache.outputs.cache-hit != 'true'
         run: |
-          mkdir win32-dev
+          mkdir -p win32-dev
           curl --http1.1 -L http://ftp.gnome.org/pub/gnome/binaries/win32/glib/2.28/glib-dev_2.28.8-1_win32.zip -o glib-dev.zip
           unzip glib-dev.zip -d win32-dev/glib-2.28.8
           curl --http1.1 -L http://ftp.gnome.org/pub/gnome/binaries/win32/dependencies/gettext-runtime-dev_0.18.1.1-2_win32.zip -o gettext-runtime.zip
@@ -64,6 +64,28 @@ jobs:
           tar -xf json-glib.tar.gz
           curl --http1.1 -L https://github.com/EionRobb/purple-discord/files/13785079/qrencode-4.1.1.zip -o qrencode.zip
           unzip qrencode.zip
+
+          # Build or download rlottie for static Win32 builds
+          if [ ! -d rlottie ]; then
+            if curl -s -f -L https://github.com/EionRobb/purple-discord/releases/latest/download/rlottie.zip -o rlottie.zip; then
+              unzip rlottie.zip
+            else
+              git clone --depth 1 https://github.com/Samsung/rlottie.git rlottie-src
+              cmake -B rlottie-src/build -S rlottie-src \
+                -DCMAKE_SYSTEM_NAME=Windows \
+                -DCMAKE_C_COMPILER=i686-w64-mingw32-gcc \
+                -DCMAKE_CXX_COMPILER=i686-w64-mingw32-g++ \
+                -DCMAKE_BUILD_TYPE=Release \
+                -DBUILD_SHARED_LIBS=OFF \
+                -DLOTTIE_MODULE=OFF \
+                -DLOTTIE_TEST=OFF
+              cmake --build rlottie-src/build -j$(nproc)
+              mkdir -p rlottie/inc
+              cp rlottie-src/inc/rlottie_capi.h rlottie/inc/
+              cp rlottie-src/build/librlottie.a rlottie/
+              rm -rf rlottie-src
+            fi
+          fi
           cd ..
 
           ls win32-dev/
@@ -73,14 +95,22 @@ jobs:
           export WIN32_CC=i686-w64-mingw32-gcc 
           export WIN32_DEV_TOP=win32-dev
           export PIDGIN_TREE_TOP=pidgin
-          make libdiscord.dll
+          make USE_RLOTTIE_STATIC=1 libdiscord.dll
+
+      - name: Package rlottie
+        run: |
+          if [ -d win32-dev/rlottie ] && [ ! -f rlottie.zip ]; then
+            (cd win32-dev && zip -r ../rlottie.zip rlottie)
+          fi
 
       - name: archive
         if: github.event_name == 'push' && github.ref == 'refs/heads/master' && !env.ACT
         uses: actions/upload-artifact@v4
         with: 
             name: plugin 
-            path: lib*.dll
+            path: |
+              lib*.dll
+              rlottie.zip
 
       - name: Set date
         id: date
@@ -90,7 +120,9 @@ jobs:
         if: github.event_name == 'push' && github.ref == 'refs/heads/master' && !env.ACT
         uses: ncipollo/release-action@v1
         with:
-          artifacts: lib*.dll
+          artifacts: |
+            lib*.dll
+            rlottie.zip
           tag: daily-${{ steps.date.outputs.DATE }}
           name: Daily ${{ steps.date.outputs.DATE }}
           allowUpdates: true
@@ -100,4 +132,6 @@ jobs:
         if: github.event_name == 'push' && github.ref == 'refs/heads/master' && !env.ACT
         uses: actions/attest-build-provenance@v1
         with:
-          subject-path: lib*.dll
+          subject-path: |
+            lib*.dll
+            rlottie.zip
