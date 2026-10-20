@@ -71,6 +71,9 @@ jobs:
               unzip rlottie.zip
             else
               git clone --depth 1 https://github.com/Samsung/rlottie.git rlottie-src
+              # Strip MSVC-specific /MT flags and fix Shlwapi library name for MinGW
+              sed -i 's|/MT[d]*||g' rlottie-src/CMakeLists.txt
+              sed -i 's|Shlwapi.lib|shlwapi|g' rlottie-src/CMakeLists.txt
               cmake -B rlottie-src/build -S rlottie-src \
                 -DCMAKE_SYSTEM_NAME=Windows \
                 -DCMAKE_C_COMPILER=i686-w64-mingw32-gcc \
@@ -79,9 +82,10 @@ jobs:
                 -DBUILD_SHARED_LIBS=OFF \
                 -DLOTTIE_MODULE=OFF \
                 -DLOTTIE_TEST=OFF
-              cmake --build rlottie-src/build -j$(nproc)
+              cmake --build rlottie-src/build --target rlottie -j$(nproc)
               mkdir -p rlottie/inc
               cp rlottie-src/inc/rlottie_capi.h rlottie/inc/
+              cp rlottie-src/inc/rlottiecommon.h rlottie/inc/
               cp rlottie-src/build/librlottie.a rlottie/
               rm -rf rlottie-src
             fi
