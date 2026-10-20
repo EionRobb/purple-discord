@@ -58,7 +58,9 @@
 #define purple_ssl_read(a, b, c)  ((a) && (a)->private_data ? purple_ssl_read((a), (b), (c)) : 0)
 
 #ifndef DISCORD_PLUGIN_OVERRIDE
+#ifndef DISCORD_PLUGIN_ID
 #define DISCORD_PLUGIN_ID "prpl-eionrobb-discord"
+#endif
 #define DISCORD_PLUGIN_NAME "Discord"
 #ifndef DISCORD_PLUGIN_VERSION
 #define DISCORD_PLUGIN_VERSION "1.0"
