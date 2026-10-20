@@ -22,9 +22,16 @@
 #   include <dlfcn.h>
 #endif
 
+typedef struct Lottie_Animation_S Lottie_Animation;
+
 #ifdef RLOTTIE_STATIC
 
-#include <rlottie_capi.h>
+Lottie_Animation *lottie_animation_from_data(const char *data, const char *key, const char *resourcePath);
+void lottie_animation_destroy(Lottie_Animation *animation);
+size_t lottie_animation_get_totalframe(const Lottie_Animation *animation);
+double lottie_animation_get_framerate(const Lottie_Animation *animation);
+void lottie_animation_get_size(const Lottie_Animation *animation, size_t *width, size_t *height);
+void lottie_animation_render(Lottie_Animation *animation, size_t frame_num, uint32_t *buffer, size_t width, size_t height, size_t bytesPerLine);
 
 #define lottie_from_data_ptr       lottie_animation_from_data
 #define lottie_destroy_ptr         lottie_animation_destroy
@@ -40,8 +47,6 @@ discord_lottie_is_available(void)
 }
 
 #else
-
-typedef struct Lottie_Animation_S Lottie_Animation;
 
 typedef Lottie_Animation *(*lottie_from_data_fn)(const char *data, const char *key, const char *resourcePath);
 typedef void (*lottie_destroy_fn)(Lottie_Animation *animation);
@@ -123,6 +128,7 @@ discord_lottie_is_available(void)
 #   pragma GCC diagnostic ignored "-Wold-style-declaration"
 #   pragma GCC diagnostic ignored "-Wmissing-field-initializers"
 #   pragma GCC diagnostic ignored "-Wunused-function"
+#   pragma GCC diagnostic ignored "-Wunused-parameter"
 #endif
 
 #define MSF_GIF_IMPL

@@ -108,7 +108,7 @@ endif
 
 ifeq ($(USE_RLOTTIE_STATIC), 1)
 	WIN32_CFLAGS += -DRLOTTIE_STATIC -I$(WIN32_DEV_TOP)/rlottie/inc
-	WIN32_LDFLAGS += -L$(WIN32_DEV_TOP)/rlottie -lrlottie -static-libstdc++
+	WIN32_LDFLAGS += -L$(WIN32_DEV_TOP)/rlottie -lrlottie -lshlwapi -static-libstdc++
 	CFLAGS += -DRLOTTIE_STATIC
 	LDFLAGS += -lrlottie -lstdc++
 endif

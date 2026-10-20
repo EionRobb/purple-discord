@@ -74,6 +74,7 @@ jobs:
               # Strip MSVC-specific /MT flags and fix Shlwapi library name for MinGW
               sed -i 's|/MT[d]*||g' rlottie-src/CMakeLists.txt
               sed -i 's|Shlwapi.lib|shlwapi|g' rlottie-src/CMakeLists.txt
+              sed -i 's|#define RLOTTIE_API __declspec(dllimport)|#define RLOTTIE_API|g' rlottie-src/inc/rlottiecommon.h
               cmake -B rlottie-src/build -S rlottie-src \
                 -DCMAKE_SYSTEM_NAME=Windows \
                 -DCMAKE_C_COMPILER=i686-w64-mingw32-gcc \
