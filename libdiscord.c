@@ -407,6 +407,7 @@ typedef struct {
 
 	gint64 seq; /* incrementing counter */
 	guint heartbeat_timeout;
+	gboolean heartbeat_ack_pending; /* a heartbeat was sent and no OP_HEARTBEAT_ACK has come back yet */
 	guint five_minute_restart;
 
 	GHashTable *one_to_ones;		/* A store of known room_id's -> username's */
@@ -1866,7 +1867,22 @@ static gboolean
 discord_send_heartbeat(gpointer userdata)
 {
 	DiscordAccount *da = userdata;
-	JsonObject *obj = json_object_new();
+	JsonObject *obj;
+
+	/* Discord ACKs every heartbeat. If the previous one was not, the connection is half-dead: no
+	 * more events arrive and no close frame comes either. Reconnect, as the gateway docs advise. */
+	if (da->heartbeat_ack_pending) {
+		purple_debug_error("discord", "heartbeat not acknowledged, reconnecting\n");
+		da->heartbeat_ack_pending = FALSE;
+		/* Returning FALSE removes this source; discord_close must not remove it again. */
+		da->heartbeat_timeout = 0;
+		/* A connection error makes libpurple log in again from scratch, which is safer than
+		 * restarting the socket on the account state in place. */
+		purple_connection_error(da->pc, PURPLE_CONNECTION_ERROR_NETWORK_ERROR, _("Discord stopped acknowledging heartbeats"));
+		return FALSE;
+	}
+
+	obj = json_object_new();
 
 #ifdef USE_QRCODE_AUTH
 	if (da->running_auth_qrcode)
@@ -1877,6 +1893,7 @@ discord_send_heartbeat(gpointer userdata)
 	json_object_set_int_member(obj, "op", OP_HEARTBEAT);
 	json_object_set_int_member(obj, "d", da->seq);
 
+	da->heartbeat_ack_pending = TRUE; /* expect an ACK before the next heartbeat fires */
 	discord_socket_write_json(da, obj);
 
 	json_object_unref(obj);
@@ -4280,6 +4297,12 @@ static void discord_send_lazy_guild_request(DiscordAccount *da, DiscordGuild *gu
 static void
 discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data)
 {
+	/* Every branch below reads from data; a dispatch frame without an object "d" has none. */
+	if (data == NULL) {
+		purple_debug_info("discord", "discord_process_dispatch: no/malformed data for %s, skipping\n", type ? type : "(null)");
+		return;
+	}
+
 	if (purple_strequal(type, "PRESENCE_UPDATE")) {
 		JsonObject *userdata = json_object_get_object_member(data, "user");
 		DiscordUser *user = discord_upsert_user(da->new_users, userdata);
@@ -6868,7 +6891,19 @@ discord_process_frame(DiscordAccount *da, const gchar *frame)
 			gint64 seq = json_object_get_int_member(obj, "s");
 
 			da->seq = seq;
-			discord_process_dispatch(da, type, json_object_get_object_member(obj, "d"));
+
+			/* "d" has been seen as an array during the presence burst after login. Check its
+			 * type first: json_object_get_object_member asserts on anything but an object or
+			 * null, and with checks disabled it hands back a bogus object. */
+			JsonNode *d_node = json_object_get_member(obj, "d");
+			JsonObject *d_obj = (d_node != NULL && (JSON_NODE_HOLDS_OBJECT(d_node) || JSON_NODE_HOLDS_NULL(d_node)))
+			                    ? json_object_get_object_member(obj, "d") : NULL;
+			if (d_node != NULL && d_obj == NULL && !JSON_NODE_HOLDS_NULL(d_node)) {
+				purple_debug_info("discord", "discord_process_frame: \"d\" is not an object (type %d) for event %s, skipping\n",
+				                   (int) json_node_get_node_type(d_node), type ? type : "(null)");
+				break;
+			}
+			discord_process_dispatch(da, type, d_obj);
 
 			break;
 		}
@@ -6906,6 +6941,7 @@ discord_process_frame(DiscordAccount *da, const gchar *frame)
 		}
 
 		case OP_HEARTBEAT_ACK: { /* Heartbeat ACK */
+			da->heartbeat_ack_pending = FALSE;
 			break;
 		}
 
@@ -7372,6 +7408,8 @@ static void
 discord_start_socket(DiscordAccount *da)
 {
 	const gchar *server;
+
+	da->heartbeat_ack_pending = FALSE;
 
 	if (da->heartbeat_timeout) {
 		g_source_remove(da->heartbeat_timeout);
