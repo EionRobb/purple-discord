@@ -393,6 +393,8 @@ typedef struct {
 	gchar *token;
 	gchar *session_id;
 	gchar *mfa_ticket;
+	gchar *fingerprint;
+	gchar *login_instance_id;
 	gchar *ack_token;
 
 	PurpleSslConnection *websocket;
@@ -1706,6 +1708,10 @@ discord_fetch_url_with_method_len(DiscordAccount *ya, const gchar *method, const
 
 	if (ya->token) {
 		purple_http_request_header_set(request, "Authorization", ya->token);
+	} else if (ya->fingerprint) {
+		/* Discord ties the login and its 2FA ticket to this fingerprint */
+		purple_http_request_header_set(request, "X-Fingerprint", ya->fingerprint);
+		purple_http_request_header_set(request, "Referer", "https://" DISCORD_API_SERVER "/login");
 	}
 
 	if (postdata) {
@@ -6286,15 +6292,35 @@ discord_mfa_text_entry(gpointer user_data, const gchar *code)
 {
 	DiscordAccount *da = user_data;
 	JsonObject *data = json_object_new();
-	gchar *str;
+	GString *clean_code = g_string_new(NULL);
+	const gchar *method;
+	gchar *str, *url;
 
-	json_object_set_string_member(data, "code", code);
+	/* Backup codes are shown as "xxxx-xxxx"; send just the characters */
+	for (; code && *code; code++) {
+		if (*code != '-' && !g_ascii_isspace(*code)) {
+			g_string_append_c(clean_code, *code);
+		}
+	}
+
+	/* 6-digit authenticator codes go to /totp, 8-character backup codes to /backup */
+	method = clean_code->len == 8 ? "backup" : "totp";
+
+	json_object_set_string_member(data, "code", clean_code->str);
 	json_object_set_string_member(data, "ticket", da->mfa_ticket);
+	if (da->login_instance_id) {
+		json_object_set_string_member(data, "login_instance_id", da->login_instance_id);
+	}
+	json_object_set_null_member(data, "login_source");
+	json_object_set_null_member(data, "gift_code_sku_id");
 
 	str = json_object_to_string(data);
-	discord_fetch_url(da, "https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/auth/mfa/totp", str, discord_login_response, NULL);
+	url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/auth/mfa/%s", method);
+	discord_fetch_url(da, url, str, discord_login_response, NULL);
 
+	g_free(url);
 	g_free(str);
+	g_string_free(clean_code, TRUE);
 	json_object_unref(data);
 
 	g_free(da->mfa_ticket);
@@ -6326,14 +6352,31 @@ discord_login_response(DiscordAccount *da, JsonNode *node, gpointer user_data)
 		}
 
 		if (json_object_get_boolean_member(response, "mfa")) {
+			gboolean has_totp = json_object_get_boolean_member(response, "totp");
+			gboolean has_backup = json_object_get_boolean_member(response, "backup");
+			const gchar *hint;
+
+			/* Tell the user which codes this account can actually use */
+			if (has_totp && has_backup) {
+				hint = _("Enter the 6-digit code from your authenticator app, or one of your 8-character backup codes.");
+			} else if (has_totp) {
+				hint = _("Enter the 6-digit code from your authenticator app.");
+			} else if (has_backup) {
+				hint = _("This Discord account has no authenticator app set up, so authenticator codes will not work. Enter one of your 8-character backup codes.");
+			} else {
+				hint = _("This Discord account only has two-factor methods this client cannot use (SMS or a security key). Log in with a token instead.");
+			}
+
 			g_free(da->mfa_ticket);
 			da->mfa_ticket = g_strdup(json_object_get_string_member(response, "ticket"));
+			g_free(da->login_instance_id);
+			da->login_instance_id = g_strdup(json_object_get_string_member(response, "login_instance_id"));
 
 			purple_request_input(
 				da->pc,
 				_("Two-factor authentication"),
 				_("Enter Discord auth code"),
-				_("You can get this token from your two-factor authentication mobile app."),
+				hint,
 				NULL, FALSE, FALSE, "",
 				_("_Login"), G_CALLBACK(discord_mfa_text_entry),
 				_("_Cancel"), G_CALLBACK(discord_mfa_cancel),
@@ -6377,9 +6420,69 @@ discord_login_response(DiscordAccount *da, JsonNode *node, gpointer user_data)
 				}
 			}
 		}
+
+		/* eg. {"message": "Invalid two-factor code", "code": 60008} */
+		if (json_object_has_member(response, "message")) {
+			purple_connection_error(da->pc, PURPLE_CONNECTION_ERROR_AUTHENTICATION_FAILED, json_object_get_string_member(response, "message"));
+			return;
+		}
 	}
 
 	purple_connection_error(da->pc, PURPLE_CONNECTION_ERROR_AUTHENTICATION_FAILED, _("Bad username/password"));
+}
+
+static void
+discord_send_login(DiscordAccount *da)
+{
+	JsonObject *data = json_object_new();
+	gchar *str;
+
+	json_object_set_string_member(data, "login", purple_account_get_username(da->account));
+	json_object_set_string_member(data, "password", purple_connection_get_password(da->pc));
+	json_object_set_boolean_member(data, "undelete", FALSE);
+	json_object_set_null_member(data, "login_source");
+	json_object_set_null_member(data, "gift_code_sku_id");
+
+	str = json_object_to_string(data);
+	discord_fetch_url(da, "https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/auth/login", str, discord_login_response, NULL);
+
+	g_free(str);
+	json_object_unref(data);
+}
+
+static void
+discord_got_login_fingerprint(DiscordAccount *da, JsonNode *node, gpointer user_data)
+{
+	gboolean from_experiments = GPOINTER_TO_INT(user_data);
+
+	if (node == NULL) {
+		/* The connection already failed or went away */
+		return;
+	}
+
+	if (JSON_NODE_HOLDS_OBJECT(node)) {
+		const gchar *fingerprint = json_object_get_string_member(json_node_get_object(node), "fingerprint");
+
+		if (fingerprint != NULL) {
+			g_free(da->fingerprint);
+			da->fingerprint = g_strdup(fingerprint);
+		}
+	}
+
+	if (da->fingerprint == NULL && from_experiments) {
+		/* Older way of getting one */
+		purple_debug_warning("discord", "No fingerprint from /experiments, trying /auth/fingerprint\n");
+		discord_fetch_url(da, "https://" DISCORD_API_SERVER "/api/v9/auth/fingerprint", "{}", discord_got_login_fingerprint, GINT_TO_POINTER(FALSE));
+		return;
+	}
+
+	if (da->fingerprint == NULL) {
+		purple_debug_warning("discord", "No login fingerprint; two-factor authentication may fail\n");
+	} else {
+		purple_debug_info("discord", "Got login fingerprint\n");
+	}
+
+	discord_send_login(da);
 }
 
 void
@@ -6446,17 +6549,10 @@ discord_login(PurpleAccount *account)
 		discord_start_socket(da);
 
 	} else if (account_password && *account_password) {
-		JsonObject *data = json_object_new();
-		gchar *str;
-
-		json_object_set_string_member(data, "login", purple_account_get_username(account));
-		json_object_set_string_member(data, "password", account_password);
-
-		str = json_object_to_string(data);
-		discord_fetch_url(da, "https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/auth/login", str, discord_login_response, NULL);
-
-		g_free(str);
-		json_object_unref(data);
+		/* Without a fingerprint Discord rejects every 2FA code (and may sign the account out everywhere).
+		 * Unauthenticated requests to /experiments hand one out; Discord only issues 3 valid ones
+		 * per IP every 2 minutes. */
+		discord_fetch_url(da, "https://" DISCORD_API_SERVER "/api/v9/experiments", NULL, discord_got_login_fingerprint, GINT_TO_POINTER(TRUE));
 
 	} else {
 #ifdef	USE_QRCODE_AUTH
@@ -6553,6 +6649,12 @@ discord_close(PurpleConnection *pc)
 	da->frame = NULL;
 	g_free(da->token);
 	da->token = NULL;
+	g_free(da->fingerprint);
+	da->fingerprint = NULL;
+	g_free(da->mfa_ticket);
+	da->mfa_ticket = NULL;
+	g_free(da->login_instance_id);
+	da->login_instance_id = NULL;
 	g_free(da->session_id);
 	da->session_id = NULL;
 	g_free(da->self_username);
