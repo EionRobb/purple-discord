@@ -6472,7 +6472,7 @@ discord_got_login_fingerprint(DiscordAccount *da, JsonNode *node, gpointer user_
 	if (da->fingerprint == NULL && from_experiments) {
 		/* Older way of getting one */
 		purple_debug_warning("discord", "No fingerprint from /experiments, trying /auth/fingerprint\n");
-		discord_fetch_url(da, "https://" DISCORD_API_SERVER "/api/v9/auth/fingerprint", "{}", discord_got_login_fingerprint, GINT_TO_POINTER(FALSE));
+		discord_fetch_url(da, "https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/auth/fingerprint", "{}", discord_got_login_fingerprint, GINT_TO_POINTER(FALSE));
 		return;
 	}
 
@@ -6552,7 +6552,7 @@ discord_login(PurpleAccount *account)
 		/* Without a fingerprint Discord rejects every 2FA code (and may sign the account out everywhere).
 		 * Unauthenticated requests to /experiments hand one out; Discord only issues 3 valid ones
 		 * per IP every 2 minutes. */
-		discord_fetch_url(da, "https://" DISCORD_API_SERVER "/api/v9/experiments", NULL, discord_got_login_fingerprint, GINT_TO_POINTER(TRUE));
+		discord_fetch_url(da, "https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/experiments", NULL, discord_got_login_fingerprint, GINT_TO_POINTER(TRUE));
 
 	} else {
 #ifdef	USE_QRCODE_AUTH
