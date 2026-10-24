@@ -6453,6 +6453,13 @@ discord_send_login(DiscordAccount *da)
 	json_object_unref(data);
 }
 
+/* Discord issues only 3 valid fingerprints per IP every 2 minutes; past that it still hands
+ * out fingerprints, but invalid ones. Reconnects within that window (or other accounts, since
+ * the limit is per IP) reuse the last one instead of asking again. */
+#define DISCORD_FINGERPRINT_REUSE_SECONDS 120
+static gchar *discord_last_fingerprint = NULL;
+static time_t discord_last_fingerprint_time = 0;
+
 static void
 discord_got_login_fingerprint(DiscordAccount *da, JsonNode *node, gpointer user_data)
 {
@@ -6469,6 +6476,10 @@ discord_got_login_fingerprint(DiscordAccount *da, JsonNode *node, gpointer user_
 		if (fingerprint != NULL) {
 			g_free(da->fingerprint);
 			da->fingerprint = g_strdup(fingerprint);
+
+			g_free(discord_last_fingerprint);
+			discord_last_fingerprint = g_strdup(fingerprint);
+			discord_last_fingerprint_time = time(NULL);
 		}
 	}
 
@@ -6552,10 +6563,17 @@ discord_login(PurpleAccount *account)
 		discord_start_socket(da);
 
 	} else if (account_password && *account_password) {
-		/* Without a fingerprint Discord rejects every 2FA code (and may sign the account out everywhere).
-		 * Unauthenticated requests to /experiments hand one out; Discord only issues 3 valid ones
-		 * per IP every 2 minutes. */
-		discord_fetch_url(da, "https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/experiments", NULL, discord_got_login_fingerprint, GINT_TO_POINTER(TRUE));
+		time_t fingerprint_age = time(NULL) - discord_last_fingerprint_time;
+
+		if (discord_last_fingerprint != NULL && fingerprint_age >= 0 && fingerprint_age < DISCORD_FINGERPRINT_REUSE_SECONDS) {
+			purple_debug_info("discord", "Reusing the login fingerprint from %d seconds ago\n", (int) fingerprint_age);
+			da->fingerprint = g_strdup(discord_last_fingerprint);
+			discord_send_login(da);
+		} else {
+			/* Without a fingerprint Discord rejects every 2FA code (and may sign the account out everywhere).
+			 * Unauthenticated requests to /experiments hand one out. */
+			discord_fetch_url(da, "https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/experiments", NULL, discord_got_login_fingerprint, GINT_TO_POINTER(TRUE));
+		}
 
 	} else {
 #ifdef	USE_QRCODE_AUTH
