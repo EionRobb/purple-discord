@@ -1717,6 +1717,9 @@ discord_fetch_url_with_method_len(DiscordAccount *ya, const gchar *method, const
 	if (postdata) {
 		if (strstr(url, "/login") && strstr(postdata, "password")) {
 			purple_debug_info("discord", "With postdata ###PASSWORD REMOVED###\n");
+		} else if (strstr(url, "/auth/mfa/")) {
+			/* The 2FA code (or backup code) and the login ticket */
+			purple_debug_info("discord", "With postdata ###2FA CODE REMOVED###\n");
 		} else {
 			purple_debug_info("discord", "With postdata %s\n", postdata);
 		}
