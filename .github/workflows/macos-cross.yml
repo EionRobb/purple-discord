@@ -30,9 +30,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ env.OSXCROSS }}
-          key: osxcross-${{ env.OSXCROSS_COMMIT }}-sdk11.3-sdk10.13
+          key: osxcross-${{ env.OSXCROSS_COMMIT }}-sdk11.3
 
-      - name: Download SDKs and build osxcross
+      - name: Download SDK and build osxcross
         if: steps.osxcross-cache.outputs.cache-hit != 'true'
         run: |
           mkdir -p "$RUNNER_TEMP/osxcross/tarballs"
@@ -40,13 +40,12 @@ jobs:
           cd "$RUNNER_TEMP/osxcross-src"
           git checkout -q "$OSXCROSS_COMMIT"
 
-          # 10.13 SDK provides i386 + x86_64; 11.3 SDK provides x86_64 + arm64
-          curl -fsSL https://github.com/phracker/MacOSX-SDKs/releases/download/10.13/MacOSX10.13.sdk.tar.xz -o tarballs/MacOSX10.13.sdk.tar.xz
+          # 11.3 SDK provides x86_64 and arm64 (Apple Silicon)
           curl -fsSL https://github.com/phracker/MacOSX-SDKs/releases/download/11.3/MacOSX11.3.sdk.tar.xz -o tarballs/MacOSX11.3.sdk.tar.xz
 
           sudo mkdir -p "$OSXCROSS" && sudo chown "$USER" "$OSXCROSS"
           UNATTENDED=1 BUILD_FLAVOR=stable TARGET_DIR="$OSXCROSS" \
-            ENABLE_ARCHS="i386 x86_64 arm64" ./build.sh
+            ENABLE_ARCHS="x86_64 arm64" ./build.sh
 
       - name: Add osxcross to PATH
         run: echo "$OSXCROSS/bin" >> $GITHUB_PATH
@@ -62,8 +61,8 @@ jobs:
             --cross-file <(cat << 'EOF'
           [binaries]
           c = 'arm64-apple-darwin-clang'
-          ar = 'arm64-apple-darwin-ar'
-          strip = 'arm64-apple-darwin-strip'
+          ar = 'llvm-ar'
+          strip = 'llvm-strip'
           [host_machine]
           system = 'darwin'
           cpu_family = 'aarch64'
@@ -79,8 +78,8 @@ jobs:
             --cross-file <(cat << 'EOF'
           [binaries]
           c = 'o64-clang'
-          ar = 'x86_64-apple-darwin-ar'
-          strip = 'x86_64-apple-darwin-strip'
+          ar = 'llvm-ar'
+          strip = 'llvm-strip'
           [host_machine]
           system = 'darwin'
           cpu_family = 'x86_64'
@@ -89,23 +88,6 @@ jobs:
           EOF
           )
           ninja -C json-glib-src/build-x86_64
-
-          # i386 slice
-          meson setup json-glib-src/build-i386 json-glib-src \
-            --default-library=static -Dintrospection=disabled -Dtests=false -Ddocumentation=disabled -Dnls=disabled \
-            --cross-file <(cat << 'EOF'
-          [binaries]
-          c = 'o32-clang'
-          ar = 'i386-apple-darwin-ar'
-          strip = 'i386-apple-darwin-strip'
-          [host_machine]
-          system = 'darwin'
-          cpu_family = 'x86'
-          cpu = 'i386'
-          endian = 'little'
-          EOF
-          )
-          ninja -C json-glib-src/build-i386
 
       - name: Build static rlottie slices
         run: |
@@ -118,8 +100,8 @@ jobs:
           [binaries]
           c = 'arm64-apple-darwin-clang'
           cpp = 'arm64-apple-darwin-clang++'
-          ar = 'arm64-apple-darwin-ar'
-          strip = 'arm64-apple-darwin-strip'
+          ar = 'llvm-ar'
+          strip = 'llvm-strip'
           [host_machine]
           system = 'darwin'
           cpu_family = 'aarch64'
@@ -136,8 +118,8 @@ jobs:
           [binaries]
           c = 'o64-clang'
           cpp = 'o64-clang++'
-          ar = 'x86_64-apple-darwin-ar'
-          strip = 'x86_64-apple-darwin-strip'
+          ar = 'llvm-ar'
+          strip = 'llvm-strip'
           [host_machine]
           system = 'darwin'
           cpu_family = 'x86_64'
@@ -146,24 +128,6 @@ jobs:
           EOF
           )
           ninja -C rlottie-src/build-x86_64
-
-          # i386
-          meson setup rlottie-src/build-i386 rlottie-src \
-            --default-library=static -Dexample=false -Dtest=false \
-            --cross-file <(cat << 'EOF'
-          [binaries]
-          c = 'o32-clang'
-          cpp = 'o32-clang++'
-          ar = 'i386-apple-darwin-ar'
-          strip = 'i386-apple-darwin-strip'
-          [host_machine]
-          system = 'darwin'
-          cpu_family = 'x86'
-          cpu = 'i386'
-          endian = 'little'
-          EOF
-          )
-          ninja -C rlottie-src/build-i386
 
       - name: Build plugin slices
         run: |
@@ -187,19 +151,10 @@ jobs:
                PURPLE_LIBS="-lz $PWD/json-glib-src/build-x86_64/json-glib/libjson-glib-1.0.a $PWD/rlottie-src/build-x86_64/src/librlottie.a -lc++"
           mv libdiscord.so libdiscord_x86_64.so
 
-          # 3. i386 slice
-          make clean
-          make CC=o32-clang \
-               CFLAGS="-O2 -g -pipe $GLIB_CFLAGS -DRLOTTIE_STATIC -DUSE_QRCODE_AUTH=0" \
-               LDFLAGS="-Wl,-undefined,dynamic_lookup" \
-               PURPLE_CFLAGS="$GLIB_CFLAGS" \
-               PURPLE_LIBS="-lz $PWD/json-glib-src/build-i386/json-glib/libjson-glib-1.0.a $PWD/rlottie-src/build-i386/src/librlottie.a -lc++"
-          mv libdiscord.so libdiscord_i386.so
-
       - name: Assemble fat binary
         run: |
-          LIPO=$(which x86_64-apple-darwin*-lipo || echo lipo)
-          $LIPO -create libdiscord_i386.so libdiscord_x86_64.so libdiscord_arm64.so -output libdiscord_macos.so
+          LIPO=$(which x86_64-apple-darwin*-lipo || which lipo)
+          $LIPO -create libdiscord_x86_64.so libdiscord_arm64.so -output libdiscord_macos.so
           $LIPO -info libdiscord_macos.so
 
       - name: Upload universal binary
