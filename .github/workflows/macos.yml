@@ -1,0 +1,134 @@
+name: macOS
+on:
+  - push
+  - pull_request
+
+jobs:
+  build-slice:
+    name: build (${{ matrix.arch }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            os: macos-latest
+            setup: brew
+          - arch: x86_64
+            os: macos-15-intel
+            setup: macports
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: install native arm64 deps (Homebrew)
+        if: matrix.setup == 'brew'
+        run: |
+          brew install pidgin json-glib gettext pkg-config nss qrencode
+          echo "PKG_CONFIG_PATH=$(brew --prefix)/lib/pkgconfig:$(brew --prefix)/opt/pidgin/lib/pkgconfig:$(brew --prefix)/opt/gettext/lib/pkgconfig:$(brew --prefix)/opt/json-glib/lib/pkgconfig:$(brew --prefix)/opt/nss/lib/pkgconfig:$(brew --prefix)/opt/qrencode/lib/pkgconfig" >> $GITHUB_ENV
+
+      - name: install MacPorts
+        if: matrix.setup == 'macports'
+        uses: melusina-org/setup-macports@v1
+
+      - name: install x86_64 deps (MacPorts)
+        if: matrix.setup == 'macports'
+        run: |
+          sudo port -N install pidgin json-glib nss qrencode pkgconfig
+          echo "PKG_CONFIG_PATH=/opt/local/lib/pkgconfig" >> $GITHUB_ENV
+
+      - name: build static json-glib
+        run: |
+          python3 -m pip install --upgrade meson ninja
+          git clone --depth 1 --branch 1.10.6 https://gitlab.gnome.org/GNOME/json-glib.git json-glib-src
+          meson setup json-glib-src/build json-glib-src \
+            --default-library=static \
+            -Dintrospection=disabled \
+            -Dtests=false \
+            -Ddocumentation=disabled \
+            -Dnls=disabled \
+            -Dc_args="-arch ${{ matrix.arch }} -mmacosx-version-min=10.13" \
+            -Dc_link_args="-arch ${{ matrix.arch }} -mmacosx-version-min=10.13"
+          ninja -C json-glib-src/build
+          echo "JSON_GLIB_A=$PWD/json-glib-src/build/json-glib/libjson-glib-1.0.a" >> $GITHUB_ENV
+
+      - name: build static rlottie
+        run: |
+          git clone --depth 1 https://github.com/Samsung/rlottie.git rlottie-src
+          meson setup rlottie-src/build rlottie-src \
+            --default-library=static \
+            -Dexample=false \
+            -Dtest=false \
+            -Dc_args="-arch ${{ matrix.arch }} -mmacosx-version-min=10.13" \
+            -Dcpp_args="-arch ${{ matrix.arch }} -mmacosx-version-min=10.13" \
+            -Dc_link_args="-arch ${{ matrix.arch }} -mmacosx-version-min=10.13" \
+            -Dcpp_link_args="-arch ${{ matrix.arch }} -mmacosx-version-min=10.13"
+          ninja -C rlottie-src/build
+          echo "RLOTTIE_A=$PWD/rlottie-src/build/src/librlottie.a" >> $GITHUB_ENV
+
+      - name: build slice
+        run: |
+          make USE_RLOTTIE_STATIC=1 \
+               CFLAGS="-O2 -g -pipe -arch ${{ matrix.arch }} -mmacosx-version-min=10.13 -DRLOTTIE_STATIC" \
+               LDFLAGS="-arch ${{ matrix.arch }} -mmacosx-version-min=10.13 -Wl,-undefined,dynamic_lookup" \
+               PURPLE_LIBS="-lz $JSON_GLIB_A $RLOTTIE_A"
+          mv libdiscord.so libdiscord_${{ matrix.arch }}.so
+          file libdiscord_${{ matrix.arch }}.so
+          otool -L libdiscord_${{ matrix.arch }}.so
+
+      - name: upload slice artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: slice-${{ matrix.arch }}
+          path: libdiscord_${{ matrix.arch }}.so
+
+  assemble:
+    name: assemble universal binary
+    needs: build-slice
+    runs-on: macos-latest
+    permissions:
+      id-token: write
+      contents: write
+      attestations: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: download slices
+        uses: actions/download-artifact@v4
+        with:
+          pattern: slice-*
+          merge-multiple: true
+
+      - name: stitch universal fat binary
+        run: |
+          lipo -create libdiscord_x86_64.so libdiscord_arm64.so -output libdiscord_macos.so
+          file libdiscord_macos.so
+          otool -L libdiscord_macos.so
+
+      - name: archive
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master' && !env.ACT
+        uses: actions/upload-artifact@v4
+        with: 
+          name: plugin 
+          path: lib*_macos.so
+
+      - name: Set date
+        id: date
+        run: echo "DATE=$(date +%Y-%m-%d)" >> $GITHUB_OUTPUT
+
+      - name: release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master' && !env.ACT
+        uses: ncipollo/release-action@v1
+        with:
+          artifacts: lib*_macos.so
+          tag: daily-${{ steps.date.outputs.DATE }}
+          name: Daily ${{ steps.date.outputs.DATE }}
+          allowUpdates: true
+          makeLatest: true
+
+      - name: attest
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master' && !env.ACT
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-path: lib*_macos.so
