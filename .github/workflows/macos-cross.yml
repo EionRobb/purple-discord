@@ -20,10 +20,10 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq \
-            clang cmake python3 make patch xz-utils bzip2 cpio \
+            clang cmake python3 meson ninja-build make patch xz-utils bzip2 cpio \
             libxml2-dev libssl-dev zlib1g-dev liblzma-dev libbz2-dev llvm-dev uuid-dev \
-            p7zip-full zip ninja-build pkg-config \
-            libglib2.0-dev libjson-glib-dev libpurple-dev
+            p7zip-full zip pkg-config \
+            libglib2.0-dev libjson-glib-dev libpurple-dev libnss3-dev
 
       - name: Cache osxcross
         id: osxcross-cache
@@ -48,46 +48,33 @@ jobs:
             ENABLE_ARCHS="x86_64 arm64" ./build.sh
 
       - name: Add osxcross to PATH
-        run: echo "$OSXCROSS/bin" >> $GITHUB_PATH
-
-      - name: Build static json-glib slices
         run: |
-          python3 -m pip install --upgrade meson
-          git clone --depth 1 --branch 1.10.6 https://gitlab.gnome.org/GNOME/json-glib.git json-glib-src
+          echo "$OSXCROSS/bin" >> $GITHUB_PATH
+          TARGET=$(basename "$(ls -1 "$OSXCROSS"/bin/x86_64-apple-darwin[0-9]*-clang | grep -v cmake | head -n 1)" | sed 's/x86_64-apple-//;s/-clang//')
+          echo "Detected Darwin target: $TARGET"
+          echo "DARWIN_TARGET=$TARGET" >> $GITHUB_ENV
 
-          # arm64 slice
-          meson setup json-glib-src/build-arm64 json-glib-src \
-            --default-library=static -Dintrospection=disabled -Dtests=false -Ddocumentation=disabled -Dnls=disabled \
-            --cross-file <(cat << 'EOF'
-          [binaries]
-          c = 'arm64-apple-darwin-clang'
-          ar = 'llvm-ar'
-          strip = 'llvm-strip'
-          [host_machine]
-          system = 'darwin'
-          cpu_family = 'aarch64'
-          cpu = 'arm64'
-          endian = 'little'
-          EOF
-          )
-          ninja -C json-glib-src/build-arm64
+      - name: Build static qrencode slices
+        run: |
+          git clone --depth 1 https://github.com/fukuchi/libqrencode.git qrencode-src
 
-          # x86_64 slice
-          meson setup json-glib-src/build-x86_64 json-glib-src \
-            --default-library=static -Dintrospection=disabled -Dtests=false -Ddocumentation=disabled -Dnls=disabled \
-            --cross-file <(cat << 'EOF'
-          [binaries]
-          c = 'o64-clang'
-          ar = 'llvm-ar'
-          strip = 'llvm-strip'
-          [host_machine]
-          system = 'darwin'
-          cpu_family = 'x86_64'
-          cpu = 'x86_64'
-          endian = 'little'
-          EOF
-          )
-          ninja -C json-glib-src/build-x86_64
+          # arm64
+          cmake -B qrencode-src/build-arm64 -S qrencode-src \
+            -DCMAKE_SYSTEM_NAME=Darwin \
+            -DCMAKE_C_COMPILER=arm64-apple-${DARWIN_TARGET}-clang \
+            -DCMAKE_AR=$OSXCROSS/bin/arm64-apple-${DARWIN_TARGET}-ar \
+            -DCMAKE_RANLIB=$OSXCROSS/bin/arm64-apple-${DARWIN_TARGET}-ranlib \
+            -DBUILD_SHARED_LIBS=OFF -DWITH_TOOLS=OFF -DWITH_TESTS=OFF
+          cmake --build qrencode-src/build-arm64
+
+          # x86_64
+          cmake -B qrencode-src/build-x86_64 -S qrencode-src \
+            -DCMAKE_SYSTEM_NAME=Darwin \
+            -DCMAKE_C_COMPILER=x86_64-apple-${DARWIN_TARGET}-clang \
+            -DCMAKE_AR=$OSXCROSS/bin/x86_64-apple-${DARWIN_TARGET}-ar \
+            -DCMAKE_RANLIB=$OSXCROSS/bin/x86_64-apple-${DARWIN_TARGET}-ranlib \
+            -DBUILD_SHARED_LIBS=OFF -DWITH_TOOLS=OFF -DWITH_TESTS=OFF
+          cmake --build qrencode-src/build-x86_64
 
       - name: Build static rlottie slices
         run: |
@@ -96,12 +83,13 @@ jobs:
           # arm64
           meson setup rlottie-src/build-arm64 rlottie-src \
             --default-library=static -Dexample=false -Dtest=false \
-            --cross-file <(cat << 'EOF'
+            --cross-file <(cat << EOF
           [binaries]
-          c = 'arm64-apple-darwin-clang'
-          cpp = 'arm64-apple-darwin-clang++'
-          ar = 'llvm-ar'
-          strip = 'llvm-strip'
+          c = 'arm64-apple-${DARWIN_TARGET}-clang'
+          cpp = 'arm64-apple-${DARWIN_TARGET}-clang++'
+          ar = 'arm64-apple-${DARWIN_TARGET}-ar'
+          ranlib = 'arm64-apple-${DARWIN_TARGET}-ranlib'
+          strip = 'arm64-apple-${DARWIN_TARGET}-strip'
           [host_machine]
           system = 'darwin'
           cpu_family = 'aarch64'
@@ -114,12 +102,13 @@ jobs:
           # x86_64
           meson setup rlottie-src/build-x86_64 rlottie-src \
             --default-library=static -Dexample=false -Dtest=false \
-            --cross-file <(cat << 'EOF'
+            --cross-file <(cat << EOF
           [binaries]
-          c = 'o64-clang'
-          cpp = 'o64-clang++'
-          ar = 'llvm-ar'
-          strip = 'llvm-strip'
+          c = 'x86_64-apple-${DARWIN_TARGET}-clang'
+          cpp = 'x86_64-apple-${DARWIN_TARGET}-clang++'
+          ar = 'x86_64-apple-${DARWIN_TARGET}-ar'
+          ranlib = 'x86_64-apple-${DARWIN_TARGET}-ranlib'
+          strip = 'x86_64-apple-${DARWIN_TARGET}-strip'
           [host_machine]
           system = 'darwin'
           cpu_family = 'x86_64'
@@ -131,34 +120,41 @@ jobs:
 
       - name: Build plugin slices
         run: |
-          GLIB_CFLAGS=$(pkg-config --cflags glib-2.0 purple)
+          GLIB_CFLAGS=$(pkg-config --cflags glib-2.0 json-glib-1.0 purple)
+          NSS_CFLAGS=$(pkg-config --cflags nss)
+          COMMON_LDFLAGS="-Wl,-undefined,dynamic_lookup -Wl,-rpath,/opt/homebrew/opt/nss/lib -Wl,-rpath,/usr/local/opt/nss/lib -Wl,-rpath,/opt/local/lib"
 
           # 1. arm64 slice
           make clean
-          make CC=arm64-apple-darwin-clang \
-               CFLAGS="-O2 -g -pipe $GLIB_CFLAGS -DRLOTTIE_STATIC -DUSE_QRCODE_AUTH=0" \
-               LDFLAGS="-Wl,-undefined,dynamic_lookup" \
-               PURPLE_CFLAGS="$GLIB_CFLAGS" \
-               PURPLE_LIBS="-lz $PWD/json-glib-src/build-arm64/json-glib/libjson-glib-1.0.a $PWD/rlottie-src/build-arm64/src/librlottie.a -lc++"
+          make USE_QRCODE_AUTH=1 \
+               CC=arm64-apple-${DARWIN_TARGET}-clang \
+               CFLAGS="-O2 -g -pipe $GLIB_CFLAGS $NSS_CFLAGS -I$PWD/qrencode-src -I$PWD/qrencode-src/build-arm64 -DRLOTTIE_STATIC -DUSE_QRCODE_AUTH" \
+               LDFLAGS="$COMMON_LDFLAGS" \
+               PURPLE_CFLAGS="$GLIB_CFLAGS $NSS_CFLAGS" \
+               PURPLE_LIBS="-lz $PWD/rlottie-src/build-arm64/src/librlottie.a $PWD/qrencode-src/build-arm64/libqrencode.a -lc++"
           mv libdiscord.so libdiscord_arm64.so
 
           # 2. x86_64 slice
           make clean
-          make CC=o64-clang \
-               CFLAGS="-O2 -g -pipe $GLIB_CFLAGS -DRLOTTIE_STATIC -DUSE_QRCODE_AUTH=0" \
-               LDFLAGS="-Wl,-undefined,dynamic_lookup" \
-               PURPLE_CFLAGS="$GLIB_CFLAGS" \
-               PURPLE_LIBS="-lz $PWD/json-glib-src/build-x86_64/json-glib/libjson-glib-1.0.a $PWD/rlottie-src/build-x86_64/src/librlottie.a -lc++"
+          make USE_QRCODE_AUTH=1 \
+               CC=x86_64-apple-${DARWIN_TARGET}-clang \
+               CFLAGS="-O2 -g -pipe $GLIB_CFLAGS $NSS_CFLAGS -I$PWD/qrencode-src -I$PWD/qrencode-src/build-x86_64 -DRLOTTIE_STATIC -DUSE_QRCODE_AUTH" \
+               LDFLAGS="$COMMON_LDFLAGS" \
+               PURPLE_CFLAGS="$GLIB_CFLAGS $NSS_CFLAGS" \
+               PURPLE_LIBS="-lz $PWD/rlottie-src/build-x86_64/src/librlottie.a $PWD/qrencode-src/build-x86_64/libqrencode.a -lc++"
           mv libdiscord.so libdiscord_x86_64.so
 
       - name: Assemble fat binary
         run: |
-          LIPO=$(which x86_64-apple-darwin*-lipo || which lipo)
+          LIPO="$OSXCROSS/bin/lipo"
           $LIPO -create libdiscord_x86_64.so libdiscord_arm64.so -output libdiscord_macos.so
           $LIPO -info libdiscord_macos.so
+          file libdiscord_macos.so
 
       - name: Upload universal binary
+        if: ${{ !env.ACT }}
         uses: actions/upload-artifact@v4
         with:
           name: libdiscord-macos-universal
           path: libdiscord_macos.so
+
