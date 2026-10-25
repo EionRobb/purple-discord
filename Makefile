@@ -110,7 +110,11 @@ ifeq ($(USE_RLOTTIE_STATIC), 1)
 	WIN32_CFLAGS += -DRLOTTIE_STATIC -I$(WIN32_DEV_TOP)/rlottie/inc
 	WIN32_LDFLAGS += -L$(WIN32_DEV_TOP)/rlottie -lrlottie -lshlwapi -Wl,-Bstatic -lstdc++ -Wl,-Bdynamic
 	CFLAGS += -DRLOTTIE_STATIC
-	LDFLAGS += -lrlottie -lstdc++
+	ifeq ($(UNAME_S), Darwin)
+		LDFLAGS += -lc++
+	else
+		LDFLAGS += -lrlottie -lstdc++
+	endif
 endif
 
 CFLAGS += -DLOCALEDIR=\"$(LOCALEDIR)\"
@@ -127,14 +131,19 @@ all: $(DISCORD_TARGET)
 
 build: all build-icons build-locales
 
+PURPLE_CFLAGS ?= $(shell $(PKG_CONFIG) purple glib-2.0 json-glib-1.0 zlib --cflags)
+PURPLE_LIBS ?= $(shell $(PKG_CONFIG) purple glib-2.0 json-glib-1.0 zlib --libs)
+PURPLE3_CFLAGS ?= $(shell $(PKG_CONFIG) purple-3 glib-2.0 json-glib-1.0 zlib --cflags)
+PURPLE3_LIBS ?= $(shell $(PKG_CONFIG) purple-3 glib-2.0 json-glib-1.0 zlib --libs)
+
 libdiscord.so: $(PURPLE_C_FILES) $(PURPLE_COMPAT_FILES)
-	$(CC) -fPIC $(CFLAGS) $(CPPFLAGS) -shared -o $@ $^ $(LDFLAGS) `$(PKG_CONFIG) purple glib-2.0 json-glib-1.0 zlib --libs --cflags`  $(INCLUDES) -Ipurple2compat -g -ggdb
+	$(CC) -fPIC $(CFLAGS) $(CPPFLAGS) -shared -o $@ $^ $(LDFLAGS) $(PURPLE_CFLAGS) $(PURPLE_LIBS) $(INCLUDES) -Ipurple2compat -g -ggdb
 
 libfluxer.so: $(PURPLE_C_FILES) $(PURPLE_COMPAT_FILES)
-	$(CC) -DDISCORD_PLUGIN_OVERRIDE=100 -fPIC $(CFLAGS) $(CPPFLAGS) -shared -o $@ $^ $(LDFLAGS) `$(PKG_CONFIG) purple glib-2.0 json-glib-1.0 zlib --libs --cflags`  $(INCLUDES) -Ipurple2compat -g -ggdb
+	$(CC) -DDISCORD_PLUGIN_OVERRIDE=100 -fPIC $(CFLAGS) $(CPPFLAGS) -shared -o $@ $^ $(LDFLAGS) $(PURPLE_CFLAGS) $(PURPLE_LIBS) $(INCLUDES) -Ipurple2compat -g -ggdb
 
 libdiscord3.so: $(PURPLE_C_FILES)
-	$(CC) -fPIC $(CFLAGS) $(CPPFLAGS) -shared -o $@ $^ $(LDFLAGS) `$(PKG_CONFIG) purple-3 glib-2.0 json-glib-1.0 zlib --libs --cflags` $(INCLUDES)  -g -ggdb
+	$(CC) -fPIC $(CFLAGS) $(CPPFLAGS) -shared -o $@ $^ $(LDFLAGS) $(PURPLE3_CFLAGS) $(PURPLE3_LIBS) $(INCLUDES) -g -ggdb
 
 libdiscord.dll: $(PURPLE_C_FILES) $(PURPLE_COMPAT_FILES)
 	$(WIN32_CC) -O0 -g -ggdb -shared -o $@ $^ $(WIN32_PIDGIN2_CFLAGS) $(WIN32_PIDGIN2_LDFLAGS) -Ipurple2compat
