@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-19 05:54+0100\n"
+"POT-Creation-Date: 2026-10-25 05:34+0100\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -183,13 +183,28 @@ msgstr ""
 msgid "Cancelled 2FA auth"
 msgstr ""
 
+msgid ""
+"Enter the 6-digit code from your authenticator app, or one of your 8-"
+"character backup codes."
+msgstr ""
+
+msgid "Enter the 6-digit code from your authenticator app."
+msgstr ""
+
+msgid ""
+"This Discord account has no authenticator app set up, so authenticator codes "
+"will not work. Enter one of your 8-character backup codes."
+msgstr ""
+
+msgid ""
+"This Discord account only has two-factor methods this client cannot use (SMS "
+"or a security key). Log in with a token instead."
+msgstr ""
+
 msgid "Two-factor authentication"
 msgstr ""
 
 msgid "Enter Discord auth code"
-msgstr ""
-
-msgid "You can get this token from your two-factor authentication mobile app."
 msgstr ""
 
 msgid "_Login"
@@ -502,9 +517,6 @@ msgid "Couldn't load file"
 msgstr ""
 
 msgid "Maximum file size is 10MB"
-msgstr ""
-
-msgid "Guessing file type is:"
 msgstr ""
 
 msgid "DM Does Not Exist"

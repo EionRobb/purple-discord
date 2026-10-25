@@ -10877,6 +10877,85 @@ purple_xfer_update_cb(DiscordAccount *da, JsonNode *node, gpointer userdata) {
 	}
 }
 
+static const gchar *
+discord_guess_mimetype(const gchar *filename, const guchar *data, gsize data_len)
+{
+	/* Magic bytes check */
+	if (data != NULL && data_len >= 4) {
+		if (data_len >= 8 && memcmp(data, "\x89PNG\r\n\x1a\n", 8) == 0)
+			return "image/png";
+		if (memcmp(data, "\xFF\xD8\xFF", 3) == 0)
+			return "image/jpeg";
+		if (data_len >= 6 && (memcmp(data, "GIF87a", 6) == 0 || memcmp(data, "GIF89a", 6) == 0))
+			return "image/gif";
+		if (data_len >= 12 && memcmp(data, "RIFF", 4) == 0 && memcmp(data + 8, "WEBP", 4) == 0)
+			return "image/webp";
+		if (data_len >= 8 && memcmp(data + 4, "ftyp", 4) == 0)
+			return "video/mp4";
+		if (memcmp(data, "%PDF", 4) == 0)
+			return "application/pdf";
+		if (memcmp(data, "PK\x03\x04", 4) == 0)
+			return "application/zip";
+		if (memcmp(data, "OggS", 4) == 0)
+			return "audio/ogg";
+	}
+
+	/* File extension lookup */
+	if (filename != NULL) {
+		const gchar *dot = strrchr(filename, '.');
+		if (dot != NULL) {
+			const gchar *ext = dot + 1;
+			static const struct {
+				const gchar *ext;
+				const gchar *mime;
+			} ext_map[] = {
+				{ "png",  "image/png" },
+				{ "jpg",  "image/jpeg" },
+				{ "jpeg", "image/jpeg" },
+				{ "gif",  "image/gif" },
+				{ "webp", "image/webp" },
+				{ "svg",  "image/svg+xml" },
+				{ "bmp",  "image/bmp" },
+				{ "ico",  "image/x-icon" },
+				{ "mp3",  "audio/mpeg" },
+				{ "ogg",  "audio/ogg" },
+				{ "wav",  "audio/wav" },
+				{ "flac", "audio/flac" },
+				{ "aac",  "audio/aac" },
+				{ "m4a",  "audio/mp4" },
+				{ "opus", "audio/opus" },
+				{ "mp4",  "video/mp4" },
+				{ "webm", "video/webm" },
+				{ "mkv",  "video/x-matroska" },
+				{ "mov",  "video/quicktime" },
+				{ "avi",  "video/x-msvideo" },
+				{ "txt",  "text/plain" },
+				{ "html", "text/html" },
+				{ "htm",  "text/html" },
+				{ "css",  "text/css" },
+				{ "js",   "application/javascript" },
+				{ "json", "application/json" },
+				{ "xml",  "application/xml" },
+				{ "csv",  "text/csv" },
+				{ "pdf",  "application/pdf" },
+				{ "zip",  "application/zip" },
+				{ "tar",  "application/x-tar" },
+				{ "gz",   "application/gzip" },
+				{ "7z",   "application/x-7z-compressed" },
+				{ NULL,   NULL }
+			};
+
+			for (gsize i = 0; ext_map[i].ext != NULL; i++) {
+				if (g_ascii_strcasecmp(ext, ext_map[i].ext) == 0) {
+					return ext_map[i].mime;
+				}
+			}
+		}
+	}
+
+	return "application/octet-stream";
+}
+
 // TODO progress, true cancel
 static void
 discord_xfer_send_init(PurpleXfer *xfer)
@@ -10884,7 +10963,7 @@ discord_xfer_send_init(PurpleXfer *xfer)
 	gchar *filename;
 	gchar *url;
 	gchar *nonce;
-	gchar *mimetype;
+	const gchar *mimetype;
 	GMappedFile *file;
 	GString *postdata;
 
@@ -10926,10 +11005,7 @@ discord_xfer_send_init(PurpleXfer *xfer)
 	// are NOT the responsibility of the caller
 	gchar *contents = g_mapped_file_get_contents(file);
 
-	gboolean guessing;
-	mimetype = g_content_type_guess(fullpath, (guchar *) contents, file_len, &guessing);
-	if (guessing)
-		purple_notify_info(da, fullpath, _("Guessing file type is:"), mimetype);
+	mimetype = discord_guess_mimetype(fullpath, (const guchar *) contents, file_len);
 
 	filename = g_path_get_basename(fullpath);
 	purple_xfer_set_filename(xfer, filename);
@@ -10960,7 +11036,6 @@ discord_xfer_send_init(PurpleXfer *xfer)
 	g_free(filename);
 	g_free(url);
 	g_free(nonce);
-	g_free(mimetype);
 	g_mapped_file_unref(file);
 	g_string_free(postdata, TRUE);
 }
