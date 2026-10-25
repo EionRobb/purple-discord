@@ -1,0 +1,209 @@
+name: macOS Cross (Ubuntu)
+on:
+  - push
+  - pull_request
+  - workflow_dispatch
+
+jobs:
+  cross-build:
+    name: cross-compile macOS universal
+    runs-on: ubuntu-24.04
+
+    env:
+      OSXCROSS_COMMIT: 27d21e4977c9751d01199c7a226a6faf494c3dd9
+      OSXCROSS: /opt/osxcross
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build tools and Ubuntu headers
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq \
+            clang cmake python3 make patch xz-utils bzip2 cpio \
+            libxml2-dev libssl-dev zlib1g-dev liblzma-dev libbz2-dev llvm-dev uuid-dev \
+            p7zip-full zip ninja-build pkg-config \
+            libglib2.0-dev libjson-glib-dev libpurple-dev
+
+      - name: Cache osxcross
+        id: osxcross-cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.OSXCROSS }}
+          key: osxcross-${{ env.OSXCROSS_COMMIT }}-sdk11.3-sdk10.13
+
+      - name: Download SDKs and build osxcross
+        if: steps.osxcross-cache.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p "$RUNNER_TEMP/osxcross/tarballs"
+          git clone -q https://github.com/tpoechtrager/osxcross.git "$RUNNER_TEMP/osxcross-src"
+          cd "$RUNNER_TEMP/osxcross-src"
+          git checkout -q "$OSXCROSS_COMMIT"
+
+          # 10.13 SDK provides i386 + x86_64; 11.3 SDK provides x86_64 + arm64
+          curl -fsSL https://github.com/phracker/MacOSX-SDKs/releases/download/10.13/MacOSX10.13.sdk.tar.xz -o tarballs/MacOSX10.13.sdk.tar.xz
+          curl -fsSL https://github.com/phracker/MacOSX-SDKs/releases/download/11.3/MacOSX11.3.sdk.tar.xz -o tarballs/MacOSX11.3.sdk.tar.xz
+
+          sudo mkdir -p "$OSXCROSS" && sudo chown "$USER" "$OSXCROSS"
+          UNATTENDED=1 BUILD_FLAVOR=stable TARGET_DIR="$OSXCROSS" \
+            ENABLE_ARCHS="i386 x86_64 arm64" ./build.sh
+
+      - name: Add osxcross to PATH
+        run: echo "$OSXCROSS/bin" >> $GITHUB_PATH
+
+      - name: Build static json-glib slices
+        run: |
+          python3 -m pip install --upgrade meson
+          git clone --depth 1 --branch 1.10.6 https://gitlab.gnome.org/GNOME/json-glib.git json-glib-src
+
+          # arm64 slice
+          meson setup json-glib-src/build-arm64 json-glib-src \
+            --default-library=static -Dintrospection=disabled -Dtests=false -Ddocumentation=disabled -Dnls=disabled \
+            --cross-file <(cat << 'EOF'
+          [binaries]
+          c = 'arm64-apple-darwin-clang'
+          ar = 'arm64-apple-darwin-ar'
+          strip = 'arm64-apple-darwin-strip'
+          [host_machine]
+          system = 'darwin'
+          cpu_family = 'aarch64'
+          cpu = 'arm64'
+          endian = 'little'
+          EOF
+          )
+          ninja -C json-glib-src/build-arm64
+
+          # x86_64 slice
+          meson setup json-glib-src/build-x86_64 json-glib-src \
+            --default-library=static -Dintrospection=disabled -Dtests=false -Ddocumentation=disabled -Dnls=disabled \
+            --cross-file <(cat << 'EOF'
+          [binaries]
+          c = 'o64-clang'
+          ar = 'x86_64-apple-darwin-ar'
+          strip = 'x86_64-apple-darwin-strip'
+          [host_machine]
+          system = 'darwin'
+          cpu_family = 'x86_64'
+          cpu = 'x86_64'
+          endian = 'little'
+          EOF
+          )
+          ninja -C json-glib-src/build-x86_64
+
+          # i386 slice
+          meson setup json-glib-src/build-i386 json-glib-src \
+            --default-library=static -Dintrospection=disabled -Dtests=false -Ddocumentation=disabled -Dnls=disabled \
+            --cross-file <(cat << 'EOF'
+          [binaries]
+          c = 'o32-clang'
+          ar = 'i386-apple-darwin-ar'
+          strip = 'i386-apple-darwin-strip'
+          [host_machine]
+          system = 'darwin'
+          cpu_family = 'x86'
+          cpu = 'i386'
+          endian = 'little'
+          EOF
+          )
+          ninja -C json-glib-src/build-i386
+
+      - name: Build static rlottie slices
+        run: |
+          git clone --depth 1 https://github.com/Samsung/rlottie.git rlottie-src
+
+          # arm64
+          meson setup rlottie-src/build-arm64 rlottie-src \
+            --default-library=static -Dexample=false -Dtest=false \
+            --cross-file <(cat << 'EOF'
+          [binaries]
+          c = 'arm64-apple-darwin-clang'
+          cpp = 'arm64-apple-darwin-clang++'
+          ar = 'arm64-apple-darwin-ar'
+          strip = 'arm64-apple-darwin-strip'
+          [host_machine]
+          system = 'darwin'
+          cpu_family = 'aarch64'
+          cpu = 'arm64'
+          endian = 'little'
+          EOF
+          )
+          ninja -C rlottie-src/build-arm64
+
+          # x86_64
+          meson setup rlottie-src/build-x86_64 rlottie-src \
+            --default-library=static -Dexample=false -Dtest=false \
+            --cross-file <(cat << 'EOF'
+          [binaries]
+          c = 'o64-clang'
+          cpp = 'o64-clang++'
+          ar = 'x86_64-apple-darwin-ar'
+          strip = 'x86_64-apple-darwin-strip'
+          [host_machine]
+          system = 'darwin'
+          cpu_family = 'x86_64'
+          cpu = 'x86_64'
+          endian = 'little'
+          EOF
+          )
+          ninja -C rlottie-src/build-x86_64
+
+          # i386
+          meson setup rlottie-src/build-i386 rlottie-src \
+            --default-library=static -Dexample=false -Dtest=false \
+            --cross-file <(cat << 'EOF'
+          [binaries]
+          c = 'o32-clang'
+          cpp = 'o32-clang++'
+          ar = 'i386-apple-darwin-ar'
+          strip = 'i386-apple-darwin-strip'
+          [host_machine]
+          system = 'darwin'
+          cpu_family = 'x86'
+          cpu = 'i386'
+          endian = 'little'
+          EOF
+          )
+          ninja -C rlottie-src/build-i386
+
+      - name: Build plugin slices
+        run: |
+          GLIB_CFLAGS=$(pkg-config --cflags glib-2.0 purple)
+
+          # 1. arm64 slice
+          make clean
+          make CC=arm64-apple-darwin-clang \
+               CFLAGS="-O2 -g -pipe $GLIB_CFLAGS -DRLOTTIE_STATIC -DUSE_QRCODE_AUTH=0" \
+               LDFLAGS="-Wl,-undefined,dynamic_lookup" \
+               PURPLE_CFLAGS="$GLIB_CFLAGS" \
+               PURPLE_LIBS="-lz $PWD/json-glib-src/build-arm64/json-glib/libjson-glib-1.0.a $PWD/rlottie-src/build-arm64/src/librlottie.a -lc++"
+          mv libdiscord.so libdiscord_arm64.so
+
+          # 2. x86_64 slice
+          make clean
+          make CC=o64-clang \
+               CFLAGS="-O2 -g -pipe $GLIB_CFLAGS -DRLOTTIE_STATIC -DUSE_QRCODE_AUTH=0" \
+               LDFLAGS="-Wl,-undefined,dynamic_lookup" \
+               PURPLE_CFLAGS="$GLIB_CFLAGS" \
+               PURPLE_LIBS="-lz $PWD/json-glib-src/build-x86_64/json-glib/libjson-glib-1.0.a $PWD/rlottie-src/build-x86_64/src/librlottie.a -lc++"
+          mv libdiscord.so libdiscord_x86_64.so
+
+          # 3. i386 slice
+          make clean
+          make CC=o32-clang \
+               CFLAGS="-O2 -g -pipe $GLIB_CFLAGS -DRLOTTIE_STATIC -DUSE_QRCODE_AUTH=0" \
+               LDFLAGS="-Wl,-undefined,dynamic_lookup" \
+               PURPLE_CFLAGS="$GLIB_CFLAGS" \
+               PURPLE_LIBS="-lz $PWD/json-glib-src/build-i386/json-glib/libjson-glib-1.0.a $PWD/rlottie-src/build-i386/src/librlottie.a -lc++"
+          mv libdiscord.so libdiscord_i386.so
+
+      - name: Assemble fat binary
+        run: |
+          LIPO=$(which x86_64-apple-darwin*-lipo || echo lipo)
+          $LIPO -create libdiscord_i386.so libdiscord_x86_64.so libdiscord_arm64.so -output libdiscord_macos.so
+          $LIPO -info libdiscord_macos.so
+
+      - name: Upload universal binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: libdiscord-macos-universal
+          path: libdiscord_macos.so
