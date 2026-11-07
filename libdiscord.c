@@ -7707,9 +7707,11 @@ discord_chat_invite(PurpleConnection *pc, int id, const char *message, const cha
 		return;
 	}
 
-	if (g_hash_table_contains_int64(da->group_dms, id)) {
+	if (g_hash_table_contains_int64(da->group_dms, room_id)) {
 		JsonObject *data = json_object_new();
-		json_object_set_string_member(data, "recipient", from_int(user->id));
+		gchar *recipient = from_int(user->id);
+		json_object_set_string_member(data, "recipient", recipient);
+		g_free(recipient);
 		gchar *postdata = json_object_to_string(data);
 
 		gchar *url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/channels/%" G_GUINT64_FORMAT "/recipients/%" G_GUINT64_FORMAT, room_id, user->id);
