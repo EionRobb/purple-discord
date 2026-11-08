@@ -404,6 +404,12 @@ typedef struct {
 	gchar *frame;
 	guint64 frame_len;
 	guint64 frame_len_progress;
+	GByteArray *frame_fragments;	/* payload so far of a message sent in several frames */
+	guint websocket_status_len;
+	guint frame_header_len;
+	gchar websocket_status[13];	/* start of the handshake reply's status line */
+	guchar frame_header[10];	/* frame header bytes read so far */
+	guchar websocket_header_nlbr;	/* run of CR/LF at the end of the handshake reply read so far */
 
 	gint64 seq; /* incrementing counter */
 	guint heartbeat_timeout;
@@ -6668,6 +6674,10 @@ discord_close(PurpleConnection *pc)
 	da->cookie_table = NULL;
 	g_free(da->frame);
 	da->frame = NULL;
+	if (da->frame_fragments != NULL) {
+		g_byte_array_free(da->frame_fragments, TRUE);
+		da->frame_fragments = NULL;
+	}
 	g_free(da->token);
 	da->token = NULL;
 	g_free(da->fingerprint);
@@ -7125,31 +7135,236 @@ discord_inflate(DiscordAccount *da, gchar *frame, gsize frame_len)
 
 static gboolean discord_five_minute_restart(gpointer data);
 
+/* Bytes of websocket frame header (RFC 6455 5.2) needed, given the first have bytes of it */
+static guint
+discord_socket_frame_header_size(const guchar *header, guint have)
+{
+	if (have < 2) {
+		return 2;
+	}
+
+	switch (header[1] & 0x7f) {
+		case 126:
+			return 4;
+		case 127:
+			return 10;
+		default:
+			return 2;
+	}
+}
+
+static void
+discord_socket_protocol_error(DiscordAccount *ya, const gchar *what, guint opcode)
+{
+	purple_debug_error("discord", "websocket protocol error: %s (opcode %u)\n", what, opcode);
+	purple_connection_error(ya->pc, PURPLE_CONNECTION_ERROR_NETWORK_ERROR, _("Websocket protocol error"));
+}
+
+/* Checks the frame header in ya->frame_header and sets up ya->frame for its payload.
+ * FALSE when the header is a protocol error; the connection is then being dropped. */
+static gboolean
+discord_socket_start_frame(DiscordAccount *ya)
+{
+	const guchar *header = ya->frame_header;
+	guint opcode = header[0] & 0x0f;
+	guint64 len = header[1] & 0x7f;
+	guint64 total;
+	guint i;
+
+	if (header[0] & 0x70) {
+		/* no extension was negotiated, so the reserved bits must be clear */
+		discord_socket_protocol_error(ya, "reserved bits set", opcode);
+		return FALSE;
+	}
+	if (header[1] & 0x80) {
+		discord_socket_protocol_error(ya, "masked frame from the server", opcode);
+		return FALSE;
+	}
+
+	if (len == 126) {
+		len = ((guint64) header[2] << 8) | header[3];
+	} else if (len == 127) {
+		len = 0;
+		for (i = 2; i < 10; i++) {
+			len = (len << 8) | header[i];
+		}
+		if ((len & (1ULL << 63)) != 0) {
+			purple_debug_error("discord", "Frame length has MSB set, possible protocol error\n");
+			purple_connection_error(ya->pc, PURPLE_CONNECTION_ERROR_NETWORK_ERROR, _("Websocket protocol error"));
+			return FALSE;
+		}
+	}
+
+	if (opcode >= 8) {
+		if (opcode > 10) {
+			discord_socket_protocol_error(ya, "unknown control opcode", opcode);
+			return FALSE;
+		}
+		if (!(header[0] & 0x80) || (header[1] & 0x7f) > 125) {
+			/* control frames are never fragmented and use only the 7-bit length */
+			discord_socket_protocol_error(ya, "fragmented or oversized control frame", opcode);
+			return FALSE;
+		}
+	} else if (opcode > 2) {
+		discord_socket_protocol_error(ya, "unknown data opcode", opcode);
+		return FALSE;
+	} else if ((opcode == 0) != (ya->frame_fragments != NULL)) {
+		discord_socket_protocol_error(ya, opcode == 0 ? "continuation without a first fragment" : "new message inside a fragmented one", opcode);
+		return FALSE;
+	}
+
+	/* a fragmented message counts in full */
+	total = len;
+	if (opcode < 8 && ya->frame_fragments != NULL) {
+		total += ya->frame_fragments->len;
+	}
+
+	// Check for unreasonable frame_len value
+	if (total > (16 * 1024 * 1024)) { // 16MB max frame size
+		purple_debug_error("discord", "Unreasonable frame length: %" G_GUINT64_FORMAT "\n", total);
+		purple_connection_error(ya->pc, PURPLE_CONNECTION_ERROR_NETWORK_ERROR, _("Websocket protocol error: unreasonable frame length"));
+		return FALSE;
+	}
+
+	ya->packet_code = header[0];
+	ya->frame_len = len;
+	ya->frame_len_progress = 0;
+	ya->frame = g_new0(gchar, len + 1);
+
+	return TRUE;
+}
+
+/* Handles the frame whose payload is now complete in ya->frame. FALSE when reading must stop
+ * because the connection is being dropped or was replaced. */
+static gboolean
+discord_socket_got_frame(DiscordAccount *ya, PurpleSslConnection *conn)
+{
+	guint opcode = ya->packet_code & 0x0f;
+	gboolean fin = (ya->packet_code & 0x80) != 0;
+	gchar *message = ya->frame;
+	gsize message_len = ya->frame_len;
+	gboolean success;
+
+	ya->frame = NULL;
+	ya->packet_code = 0;
+	ya->frame_len = 0;
+	ya->frame_len_progress = 0;
+
+	if (opcode == 8) {
+		purple_debug_error("discord", "websocket closed\n");
+
+		if (message_len >= 2) {
+			gint error_code = ((guchar) message[0] << 8) + (guchar) message[1];
+			purple_debug_error("discord", "error code %d\n", error_code);
+
+			if (error_code == 4004) {
+				/* bad auth token, clear and reset */
+				g_free(message);
+				purple_account_set_string(ya->account, "token", NULL);
+
+				purple_connection_error(ya->pc, PURPLE_CONNECTION_ERROR_NETWORK_ERROR, _("Reauthentication required"));
+				return FALSE;
+			}
+		}
+		g_free(message);
+
+		/* Try reconnect */
+		discord_start_socket(ya);
+		return FALSE;
+	}
+
+	if (opcode == 9) {
+		/* Ping: answer with a pong carrying the same payload */
+		discord_socket_write_data(ya, (guchar *) message, message_len, 138);
+		g_free(message);
+		return ya->websocket == conn;
+	}
+
+	if (opcode == 10) {
+		/* Ignore pong */
+		g_free(message);
+		return TRUE;
+	}
+
+	/* A message may come in several frames: a text or binary one without FIN, then continuation
+	 * frames, the last with FIN. Gather them; zlib-stream needs every byte in order. */
+	if (!fin || ya->frame_fragments != NULL) {
+		if (ya->frame_fragments == NULL) {
+			ya->frame_fragments = g_byte_array_new();
+		}
+		g_byte_array_append(ya->frame_fragments, (const guint8 *) message, message_len);
+		g_free(message);
+
+		if (!fin) {
+			return TRUE;
+		}
+
+		message_len = ya->frame_fragments->len;
+		g_byte_array_append(ya->frame_fragments, (const guint8 *) "", 1);
+		message = (gchar *) g_byte_array_free(ya->frame_fragments, FALSE);
+		ya->frame_fragments = NULL;
+	}
+
+	if (ya->compress) {
+		gchar *temp = discord_inflate(ya, message, message_len);
+		g_free(message);
+		message = temp;
+	}
+
+#ifdef USE_QRCODE_AUTH
+	if (ya->running_auth_qrcode) {
+		success = discord_process_qrcode_auth_frame(ya, message);
+	} else
+#endif
+	success = discord_process_frame(ya, message);
+	g_free(message);
+	ya->frames_since_reconnect++;
+
+	return ya->websocket != NULL && success != FALSE && ya->websocket == conn;
+}
+
 static void
 discord_socket_got_data(gpointer userdata, PurpleSslConnection *conn, PurpleInputCondition cond)
 {
 	DiscordAccount *ya = userdata;
-	guchar length_code;
 	int read_len = 0;
-	gboolean done_some_reads = FALSE;
 
 	g_return_if_fail(conn == ya->websocket);
 
-	if (G_UNLIKELY(!ya->websocket_header_received)) {
-		gint nlbr_count = 0;
+	/* The HTTP reply to the upgrade request, up to its blank line. It can arrive over several
+	 * callbacks, split anywhere, so what has been seen of it is kept in ya. */
+	while (!ya->websocket_header_received) {
 		gchar nextchar;
 
-		while (nlbr_count < 4 && purple_ssl_read(conn, &nextchar, 1) == 1) {
-			if (nextchar == '\r' || nextchar == '\n') {
-				nlbr_count++;
-			} else {
-				nlbr_count = 0;
-			}
+		read_len = purple_ssl_read(conn, &nextchar, 1);
+		if (read_len != 1) {
+			goto read_failed;
 		}
 
-		if (nlbr_count == 4) {
+		if (ya->websocket_status_len < sizeof(ya->websocket_status) - 1) {
+			ya->websocket_status[ya->websocket_status_len++] = nextchar;
+		}
+
+		if (nextchar == '\r' || nextchar == '\n') {
+			ya->websocket_header_nlbr++;
+		} else {
+			ya->websocket_header_nlbr = 0;
+		}
+
+		if (ya->websocket_header_nlbr == 4) {
+			ya->websocket_status[ya->websocket_status_len] = '\0';
+
+			if (ya->websocket_status_len != 12 || strncmp(ya->websocket_status, "HTTP/1.", 7) != 0 || strncmp(ya->websocket_status + 8, " 101", 4) != 0) {
+				gchar *status = g_strescape(ya->websocket_status, NULL);
+
+				/* e.g. a Cloudflare block; the body is not websocket frames */
+				purple_debug_error("discord", "websocket handshake refused: \"%s\"\n", status);
+				g_free(status);
+				purple_connection_error(ya->pc, PURPLE_CONNECTION_ERROR_NETWORK_ERROR, _("Websocket protocol error"));
+				return;
+			}
+
 			ya->websocket_header_received = TRUE;
-			done_some_reads = TRUE;
 
 			/* flush stuff that we attempted to send before the websocket was ready */
 			while (ya->pending_writes) {
@@ -7161,154 +7376,51 @@ discord_socket_got_data(gpointer userdata, PurpleSslConnection *conn, PurpleInpu
 		}
 	}
 
-	while (ya->frame || (read_len = purple_ssl_read(conn, &ya->packet_code, 1)) == 1) {
-		if (!ya->frame) {
-			if (ya->packet_code != 129 && ya->packet_code != 130) {
-				if (ya->packet_code == 136) {
-					purple_debug_error("discord", "websocket closed\n");
+	for (;;) {
+		if (ya->frame == NULL) {
+			/* The 2-10 byte frame header, which can also be split across callbacks */
+			guint header_size = discord_socket_frame_header_size(ya->frame_header, ya->frame_header_len);
 
-					length_code = 0;
-					purple_ssl_read(conn, &length_code, 1);
-
-					if (length_code > 0 && length_code <= 125) {
-						guchar error_buf[2];
-
-						if (purple_ssl_read(conn, &error_buf, 2) == 2) {
-							gint error_code = (error_buf[0] << 8) + error_buf[1];
-							purple_debug_error("discord", "error code %d\n", error_code);
-
-							if (error_code == 4004) {
-								/* bad auth token, clear and reset */
-								purple_account_set_string(ya->account, "token", NULL);
-
-								purple_connection_error(ya->pc, PURPLE_CONNECTION_ERROR_NETWORK_ERROR, _("Reauthentication required"));
-								return;
-							}
-						}
-					}
-
-					/* Try reconnect */
-					discord_start_socket(ya);
-
-					return;
-				} else if (ya->packet_code == 137) {
-					/* Ping */
-					gint ping_frame_len = 0;
-					length_code = 0;
-					purple_ssl_read(conn, &length_code, 1);
-
-					if (length_code <= 125) {
-						ping_frame_len = length_code;
-					} else if (length_code == 126) {
-						purple_ssl_read(conn, &ping_frame_len, 2);
-						ping_frame_len = GUINT16_FROM_BE(ping_frame_len);
-					} else if (length_code == 127) {
-						purple_ssl_read(conn, &ping_frame_len, 8);
-						ping_frame_len = GUINT64_FROM_BE(ping_frame_len);
-					}
-
-					if (ping_frame_len > 0) {
-						guchar *pong_data = g_new0(guchar, ping_frame_len);
-						purple_ssl_read(conn, pong_data, ping_frame_len);
-
-						discord_socket_write_data(ya, pong_data, ping_frame_len, 138);
-						g_free(pong_data);
-					} else {
-						discord_socket_write_data(ya, (guchar *) "", 0, 138);
-					}
-
-					return;
-				} else if (ya->packet_code == 138) {
-					/* Ignore pong */
-					return;
+			while (ya->frame_header_len < header_size) {
+				read_len = purple_ssl_read(conn, ya->frame_header + ya->frame_header_len, header_size - ya->frame_header_len);
+				if (read_len <= 0) {
+					goto read_failed;
 				}
+				ya->frame_header_len += read_len;
+				header_size = discord_socket_frame_header_size(ya->frame_header, ya->frame_header_len);
+			}
+			ya->frame_header_len = 0;
 
-				purple_debug_error("discord", "unknown websocket error %d\n", ya->packet_code);
+			if (!discord_socket_start_frame(ya)) {
 				return;
 			}
-
-			length_code = 0;
-			purple_ssl_read(conn, &length_code, 1);
-			length_code = length_code & ~0x80;
-
-			if (length_code <= 125) {
-				ya->frame_len = length_code;
-			} else if (length_code == 126) {
-				purple_ssl_read(conn, &ya->frame_len, 2);
-				ya->frame_len = GUINT16_FROM_BE(ya->frame_len);
-			} else if (length_code == 127) {
-				purple_ssl_read(conn, &ya->frame_len, 8);
-				ya->frame_len = GUINT64_FROM_BE(ya->frame_len);
-				if ((ya->frame_len & (1ULL << 63)) != 0) {
-					purple_debug_error("discord", "Frame length has MSB set, possible protocol error\n");
-					purple_connection_error(ya->pc, PURPLE_CONNECTION_ERROR_NETWORK_ERROR, _("Websocket protocol error"));
-					return;
-				}
-			}
-
-			// Check for unreasonable frame_len value
-			if (ya->frame_len > (16 * 1024 * 1024)) { // 16MB max frame size
-				purple_debug_error("discord", "Unreasonable frame length: %" G_GUINT64_FORMAT "\n", ya->frame_len);
-				purple_connection_error(ya->pc, PURPLE_CONNECTION_ERROR_NETWORK_ERROR, _("Websocket protocol error: unreasonable frame length"));
-				return;
-			}
-
-			ya->frame = g_new0(gchar, ya->frame_len + 1);
-			ya->frame_len_progress = 0;
 		}
 
-		do {
+		while (ya->frame_len_progress < ya->frame_len) {
 			read_len = purple_ssl_read(conn, ya->frame + ya->frame_len_progress, ya->frame_len - ya->frame_len_progress);
-
-			if (read_len > 0) {
-				ya->frame_len_progress += read_len;
+			if (read_len <= 0) {
+				goto read_failed;
 			}
-		} while (read_len > 0 && ya->frame_len_progress < ya->frame_len);
+			ya->frame_len_progress += read_len;
+		}
 
-		done_some_reads = TRUE;
-
-		if (ya->frame_len_progress == ya->frame_len) {
-			gboolean success;
-
-			if (ya->compress) {
-				gchar *temp = discord_inflate(ya, ya->frame, ya->frame_len);
-				g_free(ya->frame);
-				ya->frame = temp;
-			}
-
-#ifdef USE_QRCODE_AUTH
-			if (ya->running_auth_qrcode) {
-				success = discord_process_qrcode_auth_frame(ya, ya->frame);
-			} else
-#endif
-			success = discord_process_frame(ya, ya->frame);
-			g_free(ya->frame);
-			ya->frame = NULL;
-			ya->packet_code = 0;
-			ya->frame_len = 0;
-			ya->frames_since_reconnect++;
-
-			if (G_UNLIKELY(ya->websocket == NULL || success == FALSE || ya->websocket != conn)) {
-				return;
-			}
-		} else {
+		if (!discord_socket_got_frame(ya, conn)) {
 			return;
 		}
 	}
 
-	if (done_some_reads == FALSE && read_len <= 0) {
-		if (read_len < 0 && errno == EAGAIN) {
-			return;
-		}
+read_failed:
+	if (read_len < 0 && errno == EAGAIN) {
+		return;
+	}
 
-		purple_debug_error("discord", "got errno %d, read_len %d from websocket thread\n", errno, read_len);
+	purple_debug_error("discord", "got errno %d, read_len %d from websocket thread\n", errno, read_len);
 
-		if (ya->frames_since_reconnect < 2) {
-			purple_connection_error(ya->pc, PURPLE_CONNECTION_ERROR_NETWORK_ERROR, _("Lost connection to server"));
-		} else {
-			/* Try reconnect */
-			discord_start_socket(ya);
-		}
+	if (ya->frames_since_reconnect < 2) {
+		purple_connection_error(ya->pc, PURPLE_CONNECTION_ERROR_NETWORK_ERROR, _("Lost connection to server"));
+	} else {
+		/* Try reconnect */
+		discord_start_socket(ya);
 	}
 }
 
@@ -7392,10 +7504,18 @@ discord_start_socket(DiscordAccount *da)
 
 	da->websocket = NULL;
 	da->websocket_header_received = FALSE;
+	da->websocket_header_nlbr = 0;
+	da->websocket_status_len = 0;
+	da->frame_header_len = 0;
 	g_free(da->frame);
 	da->frame = NULL;
 	da->packet_code = 0;
 	da->frame_len = 0;
+	da->frame_len_progress = 0;
+	if (da->frame_fragments != NULL) {
+		g_byte_array_free(da->frame_fragments, TRUE);
+		da->frame_fragments = NULL;
+	}
 	da->frames_since_reconnect = 0;
 
 #ifdef USE_QRCODE_AUTH
