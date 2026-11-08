@@ -6965,6 +6965,7 @@ discord_socket_write_data_delay_cb(gpointer user_data)
 	if (PURPLE_CONNECTION_IS_VALID(info->ya->pc)) {
 		discord_socket_write_data(info->ya, info->data, info->data_len, info->type);
 	}
+	g_free(info->data);
 	g_free(info);
 
 	return FALSE;
@@ -6975,7 +6976,8 @@ discord_socket_delay_write_data(DiscordAccount *ya, guchar *data, gsize data_len
 {
 	DiscordSocketInfo *info = g_new0(DiscordSocketInfo, 1);
 	info->ya = ya;
-	info->data = data;
+	/* A copy: every caller frees its buffer as soon as discord_socket_write_data returns */
+	info->data = g_memdup2(data, MAX(data_len, 1));
 	info->data_len = data_len;
 	info->type = type;
 
@@ -7031,7 +7033,10 @@ discord_socket_write_data(DiscordAccount *ya, guchar *data, gsize data_len, guch
 	}
 
 	memmove(full_data + (1 + len_size), &mkey, 4);
-	memmove(full_data + (1 + len_size + 4), data, data_len);
+	if (data_len) {
+		/* data is NULL for an empty frame, and memmove takes no NULL even for 0 bytes */
+		memmove(full_data + (1 + len_size + 4), data, data_len);
+	}
 
 	do {
 		ret = purple_ssl_write(ya->websocket, full_data, 1 + data_len + len_size + 4);
