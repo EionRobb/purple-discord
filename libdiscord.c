@@ -488,7 +488,12 @@ typedef struct {
 typedef struct {
 	guint64 room_id;
 	gboolean canceleable;
+	int send_retries; // how often discord_xfer_send_init waited for the connection
+	guint retry_timeout; // the pending discord_xfer_send_init_retry_cb, which holds a reference
 } DiscordTransfer;
+
+// How often to wait 1.5 s for the connection to come back before an upload gives up (about 15 s).
+#define DISCORD_XFER_MAX_RETRIES 10
 
 
 static guint64
@@ -11133,14 +11138,27 @@ discord_cmd_join_server(PurpleConversation *conv, const gchar *cmd, gchar **args
 static void
 discord_xfer_free(PurpleXfer *xfer) {
 	// we only need to free the user data
-	g_free(purple_xfer_get_protocol_data(xfer));
+	DiscordTransfer *dt = purple_xfer_get_protocol_data(xfer);
+	gboolean drop_retry_ref = FALSE;
+
+	// A retry still waiting must not run on the freed data; drop the reference it held.
+	if (dt != NULL && dt->retry_timeout != 0) {
+		purple_timeout_remove(dt->retry_timeout);
+		drop_retry_ref = TRUE;
+	}
+	purple_xfer_set_protocol_data(xfer, NULL);
+	g_free(dt);
 	purple_debug_info("discord", "ref count %d\n", xfer->ref);
+
+	if (drop_retry_ref) {
+		purple_xfer_unref(xfer);
+	}
 }
 
 static void
 discord_xfer_cancel_send(PurpleXfer *xfer) {
 	DiscordTransfer *dt = purple_xfer_get_protocol_data(xfer);
-	if (dt->canceleable) {
+	if (dt != NULL && dt->canceleable) {
 		// prevents segfault from freeing an xfer that is in use
 		purple_xfer_ref(xfer);
 		PurpleConnection *pc = purple_account_get_connection(purple_xfer_get_account(xfer));
@@ -11167,7 +11185,8 @@ purple_xfer_update_cb(DiscordAccount *da, JsonNode *node, gpointer userdata) {
 	// The following may say the xfer is canceled when it isn't, but it's
 	// the best we can do
 	if (node == NULL) {
-		purple_notify_error(pc, _("Connection Error"), NULL, xfer_info, purple_get_cpar_from_connection(pc));
+		// purple_notify_message asserts that primary is not NULL.
+		purple_notify_error(pc, _("Connection Error"), _("Discord upload failed"), xfer_info, purple_get_cpar_from_connection(pc));
 
 		purple_xfer_unref(xfer);
 		dt->canceleable = TRUE;
@@ -11303,6 +11322,63 @@ discord_guess_mimetype(const gchar *filename, const guchar *data, gsize data_len
 	return "application/octet-stream";
 }
 
+// Scan an Ogg/Opus stream for its voice-note metadata. Duration = last page granulepos / 48000 (Opus
+// granules are always 48 kHz). Waveform = per-page body sizes (a cheap loudness proxy, no opus decoder
+// linked here) downsampled to `wf_len` bytes normalized to 0..255 — Discord renders it as the voice bar.
+// Returns TRUE and fills *out_duration + waveform[wf_len] on a valid Opus stream.
+static gboolean
+discord_ogg_opus_info(const guchar *buf, gsize len, double *out_duration, guchar *waveform, int wf_len)
+{
+	if (buf == NULL || len < 47 || memcmp(buf, "OggS", 4) != 0)
+		return FALSE;
+	guint64 last_granule = 0;
+	gboolean have_granule = FALSE;
+	// gather up to 512 per-page body sizes as the raw amplitude envelope
+	guint32 amp[512];
+	int namp = 0;
+	gsize pos = 0;
+	while (pos + 27 <= len && memcmp(buf + pos, "OggS", 4) == 0) {
+		guint64 granule = 0;
+		for (int i = 0; i < 8; i++)
+			granule |= (guint64) buf[pos + 6 + i] << (8 * i);
+		int nsegs = buf[pos + 26];
+		if (pos + 27 + (gsize) nsegs > len)
+			break;
+		gsize body = 0;
+		for (int i = 0; i < nsegs; i++)
+			body += buf[pos + 27 + i];
+		if (granule != 0xFFFFFFFFFFFFFFFFULL) { // -1 = no packet completes on this page
+			last_granule = granule;
+			have_granule = TRUE;
+		}
+		if (namp < (int) (sizeof(amp) / sizeof(amp[0])))
+			amp[namp++] = (guint32) body;
+		pos += 27 + (gsize) nsegs + body;
+	}
+	if (!have_granule)
+		return FALSE;
+	*out_duration = (double) last_granule / 48000.0;
+	// downsample the envelope to wf_len buckets, then normalize to 0..255
+	guint32 peak = 1;
+	for (int i = 0; i < namp; i++)
+		if (amp[i] > peak) peak = amp[i];
+	for (int b = 0; b < wf_len; b++) {
+		guint32 v = 0;
+		if (namp > 0) {
+			int i0 = (int) ((gint64) b * namp / wf_len);
+			int i1 = (int) ((gint64) (b + 1) * namp / wf_len);
+			if (i1 <= i0) i1 = i0 + 1;
+			guint32 acc = 0; int n = 0;
+			for (int i = i0; i < i1 && i < namp; i++) { acc += amp[i]; n++; }
+			v = n ? acc / n : 0;
+		}
+		waveform[b] = (guchar) (v * 255u / peak);
+	}
+	return TRUE;
+}
+
+static gboolean discord_xfer_send_init_retry_cb(gpointer data);
+
 // TODO progress, true cancel
 static void
 discord_xfer_send_init(PurpleXfer *xfer)
@@ -11314,12 +11390,30 @@ discord_xfer_send_init(PurpleXfer *xfer)
 	GMappedFile *file;
 	GString *postdata;
 
-	purple_xfer_ref(xfer);
-
 	PurpleAccount *acct = purple_xfer_get_account(xfer);
 	PurpleConnection *pc = purple_account_get_connection(acct);
-	DiscordAccount *da = purple_connection_get_protocol_data(pc);
 	DiscordTransfer *dt = purple_xfer_get_protocol_data(xfer);
+
+	// While the account reconnects, discord_fetch_url would drop the upload without a word. Wait for
+	// the connection to come back for a while before giving up.
+	if (!PURPLE_CONNECTION_IS_VALID(pc) || purple_account_is_disconnected(acct)) {
+		if (dt != NULL && dt->send_retries < DISCORD_XFER_MAX_RETRIES) {
+			dt->send_retries++;
+			purple_debug_info("discord", "xfer: connection not ready, retry %d/%d in 1.5s\n",
+				dt->send_retries, DISCORD_XFER_MAX_RETRIES);
+			purple_xfer_ref(xfer); // held by the timeout; released in discord_xfer_send_init_retry_cb
+			dt->retry_timeout = purple_timeout_add(1500, discord_xfer_send_init_retry_cb, xfer);
+		} else {
+			purple_xfer_error(PURPLE_XFER_SEND, acct, purple_xfer_get_remote_user(xfer),
+				_("Discord is not connected. Please try again."));
+			purple_xfer_cancel_local(xfer);
+		}
+		return;
+	}
+
+	purple_xfer_ref(xfer);
+
+	DiscordAccount *da = purple_connection_get_protocol_data(pc);
 
 	const gchar* fullpath = purple_xfer_get_local_filename(xfer);
 
@@ -11360,12 +11454,32 @@ discord_xfer_send_init(PurpleXfer *xfer)
 	// We don't insert this into sent messages because that will prevent it
 	// from appearing in our client
 	nonce = g_strdup_printf("%" G_GUINT32_FORMAT, g_random_int());
+	// The transport transcodes recorded voice notes to Ogg/Opus. If this is one, send it as a Discord
+	// VOICE MESSAGE (flags 1<<13) with the required duration_secs + waveform attachment metadata; the
+	// file part must be "files[0]" so it binds to attachment id 0. Otherwise fall back to a plain file.
+	double vn_duration = 0;
+	guchar vn_waveform[64];
+	gchar *vn_waveform_b64 = NULL;
+	gsize namelen = strlen(filename);
+	gboolean is_voice = (namelen > 4 && g_ascii_strcasecmp(filename + namelen - 4, ".ogg") == 0 &&
+	                     discord_ogg_opus_info((const guchar *) contents, file_len, &vn_duration, vn_waveform, (int) sizeof(vn_waveform)));
 
 	postdata = g_string_new(NULL);
-	g_string_append_printf(postdata, "------PurpleBoundary\r\nContent-Disposition: form-data; name=\"file\"; filename=\"%s\"\r\nContent-Type: %s\r\n\r\n", purple_url_encode(filename), mimetype);
-	g_string_append_len(postdata, contents, file_len);
-	g_string_append_printf(postdata, "\r\n------PurpleBoundary\r\nContent-Disposition: form-data; name=\"payload_json\"\r\n\r\n{\"content\":\"\",\"nonce\":\"%s\",\"tts\":false}\r\n", nonce);
+	if (is_voice) {
+		vn_waveform_b64 = g_base64_encode(vn_waveform, sizeof(vn_waveform));
+		g_string_append_printf(postdata, "------PurpleBoundary\r\nContent-Disposition: form-data; name=\"files[0]\"; filename=\"%s\"\r\nContent-Type: %s\r\n\r\n", purple_url_encode(filename), mimetype);
+		g_string_append_len(postdata, contents, file_len);
+		g_string_append_printf(postdata, "\r\n------PurpleBoundary\r\nContent-Disposition: form-data; name=\"payload_json\"\r\n\r\n"
+			"{\"content\":\"\",\"nonce\":\"%s\",\"tts\":false,\"flags\":8192,"
+			"\"attachments\":[{\"id\":\"0\",\"filename\":\"%s\",\"duration_secs\":%.2f,\"waveform\":\"%s\"}]}\r\n",
+			nonce, filename, vn_duration, vn_waveform_b64);
+	} else {
+		g_string_append_printf(postdata, "------PurpleBoundary\r\nContent-Disposition: form-data; name=\"file\"; filename=\"%s\"\r\nContent-Type: %s\r\n\r\n", purple_url_encode(filename), mimetype);
+		g_string_append_len(postdata, contents, file_len);
+		g_string_append_printf(postdata, "\r\n------PurpleBoundary\r\nContent-Disposition: form-data; name=\"payload_json\"\r\n\r\n{\"content\":\"\",\"nonce\":\"%s\",\"tts\":false}\r\n", nonce);
+	}
 	g_string_append(postdata, "------PurpleBoundary--\r\n");
+	g_free(vn_waveform_b64);
 
 	url = g_strdup_printf("https://" DISCORD_API_SERVER "/api/" DISCORD_API_VERSION "/channels/%" G_GUINT64_FORMAT "/messages", dt->room_id);
 
@@ -11387,6 +11501,23 @@ discord_xfer_send_init(PurpleXfer *xfer)
 	g_string_free(postdata, TRUE);
 }
 
+// Tries discord_xfer_send_init again, and drops the reference it took for this timeout.
+static gboolean
+discord_xfer_send_init_retry_cb(gpointer data)
+{
+	PurpleXfer *xfer = data;
+	DiscordTransfer *dt = purple_xfer_get_protocol_data(xfer);
+
+	if (dt != NULL) {
+		dt->retry_timeout = 0;
+	}
+	if (dt != NULL && !purple_xfer_is_canceled(xfer)) {
+		discord_xfer_send_init(xfer);
+	}
+	purple_xfer_unref(xfer);
+	return FALSE;
+}
+
 // This is not hooked into 'new_xfer' like you may see in other prpl's
 static PurpleXfer *
 discord_create_xfer(PurpleConnection *pc, guint64 room_id, const gchar *receiver) 
@@ -11399,6 +11530,8 @@ discord_create_xfer(PurpleConnection *pc, guint64 room_id, const gchar *receiver
 	DiscordTransfer *dt = g_new(DiscordTransfer, 1);
 	dt->room_id = room_id;
 	dt->canceleable = FALSE;
+	dt->send_retries = 0;
+	dt->retry_timeout = 0;
 	purple_xfer_set_protocol_data(xfer, dt);
 
 	purple_xfer_set_init_fnc(xfer, discord_xfer_send_init);

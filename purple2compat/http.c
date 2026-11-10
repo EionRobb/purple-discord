@@ -23,6 +23,7 @@
 
 #ifndef _WIN32
 #include <errno.h>
+#include <poll.h>
 #include <unistd.h>
 #endif
 
@@ -2260,6 +2261,42 @@ _purple_http_keepalive_socket_connected(PurpleSocket *ps,
 	g_free(req);
 }
 
+/* Whether an idle pooled socket was closed while it sat in the pool. Nothing watches an idle
+ * socket, so a server that closes it, or a network change under it, goes unnoticed, and the
+ * next request would be written into a dead connection. An idle HTTP/1.1 connection has nothing
+ * to read, so a readable one has been closed or reset, or holds an alert or other data no
+ * request asked for; either way it is not reused. */
+static gboolean
+purple_http_socket_is_stale(PurpleHttpSocket *hs)
+{
+	int fd = purple_socket_get_fd(hs->ps);
+
+	if (fd < 0)
+		return TRUE;
+
+#ifdef _WIN32
+	{
+		fd_set readable;
+		struct timeval no_wait = { 0, 0 };
+
+		FD_ZERO(&readable);
+		FD_SET(fd, &readable);
+		return select(fd + 1, &readable, NULL, NULL, &no_wait) != 0;
+	}
+#else
+	{
+		struct pollfd pfd = { fd, POLLIN, 0 };
+		int ret;
+
+		do {
+			ret = poll(&pfd, 1, 0);
+		} while (ret < 0 && errno == EINTR);
+
+		return ret != 0;
+	}
+#endif
+}
+
 static gboolean
 _purple_http_keepalive_host_process_queue_cb(gpointer _host)
 {
@@ -2281,14 +2318,22 @@ _purple_http_keepalive_host_process_queue_cb(gpointer _host)
 	while (it != NULL) {
 		PurpleHttpSocket *hs_current = it->data;
 
+		it = g_slist_next(it);
+
+		if (!hs_current->is_busy && purple_http_socket_is_stale(hs_current)) {
+			purple_debug_info("http", "Keep-alive connection "
+				"closed while idle, not reusing it\n");
+			host->sockets = g_slist_remove(host->sockets, hs_current);
+			purple_http_socket_close_free(hs_current);
+			continue;
+		}
+
 		sockets_count++;
 
 		if (!hs_current->is_busy) {
 			hs = hs_current;
 			break;
 		}
-
-		it = g_slist_next(it);
 	}
 
 	/* There are no free sockets and we cannot create another one. */
