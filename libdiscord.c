@@ -6671,10 +6671,6 @@ discord_login(PurpleAccount *account)
 	PurpleConnection *pc = purple_account_get_connection(account);
 	PurpleConnectionFlags pc_flags;
 
-	if (!strchr(purple_account_get_username(account), '@')) {
-		purple_connection_error(pc, PURPLE_CONNECTION_ERROR_INVALID_USERNAME, _("Username needs to be an email address"));
-		return;
-	}
 
 	pc_flags = purple_connection_get_flags(pc);
 	pc_flags |= PURPLE_CONNECTION_FLAG_HTML;
@@ -6728,6 +6724,12 @@ discord_login(PurpleAccount *account)
 		discord_start_socket(da);
 
 	} else if (account_password && *account_password) {
+		/* The email+password path, and the only one that needs an address. */
+		if (!strchr(purple_account_get_username(account), '@')) {
+			purple_connection_error(pc, PURPLE_CONNECTION_ERROR_INVALID_USERNAME, _("Username needs to be an email address"));
+			return;
+		}
+
 		time_t fingerprint_age = time(NULL) - discord_last_fingerprint_time;
 
 		if (discord_last_fingerprint != NULL && fingerprint_age >= 0 && fingerprint_age < DISCORD_FINGERPRINT_REUSE_SECONDS) {
