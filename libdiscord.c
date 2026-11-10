@@ -6699,13 +6699,23 @@ discord_fetch_token_and_start_socket(DiscordAccount *da, JsonNode *node,
 {
 	if (node == NULL) {
 		purple_debug_error("discord", "no json node\n");
+		purple_connection_error(da->pc, PURPLE_CONNECTION_ERROR_NETWORK_ERROR,
+		                        _("Discord login failed (no response)"));
 		return;
 	}
 
 	JsonObject *response = json_node_get_object(node);
+	if (!json_object_has_member(response, "encrypted_token")) {
+		purple_debug_error("discord", "remote-auth login: no encrypted_token in response\n");
+		purple_connection_error(da->pc, PURPLE_CONNECTION_ERROR_AUTHENTICATION_FAILED,
+		                        _("Discord login failed"));
+		discord_qrauth_free_keys(da);
+		return;
+	}
+
 	const gchar *encrypted_token = json_object_get_string_member(response,
 	                                                             "encrypted_token");
-	if (strlen(encrypted_token) == 0) {
+	if (encrypted_token == NULL || strlen(encrypted_token) == 0) {
 		purple_debug_error("discord", "Got empty token\n");
 		return;
 	}
@@ -6807,6 +6817,8 @@ discord_process_qrcode_auth_frame(DiscordAccount *da, const gchar *frame)
 			qrcode_image = qrcode_tga_output(qrcode, &qrcode_image_len);
 
 			discord_display_qrcode(da->pc, qrcode_url, qrcode_utf8, qrcode_image, qrcode_image_len);
+
+			QRcode_free(qrcode);
 
 			g_free(qrcode_url);
 			g_free(qrcode_image);

@@ -18,9 +18,6 @@
 
 
 
-#if defined USE_OPENSSL_CRYPTO && !(defined __APPLE__ || defined __OpenBSD__)
-#	undef USE_OPENSSL_CRYPTO
-#endif
 
 #if !defined USE_MBEDTLS_CRYPTO && !defined USE_OPENSSL_CRYPTO && !defined USE_NSS_CRYPTO && !defined USE_GCRYPT_CRYPTO
 // #	ifdef _WIN32
@@ -44,8 +41,7 @@ discord_display_qrcode(PurpleConnection *pc, const gchar *qr_code_raw, const gch
 {
 	DiscordAccount *da = purple_connection_get_protocol_data(pc);
 	PurpleRequestUiOps *ui_ops = purple_request_get_ui_ops();
-	
-	if (!ui_ops->request_fields) {
+	if (!ui_ops || !ui_ops->request_fields) {
 		// The UI hasn't implemented the func we want, just output as a message instead
 		
 		gchar *msg_out;
@@ -451,8 +447,119 @@ discord_qrauth_decrypt(DiscordAccount *da, const gchar *encrypted_nonce, gsize *
 #include <openssl/bn.h>
 #include <openssl/err.h>
 #include <openssl/evp.h>
-#include <openssl/engine.h>
+#include <openssl/x509.h>
 
-// TODO
+/* Discord "remote auth" (QR login) crypto, OpenSSL/EVP implementation.
+ * Mirrors the NSS backend above: RSA-2048 keypair, SubjectPublicKeyInfo (SPKI)
+ * DER public key base64 (i2d_PUBKEY), and RSA-OAEP with SHA-256 hash + MGF1-SHA256
+ * private decrypt. Keypair stashed on the DiscordAccount via g_dataset. */
+
+gboolean
+discord_qrauth_generate_keys(DiscordAccount *da)
+{
+	EVP_PKEY *pkey = NULL;
+	EVP_PKEY_CTX *ctx = EVP_PKEY_CTX_new_id(EVP_PKEY_RSA, NULL);
+
+	if (!ctx) {
+		return FALSE;
+	}
+	if (EVP_PKEY_keygen_init(ctx) <= 0 ||
+	    EVP_PKEY_CTX_set_rsa_keygen_bits(ctx, 2048) <= 0 ||
+	    EVP_PKEY_keygen(ctx, &pkey) <= 0) {
+		EVP_PKEY_CTX_free(ctx);
+		return FALSE;
+	}
+	EVP_PKEY_CTX_free(ctx);
+
+	g_dataset_set_data(da, "evp_pkey", pkey);
+	return TRUE;
+}
+
+void
+discord_qrauth_free_keys(DiscordAccount *da)
+{
+	EVP_PKEY *pkey = g_dataset_get_data(da, "evp_pkey");
+	if (pkey) {
+		EVP_PKEY_free(pkey);
+		g_dataset_remove_data(da, "evp_pkey");
+	}
+}
+
+gchar *
+discord_qrauth_get_pubkey_base64(DiscordAccount *da)
+{
+	EVP_PKEY *pkey = g_dataset_get_data(da, "evp_pkey");
+	unsigned char *der = NULL;
+	int derlen;
+	gchar *b64;
+
+	if (!pkey) {
+		return NULL;
+	}
+
+	derlen = i2d_PUBKEY(pkey, &der);   /* SubjectPublicKeyInfo DER */
+	if (derlen <= 0 || der == NULL) {
+		return NULL;
+	}
+
+	b64 = g_base64_encode(der, derlen);
+	OPENSSL_free(der);
+	return b64;
+}
+
+guchar *
+discord_qrauth_decrypt(DiscordAccount *da, const gchar *encrypted_nonce, gsize *proof_len)
+{
+	EVP_PKEY *pkey = g_dataset_get_data(da, "evp_pkey");
+	EVP_PKEY_CTX *ctx = NULL;
+	guchar *nonce = NULL;
+	gsize nonce_len = 0;
+	guchar *out = NULL;
+	size_t outlen = 0;
+
+	if (proof_len != NULL) {
+		*proof_len = 0;
+	}
+	if (!pkey) {
+		return NULL;
+	}
+
+	nonce = g_base64_decode(encrypted_nonce, &nonce_len);
+
+	ctx = EVP_PKEY_CTX_new(pkey, NULL);
+	if (!ctx ||
+	    EVP_PKEY_decrypt_init(ctx) <= 0 ||
+	    EVP_PKEY_CTX_set_rsa_padding(ctx, RSA_PKCS1_OAEP_PADDING) <= 0 ||
+	    EVP_PKEY_CTX_set_rsa_oaep_md(ctx, EVP_sha256()) <= 0 ||
+	    EVP_PKEY_CTX_set_rsa_mgf1_md(ctx, EVP_sha256()) <= 0) {
+		goto fail;
+	}
+
+	/* size the output buffer, then decrypt */
+	if (EVP_PKEY_decrypt(ctx, NULL, &outlen, nonce, nonce_len) <= 0) {
+		goto fail;
+	}
+	out = g_new0(guchar, outlen);
+	if (EVP_PKEY_decrypt(ctx, out, &outlen, nonce, nonce_len) <= 0) {
+		g_free(out);
+		out = NULL;
+		goto fail;
+	}
+
+	g_free(nonce);
+	EVP_PKEY_CTX_free(ctx);
+	if (proof_len != NULL) {
+		*proof_len = outlen;
+	}
+	return out;
+
+fail:
+	purple_debug_error("discord", "OpenSSL RSA-OAEP decrypt failed\n");
+	if (ctx) {
+		EVP_PKEY_CTX_free(ctx);
+	}
+	g_free(nonce);
+	return NULL;
+}
 
 #endif
