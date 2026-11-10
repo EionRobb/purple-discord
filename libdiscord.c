@@ -1598,6 +1598,115 @@ discord_cookies_to_string(DiscordAccount *ya)
 
 static void discord_fetch_url_with_method_delay(DiscordAccount *da, const gchar *method, const gchar *url, const gchar *postdata, DiscordProxyCallbackFunc callback, gpointer user_data, guint delay);
 
+/* Keys whose string values are secrets: the account token, and what can be traded for one or for
+ * the account (a password, an MFA code, an MFA or remote-auth ticket, the encrypted token a QR login
+ * receives, a solved captcha). */
+static const gchar *const discord_secret_keys[] = {
+	"token", "encrypted_token", "password", "code", "ticket", "captcha_key", NULL
+};
+
+/* If a "key": "value" pair with a secret key starts at text[i] (the key's opening quote, written "
+ * or, inside a JSON-encoded string, \"), the offset of the value's first character, else 0. *quote
+ * is set to the quote's length (1 or 2). */
+static gsize
+discord_secret_value_at(const gchar *text, gsize len, gsize i, gsize *quote)
+{
+	gsize q = text[i] == '"' ? 1 : (text[i] == '\\' && i + 1 < len && text[i + 1] == '"') ? 2 : 0;
+
+	if (q == 0)
+		return 0;
+
+	for (const gchar *const *key = discord_secret_keys; *key != NULL; key++) {
+		gsize k = strlen(*key);
+		gsize j = i + q;
+
+		if (j + k + q > len || strncmp(text + j, *key, k) != 0 || strncmp(text + j + k, text + i, q) != 0)
+			continue;
+		j += k + q;
+		while (j < len && (text[j] == ' ' || text[j] == '\t'))
+			j++;
+		if (j >= len || text[j] != ':')
+			continue;
+		j++;
+		while (j < len && (text[j] == ' ' || text[j] == '\t'))
+			j++;
+		if (j + q > len || strncmp(text + j, text + i, q) != 0)
+			continue;
+
+		*quote = q;
+		return j + q;
+	}
+
+	return 0;
+}
+
+/* A copy of text (len bytes, or up to its NUL for -1) for the debug log, with the string value of
+ * every key in discord_secret_keys replaced by "<redacted>", also inside a JSON-encoded string
+ * (\"token\":\"...\"). */
+static gchar *
+discord_redact(const gchar *text, gssize len)
+{
+	if (text == NULL)
+		return NULL;
+
+	gsize n = len < 0 ? strlen(text) : (gsize) len;
+	GString *out = g_string_sized_new(n);
+	gsize i = 0;
+
+	while (i < n) {
+		gsize quote = 0;
+		gsize value = discord_secret_value_at(text, n, i, &quote);
+
+		if (value == 0) {
+			g_string_append_c(out, text[i]);
+			i++;
+			continue;
+		}
+
+		/* Up to the value's closing quote: a " that is not escaped, or, written \", the next \". */
+		gsize end = value;
+		while (end < n) {
+			if (quote == 1 && text[end] == '\\' && end + 1 < n) {
+				end += 2;
+			} else if (quote == 1 && text[end] == '"') {
+				break;
+			} else if (quote == 2 && text[end] == '\\' && end + 1 < n && text[end + 1] == '"') {
+				break;
+			} else {
+				end++;
+			}
+		}
+
+		g_string_append_len(out, text + i, value - i);
+		g_string_append(out, "<redacted>");
+		i = end;
+	}
+
+	return g_string_free(out, FALSE);
+}
+
+/* Whether a request to url carries a password, an MFA code or a remote-auth ticket, or answers
+ * with a token: Discord's /auth/ and remote-auth endpoints. */
+static gboolean
+discord_url_is_auth(const gchar *url)
+{
+	return url != NULL && (strstr(url, "/auth/") != NULL || strstr(url, "/remote-auth") != NULL);
+}
+
+/* Logs "<what>: <body>" (len bytes, or up to its NUL for -1) with the account token and other
+ * secrets masked. Nothing is done while debugging is off. */
+static void
+discord_debug_redacted(PurpleDebugLevel level, const gchar *what, const gchar *body, gssize len)
+{
+	if (!purple_debug_is_enabled()) {
+		return;
+	}
+
+	gchar *shown = discord_redact(body ? body : "(null)", body ? len : -1);
+	purple_debug(level, "discord", "%s: %s\n", what, shown);
+	g_free(shown);
+}
+
 static void
 discord_response_callback(PurpleHttpConnection *http_conn,
 							PurpleHttpResponse *response, gpointer user_data)
@@ -1664,7 +1773,11 @@ discord_response_callback(PurpleHttpConnection *http_conn,
 	} else {
 		JsonNode *root = json_parser_get_root(parser);
 
-		purple_debug_misc("discord", "Got response: %s\n", body ? body : "(null)");
+		if (discord_url_is_auth(purple_http_request_get_url(purple_http_conn_get_request(http_conn)))) {
+			purple_debug_misc("discord", "Got response: ###AUTH RESPONSE REMOVED###\n");
+		} else {
+			discord_debug_redacted(PURPLE_DEBUG_MISC, "Got response", body, body ? (gssize) body_len : -1);
+		}
 
 		if (conn->callback) {
 			conn->callback(conn->ya, root, conn->user_data);
@@ -1724,13 +1837,10 @@ discord_fetch_url_with_method_len(DiscordAccount *ya, const gchar *method, const
 	}
 
 	if (postdata) {
-		if (strstr(url, "/login") && strstr(postdata, "password")) {
-			purple_debug_info("discord", "With postdata ###PASSWORD REMOVED###\n");
-		} else if (strstr(url, "/auth/mfa/")) {
-			/* The 2FA code (or backup code) and the login ticket */
-			purple_debug_info("discord", "With postdata ###2FA CODE REMOVED###\n");
+		if (discord_url_is_auth(url)) {
+			purple_debug_info("discord", "With postdata ###AUTH DATA REMOVED###\n");
 		} else {
-			purple_debug_info("discord", "With postdata %s\n", postdata);
+			discord_debug_redacted(PURPLE_DEBUG_INFO, "With postdata", postdata, -1);
 		}
 
 		if (postdata[0] == '{') {
@@ -6748,10 +6858,10 @@ discord_process_qrcode_auth_frame(DiscordAccount *da, const gchar *frame)
 	JsonParser *parser = json_parser_new();
 	JsonNode *root;
 
-	purple_debug_info("discord", "got auth frame data: %s\n", frame);
+	discord_debug_redacted(PURPLE_DEBUG_INFO, "got auth frame data", frame, -1);
 
 	if (!json_parser_load_from_data(parser, frame, -1, NULL)) {
-		purple_debug_error("discord", "Error parsing response: %s\n", frame);
+		discord_debug_redacted(PURPLE_DEBUG_ERROR, "Error parsing response", frame, -1);
 		return FALSE;
 	}
 
@@ -6878,10 +6988,10 @@ discord_process_frame(DiscordAccount *da, const gchar *frame)
 	JsonNode *root;
 	gint64 opcode;
 
-	purple_debug_info("discord", "got frame data: %s\n", frame);
+	discord_debug_redacted(PURPLE_DEBUG_INFO, "got frame data", frame, -1);
 
 	if (!json_parser_load_from_data(parser, frame, -1, NULL)) {
-		purple_debug_error("discord", "Error parsing response: %s\n", frame);
+		discord_debug_redacted(PURPLE_DEBUG_ERROR, "Error parsing response", frame, -1);
 		return TRUE;
 	}
 
@@ -7027,7 +7137,7 @@ discord_socket_write_data(DiscordAccount *ya, guchar *data, gsize data_len, guch
 	int ret;
 
 	if (data_len) {
-		purple_debug_info("discord", "sending frame: %*s\n", (int) data_len, data);
+		discord_debug_redacted(PURPLE_DEBUG_INFO, "sending frame", (const gchar *) data, (gssize) data_len);
 	}
 
 	data = discord_websocket_mask(mkey, data, data_len);
