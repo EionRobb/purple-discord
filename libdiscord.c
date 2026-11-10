@@ -832,6 +832,9 @@ discord_add_thread(DiscordAccount *da, DiscordGuild *guild, DiscordChannel *pare
 		parent = discord_get_channel_global(da, from_int(thread->parent_id));
 	}
 	if (parent) {
+		if (parent->threads == NULL) {
+			parent->threads = g_hash_table_new_full(g_int64_hash, g_int64_equal, NULL, NULL);
+		}
 		g_hash_table_replace_int64(parent->threads, thread->id, thread);
 	}
 	return thread;
@@ -4703,8 +4706,13 @@ discord_process_dispatch(DiscordAccount *da, const gchar *type, JsonObject *data
 			guint64 parent_id = to_int(json_object_get_string_member(thread, "parent_id"));
 			DiscordChannel *parent = discord_get_channel_global_int(da, parent_id);
 
-			if (parent && !g_hash_table_contains_int64(parent->threads, thread_id)) {
-				discord_add_thread(da, guild, parent, thread, guild_id);
+			if (parent) {
+				if (parent->threads == NULL) {
+					parent->threads = g_hash_table_new_full(g_int64_hash, g_int64_equal, NULL, NULL);
+				}
+				if (!g_hash_table_contains_int64(parent->threads, thread_id)) {
+					discord_add_thread(da, guild, parent, thread, guild_id);
+				}
 			}
 		}
 
@@ -7616,6 +7624,9 @@ discord_chat_threads(PurpleConnection *pc, int id, const gchar *filter)
 	GHashTableIter thread_iter;
 	gpointer key, value;
 	/* TODO: get archived thread data */
+	if (channel->threads == NULL) {
+		channel->threads = g_hash_table_new_full(g_int64_hash, g_int64_equal, NULL, NULL);
+	}
 	g_hash_table_iter_init(&thread_iter, channel->threads);
 
 	gchar *threads_list = g_strdup(_("Active Threads:\n<pre>Creation Time       | Last Message Time   | Name"));
@@ -10156,6 +10167,9 @@ discord_get_thread_id_from_timestamp(DiscordAccount *da, PurpleConversation *con
 	GHashTableIter iter;
 	gpointer key, value;
 
+	if (channel->threads == NULL) {
+		channel->threads = g_hash_table_new_full(g_int64_hash, g_int64_equal, NULL, NULL);
+	}
 	g_hash_table_iter_init(&iter, channel->threads);
 
 	while (g_hash_table_iter_next(&iter, &key, &value)) {
