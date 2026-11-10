@@ -6194,6 +6194,47 @@ discord_send_lazy_guild_request(DiscordAccount *da, DiscordGuild *guild)
 	g_free(guild_id);
 }
 
+/* On user accounts Discord pushes MESSAGE_CREATE only for channels the client views.
+ * discord_send_lazy_guild_request subscribes one member-list channel per guild; this op 14 request
+ * puts the given channel in "channels", which marks it as viewed. */
+static void
+discord_subscribe_channel(DiscordAccount *da, DiscordGuild *guild, guint64 channel_id)
+{
+	if (guild == NULL || channel_id == 0) {
+		return;
+	}
+
+	JsonObject *d = json_object_new();
+	gchar *guild_id_s = from_int(guild->id);
+	gchar *channel_id_s = from_int(channel_id);
+
+	json_object_set_string_member(d, "guild_id", guild_id_s);
+	json_object_set_boolean_member(d, "typing", TRUE);
+	json_object_set_boolean_member(d, "threads", TRUE);
+	json_object_set_boolean_member(d, "activities", TRUE);
+	json_object_set_array_member(d, "members", json_array_new());
+
+	/* one member range (0-99) is enough to register the channel as "viewed" */
+	JsonObject *channels = json_object_new();
+	JsonArray *ranges = json_array_new();
+	JsonArray *range = json_array_new();
+	json_array_add_int_element(range, 0);
+	json_array_add_int_element(range, 99);
+	json_array_add_array_element(ranges, range);
+	json_object_set_array_member(channels, channel_id_s, ranges);
+	json_object_set_object_member(d, "channels", channels);
+
+	JsonObject *obj = json_object_new();
+	json_object_set_int_member(obj, "op", OP_LAZY_GUILD_REQUEST);
+	json_object_set_object_member(obj, "d", d);
+
+	discord_socket_write_json(da, obj);
+
+	json_object_unref(obj);
+	g_free(guild_id_s);
+	g_free(channel_id_s);
+}
+
 static void
 discord_guild_get_offline_users(DiscordAccount *da, const gchar *guild_id)
 {
@@ -8681,6 +8722,9 @@ discord_open_chat(DiscordAccount *da, guint64 id, gboolean present)
 		gchar *name = discord_create_nickname_from_id(da, guild, channel, da->self_user_id);
 		purple_chat_conversation_set_nick(chatconv, name);
 		g_free(name);
+
+		/* Without this, an open guild channel gets no new messages live. */
+		discord_subscribe_channel(da, guild, id);
 	}
 
 	return channel;
