@@ -80,6 +80,7 @@ jobs:
                 -DCMAKE_C_COMPILER=i686-w64-mingw32-gcc \
                 -DCMAKE_CXX_COMPILER=i686-w64-mingw32-g++ \
                 -DCMAKE_BUILD_TYPE=Release \
+                -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
                 -DBUILD_SHARED_LIBS=OFF \
                 -DLOTTIE_MODULE=OFF \
                 -DLOTTIE_TEST=OFF
