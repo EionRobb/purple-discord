@@ -1708,12 +1708,7 @@ discord_fetch_url_with_method_len(DiscordAccount *ya, const gchar *method, const
 	purple_http_request_header_set(request, "Cookie", cookies);
 	purple_http_request_header_set(request, "X-Super-Properties", discord_build_x_super_properties_header(ya));
 	purple_http_request_header_set(request, "Origin", "https://" DISCORD_API_SERVER);
-	// purple_http cannot retry a multipart upload (postdata starts with "--") on a stale pooled
-	// connection, because its body has already been consumed. Give uploads a connection of their
-	// own; other requests keep using the pool, where a retry works.
-	if (!(postdata != NULL && postdata[0] == '-' && postdata[1] == '-')) {
-		purple_http_request_set_keepalive_pool(request, ya->http_keepalive_pool);
-	}
+	purple_http_request_set_keepalive_pool(request, ya->http_keepalive_pool);
 
 	if (ya->token) {
 		purple_http_request_header_set(request, "Authorization", ya->token);
