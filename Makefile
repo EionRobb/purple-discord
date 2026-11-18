@@ -9,6 +9,9 @@ WIN32_CC ?= $(WIN32_DEV_TOP)/mingw-4.7.2/bin/gcc
 PKG_CONFIG ?= pkg-config
 XGETTEXT ?= xgettext
 
+# ImageMagick 7 uses magick; ImageMagick 6 uses convert.
+IMAGE_MAGICK ?= $(shell if command -v magick >/dev/null 2>&1; then echo magick; elif command -v convert >/dev/null 2>&1; then echo convert; fi)
+
 DIR_PERM = 0755
 LIB_PERM = 0755
 FILE_PERM = 0644
@@ -171,13 +174,16 @@ install: $(DISCORD_TARGET) install-icons install-locales
 	install -m $(LIB_PERM) -p $(DISCORD_TARGET) $(DISCORD_DEST)
 
 discord16.png: discord-alt-logo.svg
-	magick convert -strip -background none discord-alt-logo.svg -resize 16x16 discord16.png
+	@test -n "$(IMAGE_MAGICK)" || { echo "ImageMagick not found: install ImageMagick 6 (convert) or 7 (magick)" >&2; exit 1; }
+	$(IMAGE_MAGICK) -strip -background none discord-alt-logo.svg -resize 16x16 discord16.png
 
 discord22.png: discord-alt-logo.svg
-	magick convert -strip -background none discord-alt-logo.svg -resize 22x22 discord22.png
+	@test -n "$(IMAGE_MAGICK)" || { echo "ImageMagick not found: install ImageMagick 6 (convert) or 7 (magick)" >&2; exit 1; }
+	$(IMAGE_MAGICK) -strip -background none discord-alt-logo.svg -resize 22x22 discord22.png
 
 discord48.png: discord-alt-logo.svg
-	magick convert -strip -background none discord-alt-logo.svg -resize 48x48 discord48.png
+	@test -n "$(IMAGE_MAGICK)" || { echo "ImageMagick not found: install ImageMagick 6 (convert) or 7 (magick)" >&2; exit 1; }
+	$(IMAGE_MAGICK) -strip -background none discord-alt-logo.svg -resize 48x48 discord48.png
 
 build-icons: discord16.png discord22.png discord48.png
 
