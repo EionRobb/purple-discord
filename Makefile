@@ -175,15 +175,15 @@ install: $(DISCORD_TARGET) install-icons install-locales
 
 discord16.png: discord-alt-logo.svg
 	@test -n "$(IMAGE_MAGICK)" || { echo "ImageMagick not found: install ImageMagick 6 (convert) or 7 (magick)" >&2; exit 1; }
-	$(IMAGE_MAGICK) -strip -background none discord-alt-logo.svg -resize 16x16 discord16.png
+	$(IMAGE_MAGICK) -background none discord-alt-logo.svg -strip -resize 16x16 discord16.png
 
 discord22.png: discord-alt-logo.svg
 	@test -n "$(IMAGE_MAGICK)" || { echo "ImageMagick not found: install ImageMagick 6 (convert) or 7 (magick)" >&2; exit 1; }
-	$(IMAGE_MAGICK) -strip -background none discord-alt-logo.svg -resize 22x22 discord22.png
+	$(IMAGE_MAGICK) -background none discord-alt-logo.svg -strip -resize 22x22 discord22.png
 
 discord48.png: discord-alt-logo.svg
 	@test -n "$(IMAGE_MAGICK)" || { echo "ImageMagick not found: install ImageMagick 6 (convert) or 7 (magick)" >&2; exit 1; }
-	$(IMAGE_MAGICK) -strip -background none discord-alt-logo.svg -resize 48x48 discord48.png
+	$(IMAGE_MAGICK) -background none discord-alt-logo.svg -strip -resize 48x48 discord48.png
 
 build-icons: discord16.png discord22.png discord48.png
 
