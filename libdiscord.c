@@ -11322,9 +11322,12 @@ discord_guess_mimetype(const gchar *filename, const guchar *data, gsize data_len
 	return "application/octet-stream";
 }
 
-// Scan an Ogg/Opus stream for its voice-note metadata. Duration = last page granulepos / 48000 (Opus
-// granules are always 48 kHz). Waveform = per-page body sizes (a cheap loudness proxy, no opus decoder
-// linked here) downsampled to `wf_len` bytes normalized to 0..255 — Discord renders it as the voice bar.
+// Scan an Ogg Opus stream for its voice-note metadata. The stream must start with the Opus
+// identification header (RFC 7845 5.1), alone on the first page, and every page must be complete;
+// otherwise the file is sent as a plain file. Duration = the last granule position less the header's
+// pre-skip, at 48 kHz (Opus granule positions always count 48 kHz samples, whatever the input rate).
+// Waveform = per-page body sizes (a cheap loudness proxy, no opus decoder linked here) downsampled to
+// `wf_len` bytes normalized to 0..255; Discord renders it as the voice bar.
 // Returns TRUE and fills *out_duration + waveform[wf_len] on a valid Opus stream.
 static gboolean
 discord_ogg_opus_info(const guchar *buf, gsize len, double *out_duration, guchar *waveform, int wf_len)
@@ -11333,31 +11336,43 @@ discord_ogg_opus_info(const guchar *buf, gsize len, double *out_duration, guchar
 		return FALSE;
 	guint64 last_granule = 0;
 	gboolean have_granule = FALSE;
+	guint32 pre_skip = 0;
 	// gather up to 512 per-page body sizes as the raw amplitude envelope
 	guint32 amp[512];
 	int namp = 0;
 	gsize pos = 0;
-	while (pos + 27 <= len && memcmp(buf + pos, "OggS", 4) == 0) {
+	while (len - pos >= 27 && memcmp(buf + pos, "OggS", 4) == 0) {
+		gsize header = 27 + (gsize) buf[pos + 26];
+		if (header > len - pos)
+			return FALSE; // truncated segment table
+		gsize body = 0;
+		for (gsize i = 27; i < header; i++)
+			body += buf[pos + i];
+		if (body > len - pos - header)
+			return FALSE; // truncated page body
+		const guchar *data = buf + pos + header;
+		if (pos == 0) {
+			// The first page begins the stream and holds only the identification header: "OpusHead",
+			// version (major 0), channel count (at least one), pre-skip (16 bits, little-endian), ...
+			if ((buf[5] & 0x02) == 0 || body < 19 || memcmp(data, "OpusHead", 8) != 0 ||
+			    (data[8] & 0xF0) != 0 || data[9] == 0)
+				return FALSE;
+			pre_skip = (guint32) data[10] | ((guint32) data[11] << 8);
+		}
 		guint64 granule = 0;
 		for (int i = 0; i < 8; i++)
 			granule |= (guint64) buf[pos + 6 + i] << (8 * i);
-		int nsegs = buf[pos + 26];
-		if (pos + 27 + (gsize) nsegs > len)
-			break;
-		gsize body = 0;
-		for (int i = 0; i < nsegs; i++)
-			body += buf[pos + 27 + i];
 		if (granule != 0xFFFFFFFFFFFFFFFFULL) { // -1 = no packet completes on this page
 			last_granule = granule;
 			have_granule = TRUE;
 		}
 		if (namp < (int) (sizeof(amp) / sizeof(amp[0])))
 			amp[namp++] = (guint32) body;
-		pos += 27 + (gsize) nsegs + body;
+		pos += header + body;
 	}
-	if (!have_granule)
+	if (!have_granule || last_granule <= pre_skip)
 		return FALSE;
-	*out_duration = (double) last_granule / 48000.0;
+	*out_duration = (double) (last_granule - pre_skip) / 48000.0;
 	// downsample the envelope to wf_len buckets, then normalize to 0..255
 	guint32 peak = 1;
 	for (int i = 0; i < namp; i++)
@@ -11466,13 +11481,31 @@ discord_xfer_send_init(PurpleXfer *xfer)
 
 	postdata = g_string_new(NULL);
 	if (is_voice) {
+		// Built with json-glib, so that the filename is escaped and duration_secs is written with a
+		// decimal point whatever the locale
+		JsonObject *payload = json_object_new();
+		JsonArray *attachments = json_array_new();
+		JsonObject *attachment = json_object_new();
+		gchar *payload_json;
+
 		vn_waveform_b64 = g_base64_encode(vn_waveform, sizeof(vn_waveform));
+		json_object_set_string_member(attachment, "id", "0");
+		json_object_set_string_member(attachment, "filename", filename);
+		json_object_set_double_member(attachment, "duration_secs", vn_duration);
+		json_object_set_string_member(attachment, "waveform", vn_waveform_b64);
+		json_array_add_object_element(attachments, attachment);
+		json_object_set_string_member(payload, "content", "");
+		json_object_set_string_member(payload, "nonce", nonce);
+		json_object_set_boolean_member(payload, "tts", FALSE);
+		json_object_set_int_member(payload, "flags", 8192); // IS_VOICE_MESSAGE
+		json_object_set_array_member(payload, "attachments", attachments);
+		payload_json = json_object_to_string(payload);
+		json_object_unref(payload);
+
 		g_string_append_printf(postdata, "------PurpleBoundary\r\nContent-Disposition: form-data; name=\"files[0]\"; filename=\"%s\"\r\nContent-Type: %s\r\n\r\n", purple_url_encode(filename), mimetype);
 		g_string_append_len(postdata, contents, file_len);
-		g_string_append_printf(postdata, "\r\n------PurpleBoundary\r\nContent-Disposition: form-data; name=\"payload_json\"\r\n\r\n"
-			"{\"content\":\"\",\"nonce\":\"%s\",\"tts\":false,\"flags\":8192,"
-			"\"attachments\":[{\"id\":\"0\",\"filename\":\"%s\",\"duration_secs\":%.2f,\"waveform\":\"%s\"}]}\r\n",
-			nonce, filename, vn_duration, vn_waveform_b64);
+		g_string_append_printf(postdata, "\r\n------PurpleBoundary\r\nContent-Disposition: form-data; name=\"payload_json\"\r\n\r\n%s\r\n", payload_json);
+		g_free(payload_json);
 	} else {
 		g_string_append_printf(postdata, "------PurpleBoundary\r\nContent-Disposition: form-data; name=\"file\"; filename=\"%s\"\r\nContent-Type: %s\r\n\r\n", purple_url_encode(filename), mimetype);
 		g_string_append_len(postdata, contents, file_len);
