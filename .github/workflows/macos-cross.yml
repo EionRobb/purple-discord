@@ -1,0 +1,160 @@
+name: macOS Cross (Ubuntu)
+on:
+  - push
+  - pull_request
+  - workflow_dispatch
+
+jobs:
+  cross-build:
+    name: cross-compile macOS universal
+    runs-on: ubuntu-24.04
+
+    env:
+      OSXCROSS_COMMIT: 27d21e4977c9751d01199c7a226a6faf494c3dd9
+      OSXCROSS: /opt/osxcross
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build tools and Ubuntu headers
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq \
+            clang cmake python3 meson ninja-build make patch xz-utils bzip2 cpio \
+            libxml2-dev libssl-dev zlib1g-dev liblzma-dev libbz2-dev llvm-dev uuid-dev \
+            p7zip-full zip pkg-config \
+            libglib2.0-dev libjson-glib-dev libpurple-dev libnss3-dev
+
+      - name: Cache osxcross
+        id: osxcross-cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.OSXCROSS }}
+          key: osxcross-${{ env.OSXCROSS_COMMIT }}-sdk11.3
+
+      - name: Download SDK and build osxcross
+        if: steps.osxcross-cache.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p "$RUNNER_TEMP/osxcross/tarballs"
+          git clone -q https://github.com/tpoechtrager/osxcross.git "$RUNNER_TEMP/osxcross-src"
+          cd "$RUNNER_TEMP/osxcross-src"
+          git checkout -q "$OSXCROSS_COMMIT"
+
+          # 11.3 SDK provides x86_64 and arm64 (Apple Silicon)
+          curl -fsSL https://github.com/phracker/MacOSX-SDKs/releases/download/11.3/MacOSX11.3.sdk.tar.xz -o tarballs/MacOSX11.3.sdk.tar.xz
+
+          sudo mkdir -p "$OSXCROSS" && sudo chown "$USER" "$OSXCROSS"
+          UNATTENDED=1 BUILD_FLAVOR=stable TARGET_DIR="$OSXCROSS" \
+            ENABLE_ARCHS="x86_64 arm64" ./build.sh
+
+      - name: Add osxcross to PATH
+        run: |
+          echo "$OSXCROSS/bin" >> $GITHUB_PATH
+          TARGET=$(basename "$(ls -1 "$OSXCROSS"/bin/x86_64-apple-darwin[0-9]*-clang | grep -v cmake | head -n 1)" | sed 's/x86_64-apple-//;s/-clang//')
+          echo "Detected Darwin target: $TARGET"
+          echo "DARWIN_TARGET=$TARGET" >> $GITHUB_ENV
+
+      - name: Build static qrencode slices
+        run: |
+          git clone --depth 1 https://github.com/fukuchi/libqrencode.git qrencode-src
+
+          # arm64
+          cmake -B qrencode-src/build-arm64 -S qrencode-src \
+            -DCMAKE_SYSTEM_NAME=Darwin \
+            -DCMAKE_C_COMPILER=arm64-apple-${DARWIN_TARGET}-clang \
+            -DCMAKE_AR=$OSXCROSS/bin/arm64-apple-${DARWIN_TARGET}-ar \
+            -DCMAKE_RANLIB=$OSXCROSS/bin/arm64-apple-${DARWIN_TARGET}-ranlib \
+            -DBUILD_SHARED_LIBS=OFF -DWITH_TOOLS=OFF -DWITH_TESTS=OFF
+          cmake --build qrencode-src/build-arm64
+
+          # x86_64
+          cmake -B qrencode-src/build-x86_64 -S qrencode-src \
+            -DCMAKE_SYSTEM_NAME=Darwin \
+            -DCMAKE_C_COMPILER=x86_64-apple-${DARWIN_TARGET}-clang \
+            -DCMAKE_AR=$OSXCROSS/bin/x86_64-apple-${DARWIN_TARGET}-ar \
+            -DCMAKE_RANLIB=$OSXCROSS/bin/x86_64-apple-${DARWIN_TARGET}-ranlib \
+            -DBUILD_SHARED_LIBS=OFF -DWITH_TOOLS=OFF -DWITH_TESTS=OFF
+          cmake --build qrencode-src/build-x86_64
+
+      - name: Build static rlottie slices
+        run: |
+          git clone --depth 1 https://github.com/Samsung/rlottie.git rlottie-src
+
+          # arm64
+          meson setup rlottie-src/build-arm64 rlottie-src \
+            --default-library=static -Dexample=false -Dtest=false \
+            --cross-file <(cat << EOF
+          [binaries]
+          c = 'arm64-apple-${DARWIN_TARGET}-clang'
+          cpp = 'arm64-apple-${DARWIN_TARGET}-clang++'
+          ar = 'arm64-apple-${DARWIN_TARGET}-ar'
+          ranlib = 'arm64-apple-${DARWIN_TARGET}-ranlib'
+          strip = 'arm64-apple-${DARWIN_TARGET}-strip'
+          [host_machine]
+          system = 'darwin'
+          cpu_family = 'aarch64'
+          cpu = 'arm64'
+          endian = 'little'
+          EOF
+          )
+          ninja -C rlottie-src/build-arm64
+
+          # x86_64
+          meson setup rlottie-src/build-x86_64 rlottie-src \
+            --default-library=static -Dexample=false -Dtest=false \
+            --cross-file <(cat << EOF
+          [binaries]
+          c = 'x86_64-apple-${DARWIN_TARGET}-clang'
+          cpp = 'x86_64-apple-${DARWIN_TARGET}-clang++'
+          ar = 'x86_64-apple-${DARWIN_TARGET}-ar'
+          ranlib = 'x86_64-apple-${DARWIN_TARGET}-ranlib'
+          strip = 'x86_64-apple-${DARWIN_TARGET}-strip'
+          [host_machine]
+          system = 'darwin'
+          cpu_family = 'x86_64'
+          cpu = 'x86_64'
+          endian = 'little'
+          EOF
+          )
+          ninja -C rlottie-src/build-x86_64
+
+      - name: Build plugin slices
+        run: |
+          GLIB_CFLAGS=$(pkg-config --cflags glib-2.0 json-glib-1.0 purple)
+          NSS_CFLAGS=$(pkg-config --cflags nss)
+          COMMON_LDFLAGS="-Wl,-undefined,dynamic_lookup -Wl,-rpath,/opt/homebrew/opt/nss/lib -Wl,-rpath,/usr/local/opt/nss/lib -Wl,-rpath,/opt/local/lib"
+
+          # 1. arm64 slice
+          make clean
+          make USE_QRCODE_AUTH=1 \
+               CC=arm64-apple-${DARWIN_TARGET}-clang \
+               CFLAGS="-O2 -g -pipe $GLIB_CFLAGS $NSS_CFLAGS -I$PWD/qrencode-src -I$PWD/qrencode-src/build-arm64 -DRLOTTIE_STATIC -DUSE_QRCODE_AUTH" \
+               LDFLAGS="$COMMON_LDFLAGS" \
+               PURPLE_CFLAGS="$GLIB_CFLAGS $NSS_CFLAGS" \
+               PURPLE_LIBS="-lz $PWD/rlottie-src/build-arm64/src/librlottie.a $PWD/qrencode-src/build-arm64/libqrencode.a -lc++"
+          mv libdiscord.so libdiscord_arm64.so
+
+          # 2. x86_64 slice
+          make clean
+          make USE_QRCODE_AUTH=1 \
+               CC=x86_64-apple-${DARWIN_TARGET}-clang \
+               CFLAGS="-O2 -g -pipe $GLIB_CFLAGS $NSS_CFLAGS -I$PWD/qrencode-src -I$PWD/qrencode-src/build-x86_64 -DRLOTTIE_STATIC -DUSE_QRCODE_AUTH" \
+               LDFLAGS="$COMMON_LDFLAGS" \
+               PURPLE_CFLAGS="$GLIB_CFLAGS $NSS_CFLAGS" \
+               PURPLE_LIBS="-lz $PWD/rlottie-src/build-x86_64/src/librlottie.a $PWD/qrencode-src/build-x86_64/libqrencode.a -lc++"
+          mv libdiscord.so libdiscord_x86_64.so
+
+      - name: Assemble fat binary
+        run: |
+          LIPO="$OSXCROSS/bin/lipo"
+          $LIPO -create libdiscord_x86_64.so libdiscord_arm64.so -output libdiscord_macos.so
+          $LIPO -info libdiscord_macos.so
+          file libdiscord_macos.so
+
+      - name: Upload universal binary
+        if: ${{ !env.ACT }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: libdiscord-macos-universal
+          path: libdiscord_macos.so
+
